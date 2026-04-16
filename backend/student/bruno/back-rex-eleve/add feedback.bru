@@ -1,0 +1,27 @@
+meta {
+  name: add feedback
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{host}}/api/v2/feedback
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  [
+    { "content": "Très bon cours, merci !" },
+    { "content": "J'ai apprécié la clarté des explications." },
+    { "content": "Quelques exercices supplémentaires seraient utiles." }
+  ]
+}
+
+settings {
+  encodeUrl: true
+}

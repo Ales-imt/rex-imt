@@ -1,0 +1,40 @@
+meta {
+  name: refresh token
+  type: http
+  seq: 6
+}
+
+post {
+  url: http://{{host}}/api/v2/auth/refresh
+  body: none
+  auth: inherit
+}
+
+headers {
+  Cookie: refresh_token={{refresh_token}}
+}
+
+script:post-response {
+    // Stockez le token dans une variable d'environnement nommée "token"
+  const setCookieHeader = res.headers['set-cookie'];
+  
+  if (setCookieHeader) {
+    const access_token = setCookieHeader[0].split("=")
+    at = access_token[1].split(";")[0]
+    console.log(`Le premier cookie est : ${access_token[0]} ${at}`);
+    bru.setEnvVar('access_token', at);
+    
+    const refresh_token = setCookieHeader[1].split("=")
+    rt = refresh_token[1].split(';')[0]
+    console.log(`Le deuxieme cookie est : ${refresh_token[0]}  ${rt}`);
+    
+    bru.setEnvVar('refresh_token', rt);
+  
+  } else {
+    console.log('L\'en-tête Set-Cookie n\'a pas été trouvé.');
+  }
+}
+
+settings {
+  encodeUrl: true
+}

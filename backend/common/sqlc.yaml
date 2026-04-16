@@ -1,0 +1,23 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "pkg/auth/query.sql"
+    schema: "../schema.sql"
+    gen:
+      go:
+        package: "auth"
+        out: "pkg/auth"
+        sql_package: "pgx/v5"
+        omit_unused_structs: true
+
+  - engine: "postgresql"
+    queries: "pkg/user/query.sql"
+    schema: "../schema.sql"
+    gen:
+      go:
+        package: "user"
+        out: "pkg/user"
+        sql_package: "pgx/v5"
+        omit_unused_structs: true
+
+  

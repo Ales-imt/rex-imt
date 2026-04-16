@@ -1,0 +1,11 @@
+# lancer 
+#   cd infras/liquibase && liquibase changelogSync
+# pour creer l'historique des migrations
+
+databaseChangeLog:
+  - include:
+      file: releases/v0.0.0/generated.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: releases/v0.0.1/feedback_notify_trigger.yaml
+      relativeToChangelogFile: true
