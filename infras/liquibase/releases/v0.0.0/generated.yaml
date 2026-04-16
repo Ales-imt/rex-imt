@@ -1,0 +1,322 @@
+databaseChangeLog:
+- changeSet:
+    id: 1776326048533-1
+    author: vjo (generated)
+    changes:
+    - createTable:
+        columns:
+        - column:
+            autoIncrement: true
+            constraints:
+              nullable: false
+              primaryKey: true
+              primaryKeyName: elo_history_pkey
+            name: id
+            type: INTEGER
+        - column:
+            name: user_id
+            type: INTEGER
+        - column:
+            name: season_id
+            type: INTEGER
+        - column:
+            constraints:
+              nullable: false
+            name: final_elo
+            type: INTEGER
+        - column:
+            name: rank
+            type: INTEGER
+        tableName: elo_history
+- changeSet:
+    id: 1776326048533-2
+    author: vjo (generated)
+    changes:
+    - createTable:
+        columns:
+        - column:
+            autoIncrement: true
+            constraints:
+              nullable: false
+              primaryKey: true
+              primaryKeyName: feedback_pkey
+            name: id
+            startWith: 996
+            type: INTEGER
+        - column:
+            name: user_id
+            type: INTEGER
+        - column:
+            constraints:
+              nullable: false
+            name: content
+            type: TEXT
+        - column:
+            defaultValueComputed: now()
+            name: created_at
+            type: TIMESTAMP WITH TIME ZONE
+        - column:
+            name: season_id
+            type: INTEGER
+        tableName: feedback
+- changeSet:
+    id: 1776326048533-3
+    author: vjo (generated)
+    changes:
+    - createTable:
+        columns:
+        - column:
+            autoIncrement: true
+            constraints:
+              nullable: false
+            name: id
+            startWith: 1993
+            type: INTEGER
+        - column:
+            autoIncrement: true
+            constraints:
+              nullable: false
+            name: user_id
+            type: INTEGER
+        - column:
+            constraints:
+              nullable: false
+            name: token
+            type: TEXT
+        - column:
+            constraints:
+              nullable: false
+            name: expires_at
+            type: TIMESTAMP WITH TIME ZONE
+        - column:
+            constraints:
+              nullable: false
+            defaultValueComputed: CURRENT_TIMESTAMP
+            name: created_at
+            type: TIMESTAMP WITH TIME ZONE
+        - column:
+            constraints:
+              nullable: false
+            defaultValueBoolean: false
+            name: revoked
+            type: BOOLEAN
+        tableName: refresh_tokens
+- changeSet:
+    id: 1776326048533-4
+    author: vjo (generated)
+    changes:
+    - createTable:
+        columns:
+        - column:
+            autoIncrement: true
+            constraints:
+              nullable: false
+              primaryKey: true
+              primaryKeyName: season_pkey
+            name: id
+            startWith: 34
+            type: INTEGER
+        - column:
+            constraints:
+              nullable: false
+            name: start_date
+            type: TIMESTAMP WITH TIME ZONE
+        - column:
+            constraints:
+              nullable: false
+            name: end_date
+            type: TIMESTAMP WITH TIME ZONE
+        tableName: season
+- changeSet:
+    id: 1776326048533-5
+    author: vjo (generated)
+    changes:
+    - createTable:
+        columns:
+        - column:
+            constraints:
+              nullable: false
+            name: user_id
+            type: INTEGER
+        - column:
+            constraints:
+              nullable: false
+            defaultValueNumeric: 1000
+            name: elo
+            type: INTEGER
+        - column:
+            defaultValueNumeric: 0
+            name: last_elo_gain
+            type: INTEGER
+        - column:
+            defaultValue: NULL::character varying
+            name: promotion
+            type: VARCHAR(255)
+        tableName: student
+- changeSet:
+    id: 1776326048533-6
+    author: vjo (generated)
+    changes:
+    - createTable:
+        columns:
+        - column:
+            autoIncrement: true
+            constraints:
+              nullable: false
+              primaryKey: true
+              primaryKeyName: user_pkey
+            name: id
+            startWith: 3826
+            type: INTEGER
+        - column:
+            constraints:
+              nullable: false
+            name: ldapid
+            type: INTEGER
+        - column:
+            defaultValueNumeric: 1
+            name: version
+            type: INTEGER
+        - column:
+            constraints:
+              nullable: false
+            name: name
+            type: VARCHAR(255)
+        - column:
+            constraints:
+              nullable: false
+            name: surname
+            type: VARCHAR(255)
+        - column:
+            constraints:
+              nullable: false
+            name: email
+            type: VARCHAR(255)
+        - column:
+            defaultValue: user
+            name: roles
+            type: VARCHAR(255)
+        tableName: user
+- changeSet:
+    id: 1776326048533-7
+    author: vjo (generated)
+    changes:
+    - addUniqueConstraint:
+        columnNames: token
+        constraintName: refresh_tokens_token_key
+        tableName: refresh_tokens
+- changeSet:
+    id: 1776326048533-8
+    author: vjo (generated)
+    changes:
+    - addUniqueConstraint:
+        columnNames: user_id
+        constraintName: student_user_id_key
+        tableName: student
+- changeSet:
+    id: 1776326048533-9
+    author: vjo (generated)
+    changes:
+    - addUniqueConstraint:
+        columnNames: email
+        constraintName: user_email_key
+        tableName: user
+- changeSet:
+    id: 1776326048533-10
+    author: vjo (generated)
+    changes:
+    - addUniqueConstraint:
+        columnNames: ldapid
+        constraintName: user_ldapid_key
+        tableName: user
+- changeSet:
+    id: 1776326048533-11
+    author: vjo (generated)
+    changes:
+    - addForeignKeyConstraint:
+        baseColumnNames: season_id
+        baseTableName: elo_history
+        constraintName: elo_history_season_id_fkey
+        deferrable: false
+        initiallyDeferred: false
+        onDelete: NO ACTION
+        onUpdate: NO ACTION
+        referencedColumnNames: id
+        referencedTableName: season
+        validate: true
+- changeSet:
+    id: 1776326048533-12
+    author: vjo (generated)
+    changes:
+    - addForeignKeyConstraint:
+        baseColumnNames: user_id
+        baseTableName: elo_history
+        constraintName: elo_history_student_id_fkey
+        deferrable: false
+        initiallyDeferred: false
+        onDelete: NO ACTION
+        onUpdate: NO ACTION
+        referencedColumnNames: id
+        referencedTableName: user
+        validate: true
+- changeSet:
+    id: 1776326048533-13
+    author: vjo (generated)
+    changes:
+    - addForeignKeyConstraint:
+        baseColumnNames: user_id
+        baseTableName: student
+        constraintName: elo_student_user_id_fkey
+        deferrable: false
+        initiallyDeferred: false
+        onDelete: NO ACTION
+        onUpdate: NO ACTION
+        referencedColumnNames: id
+        referencedTableName: user
+        validate: true
+- changeSet:
+    id: 1776326048533-14
+    author: vjo (generated)
+    changes:
+    - addForeignKeyConstraint:
+        baseColumnNames: season_id
+        baseTableName: feedback
+        constraintName: feedback_season_id_fkey
+        deferrable: false
+        initiallyDeferred: false
+        onDelete: NO ACTION
+        onUpdate: NO ACTION
+        referencedColumnNames: id
+        referencedTableName: season
+        validate: true
+- changeSet:
+    id: 1776326048533-15
+    author: vjo (generated)
+    changes:
+    - addForeignKeyConstraint:
+        baseColumnNames: user_id
+        baseTableName: feedback
+        constraintName: feedback_student_id_fkey
+        deferrable: false
+        initiallyDeferred: false
+        onDelete: NO ACTION
+        onUpdate: NO ACTION
+        referencedColumnNames: id
+        referencedTableName: user
+        validate: true
+- changeSet:
+    id: 1776326048533-16
+    author: vjo (generated)
+    changes:
+    - addForeignKeyConstraint:
+        baseColumnNames: user_id
+        baseTableName: refresh_tokens
+        constraintName: refresh_tokens_user_id_fkey
+        deferrable: false
+        initiallyDeferred: false
+        onDelete: CASCADE
+        onUpdate: NO ACTION
+        referencedColumnNames: id
+        referencedTableName: user
+        validate: true
+

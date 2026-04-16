@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build *)",
+      "WebFetch(domain:projet-air.univ-rennes.fr)"
+    ],
+    "additionalDirectories": [
+      "/home/vjo/projets/rex/rex-imt"
+    ]
+  }
+}
