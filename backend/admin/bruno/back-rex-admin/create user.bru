@@ -1,0 +1,23 @@
+meta {
+  name: create user
+  type: http
+  seq: 6
+}
+
+post {
+  url: http://{{host}}/api/v2/user
+  body: json
+  auth: inherit
+}
+
+headers {
+  Cookie: access_token={{access_token}}
+}
+
+body:json {
+  { "email": "joel.vlasak@mines-ales.fr", "roles":"admin", "blame":false }
+}
+
+settings {
+  encodeUrl: true
+}

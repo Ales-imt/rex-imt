@@ -1,0 +1,19 @@
+meta {
+  name: Loggout
+  type: http
+  seq: 7
+}
+
+get {
+  url: http://{{host}}/api/v2/auth/logout
+  body: none
+  auth: none
+}
+
+headers {
+  Cookie: access_token={{access_token}}
+}
+
+settings {
+  encodeUrl: true
+}

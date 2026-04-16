@@ -1,0 +1,19 @@
+meta {
+  name: get user
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{host}}/api/v2/user/1025
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+settings {
+  encodeUrl: true
+}
