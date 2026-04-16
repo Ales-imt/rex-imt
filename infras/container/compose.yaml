@@ -1,0 +1,50 @@
+name: imt-rex
+services:
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    # Décommenter pour activer le GPU NVIDIA :
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: ollama-init
+    depends_on:
+      - ollama
+    entrypoint: >
+      sh -c "
+        sleep 5 &&
+        OLLAMA_HOST=http://ollama:11434 ollama pull mistral-nemo
+      "
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: "no"
+
+  db:
+    image: postgres:16.10-alpine
+    container_name: postgres-16.10-alpine-rex
+    restart: always
+    volumes:
+      # Montage du script d'initialisation
+      - ./init-user-db.sh:/docker-entrypoint-initdb.d/init-user-db.sh
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: postgres
+    ports:
+      - 5432:5432
+
+volumes:
+  ollama-data:

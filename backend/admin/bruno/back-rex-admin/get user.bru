@@ -1,0 +1,23 @@
+meta {
+  name: get user
+  type: http
+  seq: 5
+}
+
+get {
+  url: http://{{host}}/api/v2/user
+  body: none
+  auth: bearer
+}
+
+headers {
+  Cookie: access_token={{access_token}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+settings {
+  encodeUrl: true
+}

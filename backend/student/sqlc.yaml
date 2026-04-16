@@ -1,0 +1,32 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "pkg/feedback/query.sql"
+    schema: "../schema.sql"
+    gen:
+      go:
+        package: "feedback"
+        out: "pkg/feedback"
+        sql_package: "pgx/v5"
+        omit_unused_structs: true
+
+  - engine: "postgresql"
+    queries: "pkg/season/query.sql"
+    schema: "../schema.sql"
+    gen:
+      go:
+        package: "season"
+        out: "pkg/season"
+        sql_package: "pgx/v5"
+        omit_unused_structs: true
+
+  - engine: "postgresql"
+    queries: "pkg/student/query.sql"
+    schema: "../schema.sql"
+    gen:
+      go:
+        package: "student"
+        out: "pkg/student"
+        sql_package: "pgx/v5"
+        omit_unused_structs: true
+
