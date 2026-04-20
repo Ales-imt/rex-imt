@@ -11,6 +11,11 @@ SELECT *
 -- name: DeleteRefreshToken :exec
 DELETE FROM refresh_tokens WHERE token = @token;
 
+-- name: GetRefreshTokenBySession :one
+SELECT *
+        FROM refresh_tokens
+        WHERE session = @session AND revoked = false;
+
 -- name: DeleteRefreshTokenBySession :exec
 DELETE FROM refresh_tokens WHERE session = @session;
 

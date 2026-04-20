@@ -8,12 +8,11 @@ import (
 )
 
 func RoutesAuth(r chi.Router, cfg *services.Config,
-	postLdap LdapPostHandler,
-	getAccessToken func(r *http.Request) (string, error)) {
-	r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
+	postLdap LdapPostHandler) {
+	r.With(RateLimitLogin).Post("/login", func(w http.ResponseWriter, r *http.Request) {
 		Login(w, r, cfg.JWT, cfg.LDAP, postLdap)
 	})
-	r.With(Security(cfg.JWT, getAccessToken, nil)).Get("/logout",
+	r.With(Security(cfg.JWT, nil)).Get("/logout",
 		func(w http.ResponseWriter, r *http.Request) {
 			Logout(w, r, cfg.JWT)
 		})
