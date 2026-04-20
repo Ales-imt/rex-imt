@@ -20,7 +20,7 @@ ldap:
   baseDN: dc=ema,dc=fr
 
 ia:
-  provider: ragarenn # "ollama" ou "ragarenn"
+  provider: ollama # "ollama" ou "ragarenn"
 
 ollama:
   baseURL: http://localhost:11434
@@ -29,4 +29,4 @@ ollama:
 ragarenn:
   baseURL: https://ragarenn.eskemm-numerique.fr/sso/ch@t
   apiKey: ${RAGARENN_API_KEY} 
-  model: ilaas/gemma-4-31b #RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic
+  model: RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic # ilaas/gemma-4-31b ou RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic

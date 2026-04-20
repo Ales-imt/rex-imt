@@ -17,7 +17,7 @@ export interface Credentials {
 interface LogingResponse {
     name: string,
     surname: string,
-    role: string
+    roles: string[]
     access_token: string
     refresh_token: string
 }
@@ -122,7 +122,7 @@ export class CredentialsProvider {
                 user: {
                     email,
                     name: result.name,
-                    roles: [result.role]
+                    roles: result.roles
                 }
             })
 
