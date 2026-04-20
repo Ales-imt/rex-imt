@@ -38,3 +38,24 @@ databaseChangeLog:
             schemaName: public
             columnNames: ldapid
             constraintName: user_ldapid_key
+  - changeSet:
+      id: v0.0.1-002-alter-roles-to-array
+      author: vjo
+      changes:
+        - sql:
+            sql: ALTER TABLE public.user ALTER COLUMN roles DROP DEFAULT;
+        - sql:
+            sql: "ALTER TABLE public.user ALTER COLUMN roles TYPE TEXT[] USING array_replace(array_replace(array_replace(string_to_array(coalesce(roles, 'ELEVE'), ','), 'etudiant', 'ELEVE'), 'admin', 'ADMIN'), 'gestionnaire', 'GESTIONNAIRE');"
+        - sql:
+            sql: ALTER TABLE public.user ALTER COLUMN roles SET NOT NULL;
+        - sql:
+            sql: ALTER TABLE public.user ALTER COLUMN roles SET DEFAULT ARRAY['ELEVE']::text[];
+      rollback:
+        - sql:
+            sql: ALTER TABLE public.user ALTER COLUMN roles DROP DEFAULT;
+        - sql:
+            sql: ALTER TABLE public.user ALTER COLUMN roles DROP NOT NULL;
+        - sql:
+            sql: "ALTER TABLE public.user ALTER COLUMN roles TYPE VARCHAR(255) USING array_to_string(array_replace(array_replace(array_replace(roles, 'ELEVE', 'etudiant'), 'ADMIN', 'admin'), 'GESTIONNAIRE', 'gestionnaire'), ',');"
+        - sql:
+            sql: ALTER TABLE public.user ALTER COLUMN roles SET DEFAULT 'etudiant'::character varying;
