@@ -1,0 +1,36 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.2-004-create-table-groupe
+      author: vjo
+      changes:
+        - createTable:
+            tableName: groupe
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+              - column:
+                  name: promo_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: groupe
+            baseTableSchemaName: public
+            baseColumnNames: promo_id
+            referencedTableName: promotion
+            referencedTableSchemaName: public
+            referencedColumnNames: id
+            constraintName: groupe_promo_id_fkey
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: groupe
+            schemaName: public

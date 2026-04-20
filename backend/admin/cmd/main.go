@@ -4,7 +4,9 @@ import (
 	"back-rex-admin/pkg/authentification"
 	"back-rex-admin/pkg/cohorte"
 	"back-rex-admin/pkg/feedback"
+	ia "back-rex-admin/pkg/ia"
 	"back-rex-admin/pkg/ia/ollama"
+	"back-rex-admin/pkg/ia/ragarenn"
 	"back-rex-admin/pkg/user"
 	"back-rex-common/pkg/auth"
 	"back-rex-common/pkg/services"
@@ -43,9 +45,19 @@ func main() {
 	}
 	r.Use(services.MakeDatabaseMiddleware(&cfg.Database))
 	auth.StartRefreshTokenCleanup(&cfg.Database)
-	iaConnector := &ollama.Connector{
-		BaseURL: "http://localhost:11434",
-		Model:   "mistral-nemo",
+	var iaConnector ia.IAConnector
+	switch cfg.IA.Provider {
+	case "ollama":
+		iaConnector = &ollama.Connector{
+			BaseURL: cfg.Ollama.BaseURL,
+			Model:   cfg.Ollama.Model,
+		}
+	default:
+		iaConnector = &ragarenn.Connector{
+			BaseURL: cfg.RAGaRenn.BaseURL,
+			APIKey:  cfg.RAGaRenn.APIKey,
+			Model:   cfg.RAGaRenn.Model,
+		}
 	}
 	go feedback.ListenForNewFeedbacks(&cfg.Database, iaConnector)
 

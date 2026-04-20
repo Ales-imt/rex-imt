@@ -8,10 +8,28 @@ import (
 )
 
 type Config struct {
-	Database DatabaseConfig `yaml:"database"`
-	Server   ServerConfig   `yaml:"server"`
-	JWT      JWTConfig      `yaml:"jwt"`
-	LDAP     LDAPConfig     `yaml:"ldap"`
+	Database  DatabaseConfig  `yaml:"database"`
+	Server    ServerConfig    `yaml:"server"`
+	JWT       JWTConfig       `yaml:"jwt"`
+	LDAP      LDAPConfig      `yaml:"ldap"`
+	IA        IAConfig        `yaml:"ia"`
+	Ollama    OllamaConfig    `yaml:"ollama"`
+	RAGaRenn  RAGaRennConfig  `yaml:"ragarenn"`
+}
+
+type IAConfig struct {
+	Provider string `yaml:"provider"`
+}
+
+type OllamaConfig struct {
+	BaseURL string `yaml:"baseURL"`
+	Model   string `yaml:"model"`
+}
+
+type RAGaRennConfig struct {
+	BaseURL string `yaml:"baseURL"`
+	APIKey  string `yaml:"apiKey"`
+	Model   string `yaml:"model"`
 }
 
 type DatabaseConfig struct {
@@ -40,15 +58,15 @@ type LDAPConfig struct {
 
 // LoadConfig loads environment variables from a .env file and returns a Config struct
 func LoadConfigYaml(path string) (*Config, error) {
-	f, err := os.Open(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+
+	expanded := os.ExpandEnv(string(raw))
 
 	var cfg Config
-	decoder := yaml.NewDecoder(f)
-	if err := decoder.Decode(&cfg); err != nil {
+	if err := yaml.Unmarshal([]byte(expanded), &cfg); err != nil {
 		return nil, err
 	}
 

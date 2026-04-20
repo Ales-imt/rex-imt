@@ -18,6 +18,7 @@ type FeedbackNotification struct {
 	UserID    int     `json:"user_id"`
 	SeasonID  int32   `json:"season_id"`
 	Promotion *string `json:"promotion"`
+	Groupe    *string `json:"groupe"`
 }
 
 // ListenForNewFeedbacks écoute le canal Postgres 'new_feedback' et appelle
@@ -60,6 +61,6 @@ func listenLoop(dsn string, connector ia.IAConnector) error {
 			continue
 		}
 
-		CallbackFeedBack(notif, connector)
+		CallbackFeedBack(notif, connector, conn)
 	}
 }

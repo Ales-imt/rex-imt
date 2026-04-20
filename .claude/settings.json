@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(go build *)",
-      "WebFetch(domain:projet-air.univ-rennes.fr)"
+      "WebFetch(domain:projet-air.univ-rennes.fr)",
+      "Bash(git -C /home/vjo/projets/rex/rex-imt ls-files)",
+      "Bash(xargs -I{} sh -c 'git -C /home/vjo/projets/rex/rex-imt ls-files -s \"{}\" | awk \"{print \\\\$2}\" | xargs -I@ git -C /home/vjo/projets/rex/rex-imt cat-file -s @ | awk \"{print \\\\$1, \\\\\"{}\\\\\"}\"')",
+      "Bash(git -C /home/vjo/projets/rex/rex-imt rev-list --objects --all)",
+      "Bash(git -C /home/vjo/projets/rex/rex-imt cat-file --batch-check='%\\(objecttype\\) %\\(objectname\\) %\\(objectsize\\) %\\(rest\\)')",
+      "Bash(sort -k3 -rn)",
+      "Bash(awk '{print $3, $4}')",
+      "Bash(grep -n \"iaConnector\\\\|IAConnector\" /home/vjo/projets/rex/rex-imt/backend/admin/pkg/feedback/*.go)",
+      "Bash(find /home/vjo/projets/rex/rex-imt -type f \\\\\\( -name \"*.sql\" -o -name \"*.go\" \\\\\\) -exec grep -l \"student.*promotion\\\\|promotion.*student\" {} \\\\;)"
     ],
     "additionalDirectories": [
       "/home/vjo/projets/rex/rex-imt"

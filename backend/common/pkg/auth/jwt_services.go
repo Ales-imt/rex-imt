@@ -40,7 +40,7 @@ func (t TokenPair) accessToCookies() http.Cookie {
 func (t TokenPair) refreshToCookies() http.Cookie {
 
 	refreshCookie := services.CreateCookie(pathRefresh,
-		"/api/v2/auth", t.RefreshTokenInfo.Expiration, t.RefreshTokenInfo.Token)
+		"/", t.RefreshTokenInfo.Expiration, t.RefreshTokenInfo.Token)
 
 	return refreshCookie
 
