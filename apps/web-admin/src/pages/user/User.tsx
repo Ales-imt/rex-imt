@@ -107,10 +107,8 @@ const UserFields = ({ register, control, errors, isReadOnly }: RenderProps<User>
 
 export const userColumns: MRT_ColumnDef<User>[] = [
     { accessorKey: 'id', header: 'ID' },
-    { accessorKey: 'keycloak_id', header: 'Keycloak Id' },
-    { accessorKey: 'version', header: "Version" },
-    { accessorKey: 'firstName', header: 'Prénom' },
-    { accessorKey: 'lastName', header: 'Nom' },
+    { accessorKey: 'name', header: 'Nom' },
+    { accessorKey: 'surname', header: 'Prénom' },
     { accessorKey: 'email', header: 'Email' },
     {
         accessorKey: 'roles',
@@ -120,6 +118,8 @@ export const userColumns: MRT_ColumnDef<User>[] = [
             return Array.isArray(roles) ? roles.map(r => AVAILABLE_ROLES.find(ar => ar.id === r)?.label || r).join(', ') : '';
         }
     },
+    { accessorKey: 'blame', header: 'Blamé' },
+
 ]
 
 export const userViewConfig: ViewConfig<User> = {
