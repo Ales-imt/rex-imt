@@ -20,14 +20,6 @@ func Logout(w http.ResponseWriter, r *http.Request, jwt services.JWTConfig) {
 		}
 	}
 
-	tokenPaire := genereInvalidTokenPaire()
-
-	accessCokie := tokenPaire.accessToCookies()
-	http.SetCookie(w, &accessCokie)
-
-	refreshCookie := tokenPaire.refreshToCookies()
-	http.SetCookie(w, &refreshCookie)
-
 	w.WriteHeader(http.StatusNoContent) // 204 No Content
 
 }

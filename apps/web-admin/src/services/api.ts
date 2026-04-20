@@ -6,7 +6,6 @@ export const apiInstance = axios.create({
     baseURL: import.meta.env.VITE_API_URL,
 });
 
-
 let axosInit = false
 let refreshPromise: Promise<boolean> | null = null;
 

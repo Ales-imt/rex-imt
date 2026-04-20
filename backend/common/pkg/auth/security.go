@@ -5,6 +5,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -19,14 +20,13 @@ type SecurityCtx struct {
 
 func Security(
 	jwt services.JWTConfig,
-	getAccessToken func(r *http.Request) (string, error),
 	allowedRoles *[]string,
 ) func(next http.Handler) http.Handler {
 
 	security := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-			claim, err := getClaims(r, jwt.Secret, getAccessToken)
+			claim, err := getClaims(r, jwt.Secret)
 			if err != nil {
 				services.AuthenticationError(w, r, err.Error(), services.NO_INFORMATION, nil)
 				return
@@ -54,6 +54,14 @@ func Security(
 					return
 				}
 				context.Session = &session
+
+				pgCtx := services.GetPgCtx(r.Context())
+				queries := New(pgCtx.Db)
+				_, err := queries.GetRefreshTokenBySession(r.Context(), session)
+				if err != nil {
+					services.AuthenticationError(w, r, "session révoquée", services.NO_INFORMATION, nil)
+					return
+				}
 			}
 
 			if (*claim)["roles"] != nil {
@@ -84,8 +92,8 @@ func Security(
 
 // Helper pour vérifier si le rôle est autorisé
 func containsRole(role string, allowedRoles *[]string) bool {
-	for _, r := range *allowedRoles {
-		if strings.Contains(role, r) {
+	for userRole := range strings.SplitSeq(role, ",") {
+		if slices.Contains(*allowedRoles, strings.TrimSpace(userRole)) {
 			return true
 		}
 	}

@@ -3,6 +3,8 @@ package auth
 import (
 	"back-rex-common/pkg/services"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,6 +15,11 @@ import (
 	"github.com/google/uuid"
 )
 
+func hashToken(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
+}
+
 const pathAcessToken = "access_token"
 const pathRefresh = "refresh_token"
 
@@ -22,28 +29,15 @@ type RefreshTokenInfo struct {
 	Session    string
 	Version    int
 }
+
+type AccessTokenInfo struct {
+	Token      string
+	Expiration time.Time
+}
+
 type TokenPair struct {
-	AccessToken      *string    `json:"access_token"`
-	ExpirationAccess *time.Time `json:"expiration_access"`
+	AccessToken      *AccessTokenInfo
 	RefreshTokenInfo *RefreshTokenInfo
-}
-
-func (t TokenPair) accessToCookies() http.Cookie {
-
-	accessCokie := services.CreateCookie(pathAcessToken,
-		"/", *t.ExpirationAccess, *t.AccessToken)
-
-	return accessCokie
-
-}
-
-func (t TokenPair) refreshToCookies() http.Cookie {
-
-	refreshCookie := services.CreateCookie(pathRefresh,
-		"/", t.RefreshTokenInfo.Expiration, t.RefreshTokenInfo.Token)
-
-	return refreshCookie
-
 }
 
 func genereTokenPaire(jwtCfg services.JWTConfig, oldRefreshToken *RefreshToken, atClaims *jwt.MapClaims, subject string) (*TokenPair, error) {
@@ -53,24 +47,27 @@ func genereTokenPaire(jwtCfg services.JWTConfig, oldRefreshToken *RefreshToken, 
 	}
 
 	// necessaire de connaitre la session dans access token pour le logout
-	accessToken, expirationAccess, err := generateAccessToken(subject, jwtCfg, atClaims, refreshTokenInfo.Session)
+	accessToken, err := generateAccessToken(subject, jwtCfg, atClaims, refreshTokenInfo.Session)
 	if err != nil {
 		return nil, err
 	}
 
 	return &TokenPair{
 		AccessToken:      accessToken,
-		ExpirationAccess: expirationAccess,
 		RefreshTokenInfo: refreshTokenInfo,
 	}, nil
 }
 
-func generateAccessToken(subject string, jwtCfg services.JWTConfig, atClaims *jwt.MapClaims, session string) (*string, *time.Time, error) {
+func generateAccessToken(subject string, jwtCfg services.JWTConfig, atClaims *jwt.MapClaims, session string) (*AccessTokenInfo, error) {
 
-	expiration := time.Now().Add(jwtCfg.AccessTokenExpiresIn)
+	now := time.Now()
+	expiration := now.Add(jwtCfg.AccessTokenExpiresIn)
 	claims := jwt.MapClaims{
 		"sub":        subject,
 		"exp":        expiration.Unix(),
+		"iat":        now.Unix(),
+		"nbf":        now.Unix(),
+		"jti":        uuid.New().String(),
 		"session_id": session,
 	}
 
@@ -85,10 +82,13 @@ func generateAccessToken(subject string, jwtCfg services.JWTConfig, atClaims *jw
 	AccessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	token, err := AccessToken.SignedString([]byte(jwtCfg.Secret))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return &token, &expiration, nil
+	return &AccessTokenInfo{
+		Token:      token,
+		Expiration: expiration,
+	}, nil
 
 }
 
@@ -102,11 +102,10 @@ func generateRefreshToken(oldRefreshToken *RefreshToken, subject string, jwtCfg 
 	info.Expiration = time.Now().Add(jwtCfg.RefreshTokenExpiresIn)
 	rtClaims["exp"] = info.Expiration.Unix()
 
+	info.Session = uuid.New().String()
 	if oldRefreshToken == nil {
-		info.Session = uuid.New().String()
 		info.Version = 0
 	} else {
-		info.Session = oldRefreshToken.Session
 		info.Version = int(oldRefreshToken.TokenVersion.Int32) + 1
 	}
 
@@ -122,9 +121,9 @@ func generateRefreshToken(oldRefreshToken *RefreshToken, subject string, jwtCfg 
 	return &info, nil
 }
 
-func getClaims(r *http.Request, jwtSecret string, getToken func(r *http.Request) (string, error)) (*jwt.MapClaims, error) {
+func getClaims(r *http.Request, jwtSecret string) (*jwt.MapClaims, error) {
 
-	access_token, err := getToken(r)
+	access_token, err := GetAccessTokenByBearer(r)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +131,9 @@ func getClaims(r *http.Request, jwtSecret string, getToken func(r *http.Request)
 	claims := jwt.MapClaims{}
 
 	token, err := jwt.ParseWithClaims(access_token, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
 		return []byte(jwtSecret), nil
 	})
 	if err != nil || !token.Valid {
@@ -166,32 +168,6 @@ func GetAccessTokenByBearer(r *http.Request) (string, error) {
 
 }
 
-func GetAccessTokenByCookies(r *http.Request) (string, error) {
-
-	// regarde si dans les cookie
-	access_token, err := r.Cookie(pathAcessToken)
-
-	if err != nil {
-		return "", err
-	}
-
-	return access_token.Value, nil
-
-}
-
-func GetRefreshTokenByCookies(r *http.Request) (string, error) {
-
-	// regarde si dans les cookie
-	access_token, err := r.Cookie(pathRefresh)
-
-	if err != nil {
-		return "", err
-	}
-
-	return access_token.Value, nil
-
-}
-
 func StartRefreshTokenCleanup(cfg *services.DatabaseConfig) {
 	dsn := services.ToDBS(cfg)
 	pg := services.NewPG(context.Background(), dsn)
@@ -209,22 +185,4 @@ func StartRefreshTokenCleanup(cfg *services.DatabaseConfig) {
 			<-ticker.C
 		}
 	}()
-}
-
-// Utile pour supprimer les cookies d'acces cote client sur un logout.
-func genereInvalidTokenPaire() *TokenPair {
-
-	noPayload := ""
-	now := time.Now()
-
-	pairs := TokenPair{
-		AccessToken:      &noPayload,
-		ExpirationAccess: &now,
-		RefreshTokenInfo: &RefreshTokenInfo{
-			Token:      noPayload,
-			Expiration: now,
-		},
-	}
-
-	return &pairs
 }

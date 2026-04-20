@@ -1,5 +1,6 @@
 import axios from "axios"
 import type { Session } from "../../SessionContext"
+import { apiInstance } from "../../services/api"
 
 
 export interface CredentialContext {
@@ -85,7 +86,9 @@ export class CredentialsProvider {
                     this.tokenExpiry = null
                     this.setSession(null)
                 } else {
-                    this.restoreSession()
+                    if (this.restoreSession()) {
+                        window.location.href = "/"
+                    }
                 }
             }
         })
@@ -141,7 +144,13 @@ export class CredentialsProvider {
     }
 
     public signOut() {
-        axios.get('/api/v2/auth/logout')
+        try {
+            // ne pas utiliser apiInstance, sinon boucle
+            axios.get('/api/v2/auth/logout', { headers: { Authorization: `Bearer ${this.getToken()}` } })
+        } catch (err) {
+            console.log(err)
+        }
+
         this.accessToken = null
         this.refreshToken = null
         this.tokenExpiry = null
@@ -151,7 +160,7 @@ export class CredentialsProvider {
     public async updateToken(minValidity: number): Promise<boolean> {
         const nowInSeconds = Date.now() / 1000
 
-        console.log (this.tokenExpiry, nowInSeconds, this.tokenExpiry - nowInSeconds, minValidity)
+        console.log(this.tokenExpiry, nowInSeconds, this.tokenExpiry ? this.tokenExpiry - nowInSeconds : "undef", minValidity)
         if (this.tokenExpiry !== null && this.tokenExpiry - nowInSeconds > minValidity) {
             return false
         }
