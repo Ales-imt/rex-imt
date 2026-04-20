@@ -3,6 +3,7 @@ package auth
 import (
 	"back-rex-common/pkg/services"
 	"strconv"
+	"strings"
 
 	"context"
 	"errors"
@@ -42,7 +43,7 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 		return
 	}
 
-	claims := jwt.MapClaims{"roles": user.Roles}
+	claims := jwt.MapClaims{"roles": strings.Join(user.Roles, ",")}
 
 	tokenPaire, err := genereTokenPaire(jwtConfig, oldRefreshToken, &claims, strconv.Itoa(int(oldRefreshToken.UserID)))
 	if err != nil {
@@ -93,7 +94,7 @@ func Me(w http.ResponseWriter, r *http.Request, jwtConfig services.JWTConfig) {
 		return
 	}
 
-	claim, err := getClaims(r, jwtConfig.Secret) // a faire
+	claim, err := getClaims(r, jwtConfig.Secret)
 	if err != nil {
 		services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
@@ -128,7 +129,7 @@ func Me(w http.ResponseWriter, r *http.Request, jwtConfig services.JWTConfig) {
 	render.JSON(w, r, &LoginResponse{
 		Name:    user.Name,
 		Surname: user.Surname,
-		Role:    user.Roles.String,
+		Roles:   user.Roles,
 	})
 
 }

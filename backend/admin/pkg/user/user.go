@@ -6,6 +6,7 @@ import (
 	usercommon "back-rex-common/pkg/user"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/go-chi/render"
@@ -14,11 +15,13 @@ import (
 )
 
 type UserRequest struct {
-	ID      int32  `json:"id"`
-	Version int    `json:"version"`
-	Email   string `json:"email"`
-	Roles   string `json:"roles"`
-	Blame   bool   `json:"blame"`
+	ID      int32    `json:"id"`
+	Version int      `json:"version"`
+	Name    string   `json:"name"`
+	Surname string   `json:"surname"`
+	Email   string   `json:"email"`
+	Roles   []string `json:"roles"`
+	Blame   bool     `json:"blame"`
 }
 
 func CreateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig) {
@@ -62,7 +65,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 		return
 	}
 
-	etudiant := len(input.Roles) != 0 && strings.Contains(input.Roles, "etudiant")
+	etudiant := slices.Contains(input.Roles, "ELEVE")
 	ldapIdentity := auth.GetLdapIdentity(sr.Entries[0])
 
 	id, err := usercommon.CreateUser(tx, ldapIdentity, ctx, input.Roles, etudiant)
@@ -78,9 +81,9 @@ func CreateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 }
 
 var allowedRoles = map[string]struct{}{
-	"admin":        {},
-	"etudiant":     {},
-	"gestionnaire": {},
+	"ADMIN":        {},
+	"ELEVE":        {},
+	"GESTIONNAIRE": {},
 }
 
 func validateUser(user UserRequest, sr *ldap.SearchResult) []services.FormValidation {
@@ -92,7 +95,7 @@ func validateUser(user UserRequest, sr *ldap.SearchResult) []services.FormValida
 			Message: "Un role doit etre précisé",
 		})
 	} else {
-		for _, role := range strings.Split(user.Roles, ",") {
+		for _, role := range user.Roles {
 			role = strings.TrimSpace(role)
 			if _, ok := allowedRoles[role]; !ok {
 				issues = append(issues, services.FormValidation{
@@ -169,7 +172,10 @@ func UpdateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 	user, err := queries.UpdatePartialUser(ctx, UpdatePartialUserParams{
 		ID:      oldUser.ID,
 		Version: oldUser.Version,
-		Roles:   services.ToPgText(input.Roles),
+		Name:    services.ToPgText(input.Name),
+		Surname: services.ToPgText(input.Surname),
+		Email:   input.Email,
+		Roles:   input.Roles,
 		Blame:   services.ToPgBool(input.Blame),
 	})
 
@@ -183,7 +189,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 		return
 	}
 
-	etudiant := len(input.Roles) != 0 && strings.Contains(input.Roles, "etudiant")
+	etudiant := slices.Contains(input.Roles, "ELEVE")
 
 	if etudiant {
 		queriesCommon := usercommon.New(tx)

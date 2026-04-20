@@ -14,11 +14,18 @@ infra: docker liquibase
 docker:
 	@echo "--- 🐳 Démarrage des conteneurs Docker ---"
 	cd $(DOCKER_DIR) && docker compose -f compose.yaml up -d
+	@echo "--- 🚀restitue la bd ---"
+	docker cp ./devedb_backup.dump postgres-16.10-alpine-rex:/tmp/devedb_backup.dump
+	@echo "--- 🚀restaure la bd ---"
+	docker exec -i postgres-16.10-alpine-rex  pg_restore --no-owner -U postgres -d db_rex /tmp/devedb_backup.dump
 
 liquibase:
 	@echo "--- 🚀 Application des migrations Liquibase ---"
 	mkdir -p $(INFRA_DIR)/liquibase/liquibase_libs
 	cd $(INFRA_DIR)/liquibase/liquibase_libs && wget -nc https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.8/postgresql-42.7.8.jar || true
+	@echo "--- synchronize la bd et liquidbase"
+	cd $(INFRA_DIR)/liquibase && liquibase changelogSyncToTag v0.0.0
+	@echo "--- appliquer les migrations"
 	cd $(INFRA_DIR)/liquibase && liquibase update
 
 

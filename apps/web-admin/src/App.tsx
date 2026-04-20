@@ -41,11 +41,7 @@ export default function App() {
 
   const [session, setSession] = React.useState<Session | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const location = useLocation();
 
-
-  console.log("location", location)
-  
   const sessionContextValue = React.useMemo(
     () => ({
       session,
