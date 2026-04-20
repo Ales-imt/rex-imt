@@ -14,6 +14,9 @@ SELECT * FROM public.user ORDER BY id;
 -- name: UpdatePartialUser :one
 UPDATE public.user
 SET version = version + 1,
+    name = @name,
+    surname = @surname,
+    email = @email,
     roles = @roles,
     blame = @blame
 WHERE id = @id AND version = @version

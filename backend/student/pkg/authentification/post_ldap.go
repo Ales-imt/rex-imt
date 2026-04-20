@@ -34,7 +34,7 @@ func PostLdap(r *http.Request, ldapIdentity *auth.LdapIdentity) (*jwt.MapClaims,
 	case nil:
 		id = int(userByMail.ID)
 	case pgx.ErrNoRows: // 🆕 S'il n'existe pas, on l’insère dans la table `student`
-		id, err = user.CreateUser(tx, ldapIdentity, ctx, "etudiant", true)
+		id, err = user.CreateUser(tx, ldapIdentity, ctx, []string{"ELEVE"}, true)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -46,7 +46,7 @@ func PostLdap(r *http.Request, ldapIdentity *auth.LdapIdentity) (*jwt.MapClaims,
 		return nil, nil, err
 	}
 
-	claims := jwt.MapClaims{"roles": "etudiant"}
+	claims := jwt.MapClaims{"roles": "ELEVE"}
 	subject := strconv.Itoa(id)
 
 	return &claims, &subject, nil // Pas de claims supplémentaires pour l'instant

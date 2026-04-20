@@ -13,7 +13,6 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 
-
 CREATE FUNCTION public.notify_new_feedback() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -103,7 +102,6 @@ CREATE TABLE public.feedback_classification (
     groupe text,
     classified_at timestamp with time zone DEFAULT now() NOT NULL
 );
-
 
 
 
@@ -214,7 +212,7 @@ CREATE TABLE public."user" (
     name character varying(255) NOT NULL,
     surname character varying(255) NOT NULL,
     email character varying(255) NOT NULL,
-    roles character varying(255) DEFAULT 'user'::character varying,
+    roles text[] DEFAULT ARRAY['ELEVE'::text] NOT NULL,
     blame boolean DEFAULT false
 );
 
@@ -268,7 +266,6 @@ ALTER TABLE ONLY public.feedback_classification
 
 
 
-
 ALTER TABLE ONLY public.feedback
     ADD CONSTRAINT feedback_pkey PRIMARY KEY (id);
 
@@ -314,7 +311,6 @@ ALTER TABLE ONLY public."user"
 
 
 
-
 CREATE TRIGGER feedback_notify AFTER INSERT ON public.feedback FOR EACH ROW EXECUTE FUNCTION public.notify_new_feedback();
 
 
@@ -331,7 +327,6 @@ ALTER TABLE ONLY public.elo_history
 
 ALTER TABLE ONLY public.student
     ADD CONSTRAINT elo_student_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
-
 
 
 

@@ -53,7 +53,7 @@ func main() {
 		r.Route("/auth", func(r chi.Router) {
 			auth.RoutesAuth(r, cfg, authentification.PostLdap)
 		})
-		role := []string{"etudiant"}
+		role := []string{"ELEVE"}
 		r.With(auth.Security(cfg.JWT, &role)).Route("/feedback", feedback.RouteFeedBack)
 
 	})

@@ -61,7 +61,7 @@ func main() {
 	}
 	go feedback.ListenForNewFeedbacks(&cfg.Database, iaConnector)
 
-	r.Use(services.FullLogRequest)
+	//r.Use(services.FullLogRequest)
 
 	// version api1
 	r.Route("/api/v2", func(r chi.Router) {

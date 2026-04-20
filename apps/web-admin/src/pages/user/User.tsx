@@ -13,8 +13,8 @@ const userSchema = z.object({
     id: z.number(),
     keycloak_id: z.string().nullish(),
     version: z.number(),
-    firstName: z.string().optional(),
-    lastName: z.string().optional(),
+    surname: z.string().optional(),
+    name: z.string().optional(),
     email: z.email("Email invalide").optional().or(z.literal('')),
     password: z.string().optional(),
     roles: z.union([
@@ -28,23 +28,23 @@ export type User = z.infer<typeof userSchema>;
 const UserFields = ({ register, control, errors, isReadOnly }: RenderProps<User>) => (
     <>
         <TextField
-            {...register("firstName")}
+            {...register("surname")}
             label="Prénom"
             variant="outlined"
             fullWidth
             disabled={isReadOnly}
-            error={!!errors.firstName}
-            helperText={errors.firstName?.message}
+            error={!!errors.surname}
+            helperText={errors.surname?.message}
             sx={{ mb: 2 }}
         />
         <TextField
-            {...register("lastName")}
+            {...register("name")}
             label="Nom"
             variant="outlined"
             fullWidth
             disabled={isReadOnly}
-            error={!!errors.lastName}
-            helperText={errors.lastName?.message}
+            error={!!errors.name}
+            helperText={errors.name?.message}
             sx={{ mb: 2 }}
         />
         <TextField

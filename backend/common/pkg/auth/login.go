@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"context"
 	"time"
@@ -18,11 +19,11 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Name         string `json:"name"`
-	Surname      string `json:"surname"`
-	Role         string `json:"role"`
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	Name         string   `json:"name"`
+	Surname      string   `json:"surname"`
+	Roles        []string `json:"roles"`
+	AccessToken  string   `json:"access_token"`
+	RefreshToken string   `json:"refresh_token"`
 }
 
 func (c *LoginRequest) Bind(r *http.Request) error {
@@ -99,7 +100,7 @@ func Login(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	roles := (*claim)["roles"].(string)
+	rolesStr := (*claim)["roles"].(string)
 
 	// ✅ Réponse avec le token
 	render.JSON(w, r, &LoginResponse{
@@ -107,6 +108,6 @@ func Login(w http.ResponseWriter, r *http.Request,
 		Surname:      ldapIdentity.Surname,
 		AccessToken:  tokenPaire.AccessToken.Token,
 		RefreshToken: tokenPaire.RefreshTokenInfo.Token,
-		Role:         roles,
+		Roles:        strings.Split(rolesStr, ","),
 	})
 }
