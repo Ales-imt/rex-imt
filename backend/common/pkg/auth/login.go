@@ -29,6 +29,9 @@ func (c *LoginRequest) Bind(r *http.Request) error {
 	if c.Identifiant == "" || c.Password == "" {
 		return fmt.Errorf("identifiant et mot de passe requis")
 	}
+	if len(c.Identifiant) > 254 || len(c.Password) > 256 {
+		return fmt.Errorf("identifiant ou mot de passe trop long")
+	}
 	return nil
 }
 
@@ -48,7 +51,7 @@ func Login(w http.ResponseWriter, r *http.Request,
 		if validationErr, ok := err.(*services.AppValidationError); ok {
 			services.InvalidRequestError(w, r, "Erreur validation", services.VALIDATION_ERROR, validationErr.Form)
 		} else {
-			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			services.InternalServerError(w, r, "Erreur d'authentification", services.NO_INFORMATION, nil)
 		}
 		return
 	}
@@ -58,7 +61,7 @@ func Login(w http.ResponseWriter, r *http.Request,
 		if validationErr, ok := err.(*services.AppValidationError); ok {
 			services.InvalidRequestError(w, r, "Erreur validation", services.VALIDATION_ERROR, validationErr.Form)
 		} else {
-			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			services.InternalServerError(w, r, "Erreur interne", services.NO_INFORMATION, nil)
 		}
 		return
 	}
@@ -83,7 +86,7 @@ func Login(w http.ResponseWriter, r *http.Request,
 	}
 	err = queriesToken.CreateRefreshToken(context.Background(), CreateRefreshTokenParams{
 		Userid:       int32(userId),
-		Token:        tokenPaire.RefreshTokenInfo.Token,
+		Token:        hashToken(tokenPaire.RefreshTokenInfo.Token),
 		Expire:       services.ToPgTimestamptz(&tokenPaire.RefreshTokenInfo.Expiration),
 		Session:      tokenPaire.RefreshTokenInfo.Session,
 		TokenVersion: services.ToPgInt4(tokenPaire.RefreshTokenInfo.Version),
@@ -102,7 +105,7 @@ func Login(w http.ResponseWriter, r *http.Request,
 	render.JSON(w, r, &LoginResponse{
 		Name:         data.Identifiant,
 		Surname:      ldapIdentity.Surname,
-		AccessToken:  tokenPaire.RefreshTokenInfo.Token,
+		AccessToken:  tokenPaire.AccessToken.Token,
 		RefreshToken: tokenPaire.RefreshTokenInfo.Token,
 		Role:         roles,
 	})

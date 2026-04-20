@@ -61,8 +61,7 @@ func main() {
 	}
 	go feedback.ListenForNewFeedbacks(&cfg.Database, iaConnector)
 
-	//	r.Use(services.FullLogRequest)
-	getAccessToken := auth.GetAccessTokenByCookies
+	r.Use(services.FullLogRequest)
 
 	// version api1
 	r.Route("/api/v2", func(r chi.Router) {
@@ -71,19 +70,19 @@ func main() {
 			w.Write([]byte("pong"))
 		})
 		r.Route("/auth", func(r chi.Router) {
-			auth.RoutesAuth(r, cfg, authentification.PostLdap, getAccessToken)
+			auth.RoutesAuth(r, cfg, authentification.PostLdap)
 		})
-		roles := []string{"admin"}
+		roles := []string{"ADMIN"}
 
-		r.With(auth.Security(cfg.JWT, getAccessToken, &roles)).
+		r.With(auth.Security(cfg.JWT, &roles)).
 			Route("/user", func(r chi.Router) {
 				user.RouteUtilisateur(r, cfg.LDAP)
 			})
-		r.With(auth.Security(cfg.JWT, getAccessToken, &roles)).
+		r.With(auth.Security(cfg.JWT, &roles)).
 			Route("/cohorte", func(r chi.Router) {
 				cohorte.RouteCohorte(r, cfg.LDAP)
 			})
-		r.With(auth.Security(cfg.JWT, getAccessToken, &roles)).
+		r.With(auth.Security(cfg.JWT, &roles)).
 			Route("/feedback", feedback.RouteFeedback)
 	})
 

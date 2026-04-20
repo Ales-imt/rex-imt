@@ -10,7 +10,8 @@
       "Bash(sort -k3 -rn)",
       "Bash(awk '{print $3, $4}')",
       "Bash(grep -n \"iaConnector\\\\|IAConnector\" /home/vjo/projets/rex/rex-imt/backend/admin/pkg/feedback/*.go)",
-      "Bash(find /home/vjo/projets/rex/rex-imt -type f \\\\\\( -name \"*.sql\" -o -name \"*.go\" \\\\\\) -exec grep -l \"student.*promotion\\\\|promotion.*student\" {} \\\\;)"
+      "Bash(find /home/vjo/projets/rex/rex-imt -type f \\\\\\( -name \"*.sql\" -o -name \"*.go\" \\\\\\) -exec grep -l \"student.*promotion\\\\|promotion.*student\" {} \\\\;)",
+      "Bash(go get *)"
     ],
     "additionalDirectories": [
       "/home/vjo/projets/rex/rex-imt"

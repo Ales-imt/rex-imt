@@ -50,12 +50,6 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 		return
 	}
 
-	accessCokie := tokenPaire.accessToCookies()
-	http.SetCookie(w, &accessCokie)
-
-	refreshCookie := tokenPaire.refreshToCookies()
-	http.SetCookie(w, &refreshCookie)
-
 	err = queries.DeleteRefreshToken(context.Background(), oldRefreshToken.Token)
 
 	if err == pgx.ErrNoRows {
@@ -71,7 +65,7 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 	now := time.Now()
 	err = queries.CreateRefreshToken(context.Background(), CreateRefreshTokenParams{
 		Userid:       oldRefreshToken.UserID,
-		Token:        tokenPaire.RefreshTokenInfo.Token,
+		Token:        hashToken(tokenPaire.RefreshTokenInfo.Token),
 		Session:      tokenPaire.RefreshTokenInfo.Session,
 		TokenVersion: services.ToPgInt4(tokenPaire.RefreshTokenInfo.Version),
 		Expire:       services.ToPgTimestamptz(&tokenPaire.RefreshTokenInfo.Expiration),
@@ -84,7 +78,10 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent) // 204 No Content
+	render.JSON(w, r, map[string]string{
+		"accessToken":  tokenPaire.AccessToken.Token,
+		"refreshToken": tokenPaire.RefreshTokenInfo.Token,
+	})
 
 }
 
@@ -96,7 +93,7 @@ func Me(w http.ResponseWriter, r *http.Request, jwtConfig services.JWTConfig) {
 		return
 	}
 
-	claim, err := getClaims(r, jwtConfig.Secret, GetRefreshTokenByCookies)
+	claim, err := getClaims(r, jwtConfig.Secret) // a faire
 	if err != nil {
 		services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
@@ -136,16 +133,21 @@ func Me(w http.ResponseWriter, r *http.Request, jwtConfig services.JWTConfig) {
 
 }
 
+type refreshBody struct {
+	RefreshToken string `json:"refreshToken"`
+}
+
 func checkRefreshToken(r *http.Request, pgCtx *services.Postgres) (*RefreshToken, error) {
 
-	refreshToken, err := r.Cookie(pathRefresh)
-	if err != nil {
-		return nil, err
+	var body refreshBody
+	if err := render.DecodeJSON(r.Body, &body); err != nil || body.RefreshToken == "" {
+		return nil, errors.New("refresh token manquant")
 	}
+	tokenValue := hashToken(body.RefreshToken)
 
 	queries := New(pgCtx.Db)
 	// Retrieve the refresh token
-	token, err := queries.GetRefreshToken(context.Background(), refreshToken.Value)
+	token, err := queries.GetRefreshToken(context.Background(), tokenValue)
 	if err != nil {
 		return nil, err
 	}
