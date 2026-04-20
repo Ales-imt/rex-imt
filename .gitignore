@@ -1,1 +1,12 @@
+.vscode/secrets.env
 infras/liquibase/liquibase_libs
+**/__debug*
+/back/**/gen/*
+**/*.log
+**/*.xlsx
+**/*.xlsx#
+**/*.docx
+apps/web-admin/node_modules
+apps/web-admin/dist
+
+

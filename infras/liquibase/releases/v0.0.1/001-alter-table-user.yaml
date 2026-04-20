@@ -1,0 +1,40 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.2-001-alter-table-user
+      author: vjo
+      changes:
+        - dropUniqueConstraint:
+            tableName: user
+            schemaName: public
+            constraintName: user_ldapid_key
+        - dropColumn:
+            tableName: user
+            schemaName: public
+            columnName: ldapid
+        - addColumn:
+            tableName: user
+            schemaName: public
+            columns:
+              - column:
+                  name: blame
+                  type: boolean
+                  defaultValueBoolean: false
+      rollback:
+        - dropColumn:
+            tableName: user
+            schemaName: public
+            columnName: blame
+        - addColumn:
+            tableName: user
+            schemaName: public
+            columns:
+              - column:
+                  name: ldapid
+                  type: integer
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: user
+            schemaName: public
+            columnNames: ldapid
+            constraintName: user_ldapid_key
