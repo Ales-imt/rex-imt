@@ -1,0 +1,59 @@
+databaseChangeLog:
+- changeSet:
+    id: create-table-feedback-classification-1
+    author: vjo
+    changes:
+    - createTable:
+        tableName: feedback_classification
+        columns:
+        - column:
+            name: feedback_id
+            type: INTEGER
+            constraints:
+              primaryKey: true
+              foreignKeyName: fk_classification_feedback
+              references: feedback(id)
+        - column:
+            name: categorie
+            type: VARCHAR(64)
+            constraints:
+              nullable: false
+        - column:
+            name: sous_categorie
+            type: VARCHAR(64)
+            constraints:
+              nullable: false
+        - column:
+            name: sentiment
+            type: VARCHAR(16)
+            constraints:
+              nullable: false
+        - column:
+            name: urgence
+            type: INTEGER
+            constraints:
+              nullable: false
+        - column:
+            name: resume
+            type: TEXT
+            constraints:
+              nullable: false
+        - column:
+            name: promotion
+            type: TEXT
+            constraints:
+              nullable: true
+        - column:
+            name: groupe
+            type: TEXT
+            constraints:
+              nullable: true
+        - column:
+            name: classified_at
+            type: TIMESTAMPTZ
+            defaultValueComputed: now()
+            constraints:
+              nullable: false
+    rollback:
+    - dropTable:
+        tableName: feedback_classification

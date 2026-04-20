@@ -18,9 +18,11 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Name    string `json:"name"`
-	Surname string `json:"surname"`
-	Role    string `json:"role"`
+	Name         string `json:"name"`
+	Surname      string `json:"surname"`
+	Role         string `json:"role"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func (c *LoginRequest) Bind(r *http.Request) error {
@@ -94,18 +96,14 @@ func Login(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	accessCokie := tokenPaire.accessToCookies()
-	http.SetCookie(w, &accessCokie)
-
-	refreshCookie := tokenPaire.refreshToCookies()
-	http.SetCookie(w, &refreshCookie)
-
 	roles := (*claim)["roles"].(string)
 
 	// ✅ Réponse avec le token
 	render.JSON(w, r, &LoginResponse{
-		Name:    data.Identifiant,
-		Surname: ldapIdentity.Surname,
-		Role:    roles,
+		Name:         data.Identifiant,
+		Surname:      ldapIdentity.Surname,
+		AccessToken:  tokenPaire.RefreshTokenInfo.Token,
+		RefreshToken: tokenPaire.RefreshTokenInfo.Token,
+		Role:         roles,
 	})
 }

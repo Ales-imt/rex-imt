@@ -1,102 +1,373 @@
-CREATE TABLE public.user (
-    id serial4 NOT NULL,
-	"version" int4 DEFAULT 1 NULL,
-	"name" varchar(255) NOT NULL,
-	surname varchar(255) NOT NULL,
-	email varchar(255) NOT NULL,
-	roles varchar(255) DEFAULT 'user'::character varying NULL,
-	blame bool DEFAULT false NULL,
-	CONSTRAINT user_email_key UNIQUE (email),
-	CONSTRAINT user_pkey PRIMARY KEY (id)
+
+
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+
+
+CREATE FUNCTION public.notify_new_feedback() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  v_promotion varchar(255);
+  v_groupe    text;
+BEGIN
+  SELECT s.promotion INTO v_promotion
+  FROM student s
+  WHERE s.user_id = NEW.user_id;
+
+  SELECT string_agg(g.name, ', ') INTO v_groupe
+  FROM eleve_groupe eg
+  JOIN groupe g ON g.id = eg.id_groupe
+  WHERE eg.num_etudiant = NEW.user_id;
+
+  PERFORM pg_notify(
+    'new_feedback',
+    json_build_object(
+      'id',        NEW.id,
+      'content',   NEW.content,
+      'user_id',   NEW.user_id,
+      'season_id', NEW.season_id,
+      'promotion', v_promotion,
+      'groupe',    v_groupe
+    )::text
+  );
+  RETURN NEW;
+END;
+$$;
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+
+CREATE TABLE public.eleve_groupe (
+    num_etudiant integer NOT NULL,
+    id_groupe integer NOT NULL
 );
 
-CREATE TABLE public.student (
-	user_id int4 UNIQUE NOT NULL,
-	elo int4 DEFAULT 1000 NOT NULL,
-	last_elo_gain int4 DEFAULT 0 NULL,
-	promotion varchar(255) DEFAULT NULL,
-	CONSTRAINT elo_student_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.user(id)
-);
 
-CREATE TABLE public.refresh_tokens (
-    id serial4 NOT NULL,
-    user_id serial4 NOT NULL REFERENCES public.user(id) ON DELETE CASCADE,
-	token_version integer default '1',
-	session text NOT NULL,
-    token text UNIQUE NOT NULL,
-    expires_at timestamp with time zone NOT NULL,
-    created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    revoked BOOLEAN NOT NULL DEFAULT FALSE
-);
-
-
-CREATE TABLE public.season (
-	id serial4 NOT NULL,
-	start_date timestamp with time zone not null,
-	end_date timestamp with time zone NOT NULL,
-	CONSTRAINT season_pkey PRIMARY KEY (id)
-);
-
--- public.elo_history definition
-
--- Drop table
-
--- DROP TABLE public.elo_history;
 
 CREATE TABLE public.elo_history (
-	id serial4 NOT NULL,
-	user_id int4 NULL,
-	season_id int4 NULL,
-	final_elo int4 NOT NULL,
-	rank int4 NULL,
-	CONSTRAINT elo_history_pkey PRIMARY KEY (id),
-	CONSTRAINT elo_history_season_id_fkey FOREIGN KEY (season_id) REFERENCES public.season(id),
-	CONSTRAINT elo_history_student_id_fkey FOREIGN KEY (user_id) REFERENCES public.user(id)
+    id integer NOT NULL,
+    user_id integer,
+    season_id integer,
+    final_elo integer NOT NULL,
+    rank integer
 );
 
 
--- public.feedback definition
 
--- Drop table
+CREATE SEQUENCE public.elo_history_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
 
--- DROP TABLE public.feedback;
+
+
+ALTER SEQUENCE public.elo_history_id_seq OWNED BY public.elo_history.id;
+
+
 
 CREATE TABLE public.feedback (
-	id serial4 NOT NULL,
-	user_id int4 NULL,
-	content text NOT NULL,
-	created_at timestamp with time zone DEFAULT now() NULL,
-	season_id int4 NULL,
-	CONSTRAINT feedback_pkey PRIMARY KEY (id),
-	CONSTRAINT feedback_season_id_fkey FOREIGN KEY (season_id) REFERENCES public.season(id),
-	CONSTRAINT feedback_student_id_fkey FOREIGN KEY (user_id) REFERENCES public.user(id)
+    id integer NOT NULL,
+    user_id integer,
+    content text NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    season_id integer
 );
 
 
-CREATE TABLE public.promotion (
-    id bigint NOT NULL,
-    name character varying(255),
-    CONSTRAINT promotion_pkey PRIMARY KEY (id)
+
+CREATE TABLE public.feedback_classification (
+    feedback_id integer NOT NULL,
+    categorie character varying(64) NOT NULL,
+    sous_categorie character varying(64) NOT NULL,
+    sentiment character varying(16) NOT NULL,
+    urgence integer NOT NULL,
+    resume text NOT NULL,
+    promotion text,
+    groupe text,
+    classified_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+
+
+
+CREATE SEQUENCE public.feedback_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+
+ALTER SEQUENCE public.feedback_id_seq OWNED BY public.feedback.id;
+
+
 
 CREATE TABLE public.groupe (
     id bigint NOT NULL,
     name character varying(255),
-    promo_id bigint NOT NULL REFERENCES public.promotion(id) ON DELETE cascade,
-    CONSTRAINT groupe_pkey PRIMARY KEY (id)
+    promo_id bigint NOT NULL
 );
 
-CREATE TABLE feedback_groupe (
-    feedback_id   INT NOT NULL REFERENCES public.feedback(id) ON DELETE CASCADE,
-    groupe_id INT NOT NULL REFERENCES groupe(id) ON DELETE CASCADE,
-    PRIMARY KEY (feedback_id, groupe_id)
+
+
+CREATE TABLE public.promotion (
+    id bigint NOT NULL,
+    name character varying(255)
 );
 
-CREATE TABLE public.eleve_groupe (
-	num_etudiant int4 NOT NULL,
-	id_groupe int4 NOT NULL,
-	CONSTRAINT pk_eleve_groupe PRIMARY KEY (num_etudiant, id_groupe),
-	CONSTRAINT fk_eleve_groupe_eleve FOREIGN KEY (num_etudiant) REFERENCES public.user(id),
-	CONSTRAINT fk_eleve_groupe_groupe FOREIGN KEY (id_groupe) REFERENCES public.groupe(id)
+
+
+CREATE TABLE public.refresh_tokens (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    token text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    revoked boolean DEFAULT false NOT NULL,
+    token_version integer DEFAULT 1,
+    session text DEFAULT ''::text NOT NULL
 );
+
+
+
+CREATE SEQUENCE public.refresh_tokens_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+
+ALTER SEQUENCE public.refresh_tokens_id_seq OWNED BY public.refresh_tokens.id;
+
+
+
+CREATE SEQUENCE public.refresh_tokens_user_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+
+ALTER SEQUENCE public.refresh_tokens_user_id_seq OWNED BY public.refresh_tokens.user_id;
+
+
+
+CREATE TABLE public.season (
+    id integer NOT NULL,
+    start_date timestamp with time zone NOT NULL,
+    end_date timestamp with time zone NOT NULL
+);
+
+
+
+CREATE SEQUENCE public.season_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+
+ALTER SEQUENCE public.season_id_seq OWNED BY public.season.id;
+
+
+
+CREATE TABLE public.student (
+    user_id integer NOT NULL,
+    elo integer DEFAULT 1000 NOT NULL,
+    last_elo_gain integer DEFAULT 0,
+    promotion character varying(255) DEFAULT NULL::character varying
+);
+
+
+
+CREATE TABLE public."user" (
+    id integer NOT NULL,
+    version integer DEFAULT 1,
+    name character varying(255) NOT NULL,
+    surname character varying(255) NOT NULL,
+    email character varying(255) NOT NULL,
+    roles character varying(255) DEFAULT 'user'::character varying,
+    blame boolean DEFAULT false
+);
+
+
+
+CREATE SEQUENCE public.user_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+
+ALTER SEQUENCE public.user_id_seq OWNED BY public."user".id;
+
+
+
+ALTER TABLE ONLY public.elo_history ALTER COLUMN id SET DEFAULT nextval('public.elo_history_id_seq'::regclass);
+
+
+
+ALTER TABLE ONLY public.feedback ALTER COLUMN id SET DEFAULT nextval('public.feedback_id_seq'::regclass);
+
+
+
+ALTER TABLE ONLY public.refresh_tokens ALTER COLUMN id SET DEFAULT nextval('public.refresh_tokens_id_seq'::regclass);
+
+
+
+ALTER TABLE ONLY public.refresh_tokens ALTER COLUMN user_id SET DEFAULT nextval('public.refresh_tokens_user_id_seq'::regclass);
+
+
+
+ALTER TABLE ONLY public.season ALTER COLUMN id SET DEFAULT nextval('public.season_id_seq'::regclass);
+
+
+
+ALTER TABLE ONLY public."user" ALTER COLUMN id SET DEFAULT nextval('public.user_id_seq'::regclass);
+
+
+
+ALTER TABLE ONLY public.elo_history
+    ADD CONSTRAINT elo_history_pkey PRIMARY KEY (id);
+
+
+
+ALTER TABLE ONLY public.feedback_classification
+    ADD CONSTRAINT feedback_classification_pkey PRIMARY KEY (feedback_id);
+
+
+
+
+ALTER TABLE ONLY public.feedback
+    ADD CONSTRAINT feedback_pkey PRIMARY KEY (id);
+
+
+
+ALTER TABLE ONLY public.groupe
+    ADD CONSTRAINT groupe_pkey PRIMARY KEY (id);
+
+
+
+ALTER TABLE ONLY public.eleve_groupe
+    ADD CONSTRAINT pk_eleve_groupe PRIMARY KEY (num_etudiant, id_groupe);
+
+
+
+ALTER TABLE ONLY public.promotion
+    ADD CONSTRAINT promotion_pkey PRIMARY KEY (id);
+
+
+
+ALTER TABLE ONLY public.refresh_tokens
+    ADD CONSTRAINT refresh_tokens_token_key UNIQUE (token);
+
+
+
+ALTER TABLE ONLY public.season
+    ADD CONSTRAINT season_pkey PRIMARY KEY (id);
+
+
+
+ALTER TABLE ONLY public.student
+    ADD CONSTRAINT student_user_id_key UNIQUE (user_id);
+
+
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_email_key UNIQUE (email);
+
+
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_pkey PRIMARY KEY (id);
+
+
+
+
+CREATE TRIGGER feedback_notify AFTER INSERT ON public.feedback FOR EACH ROW EXECUTE FUNCTION public.notify_new_feedback();
+
+
+
+ALTER TABLE ONLY public.elo_history
+    ADD CONSTRAINT elo_history_season_id_fkey FOREIGN KEY (season_id) REFERENCES public.season(id);
+
+
+
+ALTER TABLE ONLY public.elo_history
+    ADD CONSTRAINT elo_history_student_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id);
+
+
+
+ALTER TABLE ONLY public.student
+    ADD CONSTRAINT elo_student_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+
+
+ALTER TABLE ONLY public.feedback
+    ADD CONSTRAINT feedback_season_id_fkey FOREIGN KEY (season_id) REFERENCES public.season(id);
+
+
+
+ALTER TABLE ONLY public.feedback
+    ADD CONSTRAINT feedback_student_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY public.feedback_classification
+    ADD CONSTRAINT fk_classification_feedback FOREIGN KEY (feedback_id) REFERENCES public.feedback(id);
+
+
+
+ALTER TABLE ONLY public.eleve_groupe
+    ADD CONSTRAINT fk_eleve_groupe_eleve FOREIGN KEY (num_etudiant) REFERENCES public."user"(id);
+
+
+
+ALTER TABLE ONLY public.eleve_groupe
+    ADD CONSTRAINT fk_eleve_groupe_groupe FOREIGN KEY (id_groupe) REFERENCES public.groupe(id);
+
+
+
+ALTER TABLE ONLY public.groupe
+    ADD CONSTRAINT groupe_promo_id_fkey FOREIGN KEY (promo_id) REFERENCES public.promotion(id) ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY public.refresh_tokens
+    ADD CONSTRAINT refresh_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+
 
