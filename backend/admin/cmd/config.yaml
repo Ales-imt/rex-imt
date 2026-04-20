@@ -3,7 +3,7 @@ database:
   port: 5432
   user: postgres
   password: root
-  name: db-rex  
+  name: db_rex
 
 server:
   host: localhost
@@ -11,10 +11,22 @@ server:
 
 jwt:
   secret: lee0Op9iriThai7mXae5ahxuUpo2thaenaeL6mooaehahk1U
-  accessTokenExpiresIn: 15m
+  accessTokenExpiresIn: 2m
   refreshTokenExpiresIn: 168h
 
 ldap:
-  url: 	ldap://ldap.mines-ales.fr:389
+  url: ldap://ldap.mines-ales.fr:389
   #url: ldap://localhost:3890
   baseDN: dc=ema,dc=fr
+
+ia:
+  provider: ragarenn # "ollama" ou "ragarenn"
+
+ollama:
+  baseURL: http://localhost:11434
+  model: mistral-nemo
+
+ragarenn:
+  baseURL: https://ragarenn.eskemm-numerique.fr/sso/ch@t
+  apiKey: ${RAGARENN_API_KEY} 
+  model: ilaas/gemma-4-31b #RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic

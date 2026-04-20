@@ -63,9 +63,8 @@ func IsValidEmail(identifiant string) bool {
 
 func CreateCookie(name string, path string, expires time.Time, value string) http.Cookie {
 	return http.Cookie{
-		Name:     name,
-		Path:     path,
-		HttpOnly: true,
+		Name: name,
+		Path: path,
 		//Secure: true,
 		Expires:  expires,
 		Value:    value,

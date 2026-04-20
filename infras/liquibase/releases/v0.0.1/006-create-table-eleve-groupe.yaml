@@ -1,0 +1,44 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.2-006-create-table-eleve-groupe
+      author: vjo
+      changes:
+        - createTable:
+            tableName: eleve_groupe
+            schemaName: public
+            columns:
+              - column:
+                  name: num_etudiant
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: id_groupe
+                  type: integer
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: eleve_groupe
+            schemaName: public
+            columnNames: num_etudiant, id_groupe
+            constraintName: pk_eleve_groupe
+        - addForeignKeyConstraint:
+            baseTableName: eleve_groupe
+            baseTableSchemaName: public
+            baseColumnNames: num_etudiant
+            referencedTableName: user
+            referencedTableSchemaName: public
+            referencedColumnNames: id
+            constraintName: fk_eleve_groupe_eleve
+        - addForeignKeyConstraint:
+            baseTableName: eleve_groupe
+            baseTableSchemaName: public
+            baseColumnNames: id_groupe
+            referencedTableName: groupe
+            referencedTableSchemaName: public
+            referencedColumnNames: id
+            constraintName: fk_eleve_groupe_groupe
+      rollback:
+        - dropTable:
+            tableName: eleve_groupe
+            schemaName: public
