@@ -1,6 +1,5 @@
 import axios from "axios"
 import type { Session } from "../../SessionContext"
-import { apiInstance } from "../../services/api"
 
 
 export interface CredentialContext {

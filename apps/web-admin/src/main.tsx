@@ -10,6 +10,11 @@ import { UserIndex } from './pages/user/UserLayout.tsx';
 import { createUserRoutes } from './pages/user/routes.tsx';
 import { LOGIN } from './pages/login/def.ts';
 import SignIn from './pages/login/signin.tsx';
+import { FEEDBACK_WORKFLOW } from './pages/feedback/def.ts';
+import { FeedbackIndex } from './pages/feedback/FeedbackLayout.tsx';
+import { createFeedbackRoutes } from './pages/feedback/routes.tsx';
+import { ANALYSE } from './pages/analyse/def.ts';
+import { FeedbackDashboard } from './pages/analyse/FeedbackDashboard.tsx';
 
 const routes = [
   {
@@ -26,13 +31,25 @@ const routes = [
               { index: true, Component: UserIndex },
               ...createUserRoutes()
             ]
+          },
+          {
+            path: FEEDBACK_WORKFLOW,
+            children: [
+              { index: true, Component: FeedbackIndex },
+              ...createFeedbackRoutes()
+            ]
+          },
+          {
+            path: ANALYSE,
+            Component: FeedbackDashboard
           }
         ]
       },
       {
-        path: '/'+LOGIN,
+        path: LOGIN,
         Component: SignIn
-      }
+      },
+
     ]
   }
 ]
