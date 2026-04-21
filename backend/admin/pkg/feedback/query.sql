@@ -7,7 +7,8 @@ ORDER BY f.created_at DESC;
 -- name: ListFeedbacksWithClassification :many
 SELECT f.id, f.content, f.created_at,
        c.promotion, c.groupe,
-       c.categorie, c.sous_categorie, c.sentiment, c.urgence, c.resume
+       c.categorie, c.sous_categorie, c.sentiment, c.urgence, c.resume,
+       f.strongbox
 FROM feedback f
 LEFT JOIN feedback_classification c ON c.feedback_id = f.id
 ORDER BY f.created_at DESC;

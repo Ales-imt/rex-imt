@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { TextField, Tooltip } from '@mui/material';
-import { useMemo } from 'react';
+import { Dialog, DialogContent, DialogTitle, IconButton, TextField, Tooltip, Typography } from '@mui/material';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
+import { useMemo, useState } from 'react';
 import { Crud } from '../../services/crud/Crud';
 import { createRepository, type CrudProps, type Datasource, type RenderProps, type ViewConfig } from '../../services/crud/def';
 import { useRootPath } from '../../services/crud/useRootPath';
@@ -18,6 +19,7 @@ const feedbackSchema = z.object({
     sentiment: z.string().nullish(),
     urgence: z.number().nullish(),
     resume: z.string().nullish(),
+    strongbox: z.string().nullish(),
 });
 
 export type Feedback = z.infer<typeof feedbackSchema>;
@@ -97,7 +99,23 @@ const FeedbackFields = ({ register, errors }: RenderProps<Feedback>) => (
     </>
 );
 
-export const feedbackColumns: MRT_ColumnDef<Feedback>[] = [
+function StrongboxModal({ value, onClose }: { value: string; onClose: () => void }) {
+    return (
+        <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+            <DialogTitle>StrongBox</DialogTitle>
+            <DialogContent>
+                <Typography
+                    component="pre"
+                    sx={{ fontFamily: 'monospace', fontSize: '0.85rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+                >
+                    {value}
+                </Typography>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+const baseFeedbackColumns: MRT_ColumnDef<Feedback>[] = [
     { accessorKey: 'id', header: 'ID', size: 60 },
     {
         accessorKey: 'content',
@@ -138,10 +156,38 @@ export const feedbackColumns: MRT_ColumnDef<Feedback>[] = [
     },
 ];
 
+function useFeedbackColumns(): { columns: MRT_ColumnDef<Feedback>[]; modal: React.ReactNode } {
+    const [strongbox, setStrongbox] = useState<string | null>(null);
+
+    const actionColumn: MRT_ColumnDef<Feedback> = {
+        id: 'strongbox-action',
+        header: 'StrongBox',
+        size: 90,
+        enableSorting: false,
+        Cell: ({ row }) => {
+            const val = row.original.strongbox;
+            if (!val) return null;
+            return (
+                <Tooltip title="Voir StrongBox" placement="top" arrow>
+                    <IconButton size="small" onClick={() => setStrongbox(val)}>
+                        <LockOpenIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+            );
+        },
+    };
+
+    const modal = strongbox ? (
+        <StrongboxModal value={strongbox} onClose={() => setStrongbox(null)} />
+    ) : null;
+
+    return { columns: [...baseFeedbackColumns, actionColumn], modal };
+}
+
 export const feedbackViewConfig: ViewConfig<Feedback> = {
     schema: feedbackSchema,
     emptyValue: { id: -1, content: '' },
-    columns: feedbackColumns,
+    columns: baseFeedbackColumns,
     render: FeedbackFields,
 };
 
@@ -153,18 +199,23 @@ export const feedbackDatasourceBase = createRepository<Feedback>({
 
 export function CrudFeedback({ mode, workflow, isAction, isTopToolbar, renderTopToolbarCustomActions }: CrudProps<Feedback>) {
     const rootPath = useRootPath(mode);
+    const { columns, modal } = useFeedbackColumns();
 
     const datasource = useMemo((): Datasource<Feedback> => ({
         ...feedbackDatasourceBase,
         ...feedbackViewConfig,
+        columns,
         title: 'Feedbacks',
         isAction,
         isReadOnly: true,
         isTopToolbar,
         renderTopToolbarCustomActions,
-    }), [isAction, isTopToolbar, renderTopToolbarCustomActions]);
+    }), [columns, isAction, isTopToolbar, renderTopToolbarCustomActions]);
 
     return (
-        <Crud datasource={datasource} mode={mode} workflow={workflow} rootPath={rootPath} />
+        <>
+            <Crud datasource={datasource} mode={mode} workflow={workflow} rootPath={rootPath} />
+            {modal}
+        </>
     );
 }
