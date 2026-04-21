@@ -7,6 +7,7 @@ import (
 	ia "back-rex-admin/pkg/ia"
 	"back-rex-admin/pkg/ia/ollama"
 	"back-rex-admin/pkg/ia/ragarenn"
+	"back-rex-admin/pkg/reports"
 	"back-rex-admin/pkg/user"
 	"back-rex-common/pkg/auth"
 	"back-rex-common/pkg/services"
@@ -84,6 +85,8 @@ func main() {
 			})
 		r.With(auth.Security(cfg.JWT, &roles)).
 			Route("/feedback", feedback.RouteFeedback)
+		r.With(auth.Security(cfg.JWT, &roles)).
+			Route("/reports", reports.RouteReports)
 	})
 
 	log.Printf("Serveur démarré sur le port %d (HTTP)", cfg.Server.Port)
