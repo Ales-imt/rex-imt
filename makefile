@@ -14,6 +14,11 @@ infra: docker liquibase
 docker:
 	@echo "--- 🐳 Démarrage des conteneurs Docker ---"
 	cd $(DOCKER_DIR) && docker compose -f compose.yaml up -d
+	
+	@echo "--- 🗑️ suppression de la bd db_rex ---"
+	docker exec -i postgres-16.10-alpine-rex psql -U postgres -c "DROP DATABASE IF EXISTS db_rex;"
+	@echo "--- 🆕 création de la bd db_rex ---"
+	docker exec -i postgres-16.10-alpine-rex psql -U postgres -c "CREATE DATABASE db_rex;"
 	@echo "--- 🚀restitue la bd ---"
 	docker cp ./devedb_backup.dump postgres-16.10-alpine-rex:/tmp/devedb_backup.dump
 	@echo "--- 🚀restaure la bd ---"
@@ -44,7 +49,8 @@ db-to-code:
 	cd $(BACK_DIR)/student && sqlc generate
 
 clean:
-	cd $(DOCKER_DIR) && docker compose  down -v
+#-v pour tous supprimer.
+	cd $(DOCKER_DIR) && docker compose  down  
 	rm -rf $(INFRA_DIR)/liquibase/liquibase_libs
 
 

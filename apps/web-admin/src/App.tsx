@@ -3,15 +3,19 @@ import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
 import { type Authentication, type NavigationItem } from '@toolpad/core/AppProvider';
 import PersonIcon from '@mui/icons-material/Person';
+import FeedbackIcon from '@mui/icons-material/Feedback';
+import BarChartIcon from '@mui/icons-material/BarChart';
 import { USER_WORKFLOW } from './pages/user/def';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import SessionContext, { type Session } from './SessionContext';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { ReactRouterAppProvider } from '@toolpad/core/react-router';
-import { Outlet, useLocation } from 'react-router';
+import { Outlet} from 'react-router';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { getCredentialsProvider } from './pages/login/CredentialProvider';
 import { setupAxiosInterceptors } from './services/api';
+import {  FEEDBACK_WORKFLOW } from './pages/feedback/def';
+import { ANALYSE } from './pages/analyse/def';
 
 
 type NavigationItemWithRoles = NavigationItem & {
@@ -24,6 +28,18 @@ const NAVIGATION: NavigationItemWithRoles[] = [
     segment: USER_WORKFLOW,
     title: 'Utilisateur',
     icon: <PersonIcon />,
+    // requiredRoles: ['admin'],
+  },
+  {
+    segment: FEEDBACK_WORKFLOW,
+    title: 'Feedback',
+    icon: <FeedbackIcon />,
+    // requiredRoles: ['admin'],
+  },
+  {
+    segment: ANALYSE,
+    title: 'Analyse',
+    icon: <BarChartIcon />,
     // requiredRoles: ['admin'],
   }
 

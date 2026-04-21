@@ -10,6 +10,8 @@ apps/web-admin/node_modules
 apps/web-admin/.vite
 apps/web-admin/dist
 devedb_backup.dump
+feedback_classification.sql
+
 
 
 
