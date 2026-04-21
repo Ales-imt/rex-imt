@@ -54,7 +54,7 @@ func main() {
 			auth.RoutesAuth(r, cfg, authentification.PostLdap)
 		})
 		role := []string{"ELEVE"}
-		r.With(auth.Security(cfg.JWT, &role)).Route("/feedback", feedback.RouteFeedBack)
+		r.With(auth.Security(cfg.JWT, &role)).Route("/feedback", feedback.MakeRouteFeedBack(cfg.Age.PublicKey))
 
 	})
 

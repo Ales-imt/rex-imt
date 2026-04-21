@@ -86,7 +86,8 @@ CREATE TABLE public.feedback (
     user_id integer,
     content text NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
-    season_id integer
+    season_id integer,
+    strongbox text
 );
 
 

@@ -172,8 +172,8 @@ func UpdateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 	user, err := queries.UpdatePartialUser(ctx, UpdatePartialUserParams{
 		ID:      oldUser.ID,
 		Version: oldUser.Version,
-		Name:    services.ToPgText(input.Name),
-		Surname: services.ToPgText(input.Surname),
+		Name:    input.Name,
+		Surname: input.Surname,
 		Email:   input.Email,
 		Roles:   input.Roles,
 		Blame:   services.ToPgBool(input.Blame),
