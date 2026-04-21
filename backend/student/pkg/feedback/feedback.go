@@ -5,11 +5,14 @@ import (
 	"back-rex-common/pkg/services"
 	"back-rex-eleve/pkg/season"
 	"back-rex-eleve/pkg/student"
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
 	"time"
 
+	"filippo.io/age"
+	"filippo.io/age/armor"
 	"github.com/go-chi/render"
 )
 
@@ -25,23 +28,22 @@ type FeedbackResponse struct {
 	SeasonEndsIn string `json:"seasonEndsIn"`
 }
 
-// 🔵 POST /feedback — envoie des feedbacks
-func Feedback(w http.ResponseWriter, r *http.Request) {
+func makeFeedbackHandler(agePublicKey string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var inputs []FeedbackRequest
+		if err := render.DecodeJSON(r.Body, &inputs); err != nil {
+			services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
 
-	var inputs []FeedbackRequest
-	if err := render.DecodeJSON(r.Body, &inputs); err != nil {
-		services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
+		response, err := ProcessFeedback(r, inputs, agePublicKey)
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+
+		render.JSON(w, r, response)
 	}
-
-	// Appel logique métier complète
-	response, err := ProcessFeedback(r, inputs)
-	if err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
-
-	render.JSON(w, r, response)
 }
 
 // 🔵 GET /feedback — récupère les données pour ThankView
@@ -91,9 +93,7 @@ func GetLastEloGain(w http.ResponseWriter, r *http.Request) {
 }
 
 // 🧠 ProcessFeedback : logique complète utilisée par POST
-func ProcessFeedback(r *http.Request, inputs []FeedbackRequest) (*FeedbackResponse, error) {
-
-	fmt.Println(r.RemoteAddr)
+func ProcessFeedback(r *http.Request, inputs []FeedbackRequest, agePublicKey string) (*FeedbackResponse, error) {
 	studentID := *auth.GetSecurityUserId(r.Context())
 	pgCtx := services.GetPgCtx(r.Context())
 	studentQueries := student.New(pgCtx.Db)
@@ -104,23 +104,20 @@ func ProcessFeedback(r *http.Request, inputs []FeedbackRequest) (*FeedbackRespon
 		return nil, err
 	}
 
-	if err := InsertFeedbacks(r, studentID, inputs, int32(seasonID)); err != nil {
+	if err := InsertFeedbacks(r, studentID, inputs, int32(seasonID), agePublicKey); err != nil {
 		return nil, err
 	}
 
 	eloGain := 5 * len(inputs)
 
-	// Réinitialiser last_elo_gain à 0
 	err = studentQueries.ClearLastEloGain(context.Background(), int32(studentID))
 	if err != nil {
 		return nil, fmt.Errorf("échec reset elo gain : %w", err)
 	}
 
-	// Mettre à jour l'elo
-	// Mettre à jour l'elo
 	err = studentQueries.UpdateStudentElo(context.Background(), student.UpdateStudentEloParams{
 		UserID:      int32(studentID),
-		LastEloGain: services.ToPgInt4(eloGain), // ✅ le bon nom de champ
+		LastEloGain: services.ToPgInt4(eloGain),
 	})
 	if err != nil {
 		return nil, err
@@ -150,10 +147,15 @@ func ProcessFeedback(r *http.Request, inputs []FeedbackRequest) (*FeedbackRespon
 }
 
 // 🧾 Insertion des feedbacks
-func InsertFeedbacks(r *http.Request, studentID int, inputs []FeedbackRequest, seasonID int32) error {
+func InsertFeedbacks(r *http.Request, studentID int, inputs []FeedbackRequest, seasonID int32, agePublicKey string) error {
 	pgCtx := services.GetPgCtx(r.Context())
 	queries := New(pgCtx.Db)
 	now := time.Now()
+
+	strongbox, err := encryptStrongbox(agePublicKey, r.RemoteAddr, studentID)
+	if err != nil {
+		return fmt.Errorf("échec chiffrement strongbox : %w", err)
+	}
 
 	for _, input := range inputs {
 		_, err := queries.InsertFeedbacks(context.Background(), InsertFeedbacksParams{
@@ -161,10 +163,39 @@ func InsertFeedbacks(r *http.Request, studentID int, inputs []FeedbackRequest, s
 			Content:   input.Content,
 			CreatedAt: services.ToPgTimestamptz(&now),
 			SeasonID:  services.ToPgInt4(int(seasonID)),
+			Strongbox: services.ToPgText(strongbox),
 		})
 		if err != nil {
 			return fmt.Errorf("échec insertion feedback : %w", err)
 		}
 	}
 	return nil
+}
+
+// encryptStrongbox chiffre l'IP et l'ID élève avec la clef publique age fournie.
+func encryptStrongbox(publicKeyStr string, ip string, studentID int) (string, error) {
+	recipient, err := age.ParseX25519Recipient(publicKeyStr)
+	if err != nil {
+		return "", fmt.Errorf("clef publique age invalide : %w", err)
+	}
+
+	var buf bytes.Buffer
+	armorWriter := armor.NewWriter(&buf)
+	w, err := age.Encrypt(armorWriter, recipient)
+	if err != nil {
+		return "", fmt.Errorf("age encrypt : %w", err)
+	}
+
+	payload := fmt.Sprintf("ip=%s student_id=%d", ip, studentID)
+	if _, err := w.Write([]byte(payload)); err != nil {
+		return "", err
+	}
+	if err := w.Close(); err != nil {
+		return "", err
+	}
+	if err := armorWriter.Close(); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
 }

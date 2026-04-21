@@ -15,6 +15,11 @@ type Config struct {
 	IA        IAConfig        `yaml:"ia"`
 	Ollama    OllamaConfig    `yaml:"ollama"`
 	RAGaRenn  RAGaRennConfig  `yaml:"ragarenn"`
+	Age       AgeConfig       `yaml:"age"`
+}
+
+type AgeConfig struct {
+	PublicKey string `yaml:"publicKey"`
 }
 
 type IAConfig struct {
