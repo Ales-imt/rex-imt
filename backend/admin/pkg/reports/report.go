@@ -1,7 +1,6 @@
 package reports
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,155 +8,18 @@ import (
 
 	"back-rex-common/pkg/services"
 	fpdf "github.com/go-pdf/fpdf"
+	"github.com/jackc/pgx/v5/pgtype"
 )
-
-// ── data structs ──────────────────────────────────────────────────────────────
-
-type globalStats struct {
-	Total      int
-	Classified int
-	Pending    int
-}
-
-type labelCount struct {
-	Label string
-	Count int
-}
-
-type promoStat struct {
-	Promo      string
-	Count      int
-	MaxUrgence int
-}
-
-// ── queries ───────────────────────────────────────────────────────────────────
-
-func fetchGlobalStats(ctx context.Context, pg *services.Postgres, since time.Time) (globalStats, error) {
-	row := pg.Db.QueryRow(ctx, `
-		SELECT
-			COUNT(*)                 AS total,
-			COUNT(c.feedback_id)     AS classified,
-			COUNT(*) - COUNT(c.feedback_id) AS pending
-		FROM feedback f
-		LEFT JOIN feedback_classification c ON c.feedback_id = f.id
-		WHERE f.created_at >= $1
-	`, since)
-
-	var s globalStats
-	err := row.Scan(&s.Total, &s.Classified, &s.Pending)
-	return s, err
-}
-
-func fetchByUrgence(ctx context.Context, pg *services.Postgres, since time.Time) ([]labelCount, error) {
-	rows, err := pg.Db.Query(ctx, `
-		SELECT c.urgence::text, COUNT(*) AS count
-		FROM feedback f
-		JOIN feedback_classification c ON c.feedback_id = f.id
-		WHERE f.created_at >= $1
-		GROUP BY c.urgence
-		ORDER BY c.urgence DESC
-	`, since)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var result []labelCount
-	for rows.Next() {
-		var r labelCount
-		if err := rows.Scan(&r.Label, &r.Count); err != nil {
-			return nil, err
-		}
-		result = append(result, r)
-	}
-	return result, rows.Err()
-}
-
-func fetchByCategorie(ctx context.Context, pg *services.Postgres, since time.Time) ([]labelCount, error) {
-	rows, err := pg.Db.Query(ctx, `
-		SELECT COALESCE(c.categorie, 'Non classifié'), COUNT(*) AS count
-		FROM feedback f
-		LEFT JOIN feedback_classification c ON c.feedback_id = f.id
-		WHERE f.created_at >= $1
-		GROUP BY c.categorie
-		ORDER BY count DESC
-	`, since)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var result []labelCount
-	for rows.Next() {
-		var r labelCount
-		if err := rows.Scan(&r.Label, &r.Count); err != nil {
-			return nil, err
-		}
-		result = append(result, r)
-	}
-	return result, rows.Err()
-}
-
-func fetchBySentiment(ctx context.Context, pg *services.Postgres, since time.Time) ([]labelCount, error) {
-	rows, err := pg.Db.Query(ctx, `
-		SELECT COALESCE(c.sentiment, 'non classifié'), COUNT(*) AS count
-		FROM feedback f
-		LEFT JOIN feedback_classification c ON c.feedback_id = f.id
-		WHERE f.created_at >= $1
-		GROUP BY c.sentiment
-		ORDER BY count DESC
-	`, since)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var result []labelCount
-	for rows.Next() {
-		var r labelCount
-		if err := rows.Scan(&r.Label, &r.Count); err != nil {
-			return nil, err
-		}
-		result = append(result, r)
-	}
-	return result, rows.Err()
-}
-
-func fetchByPromo(ctx context.Context, pg *services.Postgres, since time.Time) ([]promoStat, error) {
-	rows, err := pg.Db.Query(ctx, `
-		SELECT
-			COALESCE(c.promotion, 'Inconnue') AS promo,
-			COUNT(*) AS count,
-			COALESCE(MAX(c.urgence), 0) AS max_urgence
-		FROM feedback f
-		LEFT JOIN feedback_classification c ON c.feedback_id = f.id
-		WHERE f.created_at >= $1
-		GROUP BY c.promotion
-		ORDER BY count DESC
-	`, since)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var result []promoStat
-	for rows.Next() {
-		var r promoStat
-		if err := rows.Scan(&r.Promo, &r.Count, &r.MaxUrgence); err != nil {
-			return nil, err
-		}
-		result = append(result, r)
-	}
-	return result, rows.Err()
-}
 
 // ── PDF builder ───────────────────────────────────────────────────────────────
 
 func buildPDF(
 	from, to time.Time,
-	stats globalStats,
-	byUrgence, byCategorie, bySentiment []labelCount,
-	byPromo []promoStat,
+	stats ReportGlobalStatsRow,
+	byUrgence []ReportByUrgenceRow,
+	byCategorie []ReportByCategorieRow,
+	bySentiment []ReportBySentimentRow,
+	byPromo []ReportByPromoRow,
 ) (*fpdf.Fpdf, error) {
 	pdf := fpdf.New("P", "mm", "A4", "")
 	tr := pdf.UnicodeTranslatorFromDescriptor("")
@@ -199,7 +61,7 @@ func buildPDF(
 		pdf.CellFormat(0, 7, tr(value), "", 1, "L", false, 0, "")
 	}
 
-	barRow := func(label string, count, total int) {
+	barRow := func(label string, count, total int64) {
 		if total == 0 {
 			return
 		}
@@ -279,15 +141,22 @@ func buildPDF(
 		} else {
 			pdf.SetFillColor(255, 255, 255)
 		}
+		var maxUrgence int64
+		switch v := r.MaxUrgence.(type) {
+		case int32:
+			maxUrgence = int64(v)
+		case int64:
+			maxUrgence = v
+		}
 		statut := "OK"
-		if r.MaxUrgence >= 5 {
+		if maxUrgence >= 5 {
 			statut = "Alerte critique"
-		} else if r.MaxUrgence >= 3 {
+		} else if maxUrgence >= 3 {
 			statut = "Attention"
 		}
 		pdf.CellFormat(70, 6, tr(r.Promo), "1", 0, "L", fill, 0, "")
 		pdf.CellFormat(25, 6, fmt.Sprintf("%d", r.Count), "1", 0, "C", fill, 0, "")
-		pdf.CellFormat(35, 6, fmt.Sprintf("%d", r.MaxUrgence), "1", 0, "C", fill, 0, "")
+		pdf.CellFormat(35, 6, fmt.Sprintf("%d", maxUrgence), "1", 0, "C", fill, 0, "")
 		pdf.CellFormat(40, 6, statut, "1", 1, "C", fill, 0, "")
 	}
 
@@ -308,30 +177,32 @@ type periodRequest struct {
 }
 
 func generateAndSend(w http.ResponseWriter, r *http.Request, from, to time.Time, filename string) {
-	pg := services.GetPgCtx(r.Context())
+	pgctx := services.GetPgCtx(r.Context())
 	ctx := r.Context()
+	query := New(pgctx.Db)
+	since := pgtype.Timestamptz{Time: from, Valid: true}
 
-	stats, err := fetchGlobalStats(ctx, pg, from)
+	stats, err := query.ReportGlobalStats(ctx, since)
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}
-	byUrgence, err := fetchByUrgence(ctx, pg, from)
+	byUrgence, err := query.ReportByUrgence(ctx, since)
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}
-	byCategorie, err := fetchByCategorie(ctx, pg, from)
+	byCategorie, err := query.ReportByCategorie(ctx, since)
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}
-	bySentiment, err := fetchBySentiment(ctx, pg, from)
+	bySentiment, err := query.ReportBySentiment(ctx, since)
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}
-	byPromo, err := fetchByPromo(ctx, pg, from)
+	byPromo, err := query.ReportByPromo(ctx, since)
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
