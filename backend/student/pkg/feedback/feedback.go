@@ -17,7 +17,9 @@ import (
 )
 
 type FeedbackRequest struct {
-	Content string `json:"content"`
+	Content   string `json:"content"`
+	Pseudo    string `json:"pseudo"`
+	MessageID string `json:"message_id"`
 }
 
 type FeedbackResponse struct {
@@ -164,6 +166,8 @@ func InsertFeedbacks(r *http.Request, studentID int, inputs []FeedbackRequest, s
 			CreatedAt: services.ToPgTimestamptz(&now),
 			SeasonID:  services.ToPgInt4(int(seasonID)),
 			Strongbox: services.ToPgText(strongbox),
+			Pseudo:    services.ToPgText(input.Pseudo),
+			MessageID: services.ToPgText(input.MessageID),
 		})
 		if err != nil {
 			return fmt.Errorf("échec insertion feedback : %w", err)

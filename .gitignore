@@ -13,3 +13,4 @@ devedb_backup.dump
 feedback_classification.sql
 **/*.age*
 cle_privee.txt
+infras/migration/migration
