@@ -5,6 +5,7 @@ import (
 	"back-rex-common/pkg/services"
 	"back-rex-eleve/pkg/authentification"
 	"back-rex-eleve/pkg/feedback"
+	"back-rex-eleve/pkg/reponse"
 	"fmt"
 	"log"
 	"net/http"
@@ -41,7 +42,7 @@ func main() {
 	r.Use(services.MakeDatabaseMiddleware(&cfg.Database))
 	auth.StartRefreshTokenCleanup(&cfg.Database)
 
-	//r.Use(services.FullLogRequest)
+	r.Use(services.FullLogRequest)
 
 	// version api0
 	r.Route("/api/v2", func(r chi.Router) {
@@ -55,6 +56,7 @@ func main() {
 		})
 		role := []string{"ELEVE"}
 		r.With(auth.Security(cfg.JWT, &role)).Route("/feedback", feedback.MakeRouteFeedBack(cfg.Age.PublicKey))
+		r.With(auth.Security(cfg.JWT, &role)).Route("/reponse", reponse.MakeRouteReponse())
 
 	})
 
