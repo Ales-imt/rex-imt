@@ -30,3 +30,13 @@ sql:
         sql_package: "pgx/v5"
         omit_unused_structs: true
 
+
+  - engine: "postgresql"
+    queries: "pkg/reponse/query.sql"
+    schema: "../schema.sql"
+    gen:
+      go:
+        package: "reponse"
+        out: "pkg/reponse"
+        sql_package: "pgx/v5"
+        omit_unused_structs: true

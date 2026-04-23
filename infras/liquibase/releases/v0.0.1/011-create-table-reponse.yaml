@@ -1,0 +1,43 @@
+databaseChangeLog:
+- changeSet:
+    id: create-table-reponse-1
+    author: vjo
+    changes:
+    - createTable:
+        tableName: reponse
+        columns:
+        - column:
+            name: id
+            type: SERIAL
+            constraints:
+              primaryKey: true
+              nullable: false
+        - column:
+            name: message_id
+            type: TEXT
+            constraints:
+              nullable: false
+        - column:
+            name: contenu
+            type: TEXT
+            constraints:
+              nullable: false
+        - column:
+            name: auteur
+            type: TEXT
+            constraints:
+              nullable: false
+        - column:
+            name: cree_le
+            type: TIMESTAMPTZ
+            constraints:
+              nullable: false
+        - column:
+            name: lu
+            type: BOOLEAN
+            defaultValueBoolean: false
+            constraints:
+              nullable: false
+    rollback:
+    - dropTable:
+        tableName: reponse
