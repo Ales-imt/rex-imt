@@ -9,7 +9,7 @@ DOCKER_DIR=./infras/container
 
 all: infra db-to-code
 
-infra: docker liquibase
+infra: docker liquibase post-infra
 
 docker:
 	@echo "--- 🐳 Démarrage des conteneurs Docker ---"
@@ -33,6 +33,10 @@ liquibase:
 	@echo "--- appliquer les migrations"
 	cd $(INFRA_DIR)/liquibase && liquibase update
 
+post-infra:
+	@echo "--- 🚀met a jour les strongBox ---"
+	cd $(INFRA_DIR)/migration && go build
+	cd $(INFRA_DIR)/migration && ./migration
 
 db-to-code:
 	@echo "--- 🐘 1. Extraction du schéma PostgreSQL ---"
