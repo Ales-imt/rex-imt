@@ -38,11 +38,18 @@ type ReponseItem = {
   cree_le: string;
 };
 
+const yesterday = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() - 10);
+  d.setHours(1, 0, 0, 0);
+  return d.toISOString();
+})();
+
 const INITIAL_MESSAGES: Message[] = [
-  { id: '1', text: 'Salut ! Comment ça va ?', from: 'other', time: '09:41' },
-  { id: '2', text: 'Très bien merci, et toi ?', from: 'me', time: '09:42' },
-  { id: '3', text: 'Tu travailles sur quoi en ce moment ?', from: 'other', time: '09:42' },
-  { id: '4', text: 'Une app React Native 🚀', from: 'me', time: '09:43' },
+  { id: 'init-1', text: 'Salut ! Comment ça va ?', from: 'other', time: yesterday },
+  { id: 'init-2', text: 'Très bien merci, et toi ?', from: 'me', time: yesterday },
+  { id: 'init-3', text: 'Tu travailles sur quoi en ce moment ?', from: 'other', time: '09:42' },
+  { id: 'init-4', text: 'Une app React Native 🚀', from: 'me', time: '09:43' },
 ];
 
 const CHAT_FILE = `${FileSystem.documentDirectory}chat_messages.json`;
@@ -65,36 +72,54 @@ async function saveMessages(msgs: Message[]): Promise<void> {
 let messageCache: Message[] = INITIAL_MESSAGES;
 
 function now() {
-  return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return new Date().toISOString();
+}
+
+function formatTime(time: string): string {
+  const d = new Date(time);
+  if (isNaN(d.getTime())) return time;
+  return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function isToday(time: string): boolean {
+  const d = new Date(time);
+  if (isNaN(d.getTime())) return true;
+  const t = new Date();
+  return d.getDate() === t.getDate() && d.getMonth() === t.getMonth() && d.getFullYear() === t.getFullYear();
+}
+
+function formatDate(time: string): string {
+  return new Date(time).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function Bubble({ message, colors }: { message: Message; colors: typeof Colors.light }) {
   const isMe = message.from === 'me';
+  const today = isToday(message.time);
+  console.log(today)
   return (
     <View style={[styles.row, isMe ? styles.rowMe : styles.rowOther]}>
-      <View style={[
-        styles.bubble,
-        isMe
-          ? [styles.bubbleMe, { backgroundColor: colors.bubbleMe }]
-          : [styles.bubbleOther, { backgroundColor: colors.bubbleOther }],
-      ]}>
-        <Text style={[styles.bubbleText, { color: colors.bubbleText }]}>{message.text}</Text>
-        <Text style={[
-          styles.time,
-          { color: isMe ? colors.bubbleTimeMeColor : colors.bubbleTime },
-        ]}>{message.time}</Text>
+      <View style={styles.bubbleWrapper}>
+        <View style={[
+          styles.bubble,
+          isMe
+            ? [styles.bubbleMe, { backgroundColor: colors.bubbleMe }]
+            : [styles.bubbleOther, { backgroundColor: colors.bubbleOther }],
+        ]}>
+          <Text style={[styles.bubbleText, { color: colors.bubbleText }]}>{message.text}</Text>
+          <Text style={[
+            styles.time,
+            { color: isMe ? colors.bubbleTimeMeColor : colors.bubbleTime },
+          ]}>{formatTime(message.time)}</Text>
+        </View>
+        {!today && (
+          <Text style={[styles.dateBelow, { textAlign: isMe ? 'right' : 'left', color: colors.bubbleTime }]}>
+            {formatDate(message.time)}
+          </Text>
+        )}
       </View>
     </View>
   );
 }
-
-const formatter = new Intl.DateTimeFormat('fr-FR', {
-  hour: '2-digit',
-  minute: '2-digit',
-  day: '2-digit',
-  month: 'long',
-  year: 'numeric'
-});
 
 export default function ChatScreen() {
   const colors = useTheme();
@@ -123,7 +148,7 @@ export default function ChatScreen() {
   const orientation = useOrientation();
   const [keyboardOffset, setKeyboardOffset] = useState(56);
 
-  console.log('ChatScreen orientation', orientation);
+  console.log('ChatScreen messages', messages);
 
 
   const safeEdges = useMemo((): ('bottom' | 'left' | 'right')[] => {
@@ -149,7 +174,7 @@ export default function ChatScreen() {
         updateMessages(prev => [
           ...prev,
           ...res.data.map(r => ({
-            id: String(r.id),
+            id: `reponse-${r.id}`,
             text: r.contenu,
             from: 'other' as const,
             time: r.cree_le,
@@ -272,7 +297,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   bubble: {
-    maxWidth: '75%',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingTop: 8,
@@ -282,6 +306,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 1,
+  },
+  bubbleWrapper: {
+    maxWidth: '75%',
   },
   bubbleMe: {
     borderBottomRightRadius: 3,
@@ -297,6 +324,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     alignSelf: 'flex-end',
     marginTop: 2,
+  },
+  dateBelow: {
+    fontSize: 10,
+    opacity: 0.4,
+    marginTop: 2,
+    marginHorizontal: 4,
   },
   inputBar: {
     flexDirection: 'row',

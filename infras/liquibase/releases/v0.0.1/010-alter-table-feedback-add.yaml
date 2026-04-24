@@ -21,6 +21,8 @@ databaseChangeLog:
             type: TEXT
             constraints:
               nullable: true
+              unique: true
+              uniqueConstraintName: uq_feedback_message_id
 
 
     rollback:
