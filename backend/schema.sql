@@ -331,6 +331,11 @@ ALTER TABLE ONLY public.student
 
 
 
+ALTER TABLE ONLY public.feedback
+    ADD CONSTRAINT uq_feedback_message_id UNIQUE (message_id);
+
+
+
 ALTER TABLE ONLY public."user"
     ADD CONSTRAINT user_email_key UNIQUE (email);
 
@@ -382,6 +387,11 @@ ALTER TABLE ONLY public.eleve_groupe
 
 ALTER TABLE ONLY public.eleve_groupe
     ADD CONSTRAINT fk_eleve_groupe_groupe FOREIGN KEY (id_groupe) REFERENCES public.groupe(id);
+
+
+
+ALTER TABLE ONLY public.reponse
+    ADD CONSTRAINT fk_reponse_feedback FOREIGN KEY (message_id) REFERENCES public.feedback(message_id) ON DELETE CASCADE;
 
 
 

@@ -8,14 +8,15 @@ import (
 )
 
 type Config struct {
-	Database  DatabaseConfig  `yaml:"database"`
-	Server    ServerConfig    `yaml:"server"`
-	JWT       JWTConfig       `yaml:"jwt"`
-	LDAP      LDAPConfig      `yaml:"ldap"`
-	IA        IAConfig        `yaml:"ia"`
-	Ollama    OllamaConfig    `yaml:"ollama"`
-	RAGaRenn  RAGaRennConfig  `yaml:"ragarenn"`
-	Age       AgeConfig       `yaml:"age"`
+	Database DatabaseConfig `yaml:"database"`
+	Server   ServerConfig   `yaml:"server"`
+	JWT      JWTConfig      `yaml:"jwt"`
+	LDAP     LDAPConfig     `yaml:"ldap"`
+	IA       IAConfig       `yaml:"ia"`
+	Ollama   OllamaConfig   `yaml:"ollama"`
+	RAGaRenn RAGaRennConfig `yaml:"ragarenn"`
+	Age      AgeConfig      `yaml:"age"`
+	Rack     RackConfig     `yaml:"rack"`
 }
 
 type AgeConfig struct {
@@ -35,6 +36,13 @@ type RAGaRennConfig struct {
 	BaseURL string `yaml:"baseURL"`
 	APIKey  string `yaml:"apiKey"`
 	Model   string `yaml:"model"`
+}
+
+type RackConfig struct {
+	BaseURL    string `yaml:"baseURL"`
+	Model      string `yaml:"model"`
+	APIKey     string `yaml:"apiKey"`
+	CaCertPath string `yaml:"caCertPath"`
 }
 
 type DatabaseConfig struct {

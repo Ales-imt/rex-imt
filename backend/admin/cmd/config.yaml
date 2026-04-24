@@ -21,7 +21,7 @@ ldap:
   baseDN: dc=ema,dc=fr
 
 ia:
-  provider: ollama # "ollama" ou "ragarenn"
+  provider: rack # "ollama" ou "ragarenn" ou "rack"
 
 ollama:
   baseURL: http://localhost:11434
@@ -31,3 +31,9 @@ ragarenn:
   baseURL: https://ragarenn.eskemm-numerique.fr/sso/ch@t
   apiKey: ${RAGARENN_API_KEY} 
   model: RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic # ilaas/gemma-4-31b  RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic
+
+rack:
+  baseURL: https://159.31.247.10
+  model: mistral-small:latest
+  apiKey: ${RACK_API_KEY}
+  caCertPath: /home/vjo/projets/rex/rex-imt/infras/x509/mtls_certs/ca.crt
