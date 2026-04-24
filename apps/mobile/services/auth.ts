@@ -27,9 +27,12 @@ export async function logout(): Promise<void> {
   // Import dynamique pour éviter la dépendance circulaire auth ↔ api
   const { apiInstance } = await import('./api');
   const { clearTokens } = await import('./tokens');
+  const FileSystem = await import('expo-file-system/legacy');
   try {
     await apiInstance.get('/auth/logout');
   } finally {
     await clearTokens();
+    const chatFile = `${FileSystem.documentDirectory}chat_messages.json`;
+    await FileSystem.deleteAsync(chatFile, { idempotent: true });
   }
 }

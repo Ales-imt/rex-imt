@@ -17,6 +17,9 @@ databaseChangeLog:
             type: TEXT
             constraints:
               nullable: false
+              foreignKeyName: fk_reponse_feedback
+              references: feedback(message_id)
+              deleteCascade: true
         - column:
             name: contenu
             type: TEXT
