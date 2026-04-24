@@ -14,3 +14,8 @@ feedback_classification.sql
 **/*.age*
 cle_privee.txt
 infras/migration/migration
+infras/serveur-ia/serveur-ia
+**/db.go
+**/models.go
+**/query.sql.go
+

@@ -11,3 +11,7 @@ age -d cle_privee_chiffree.age | age -d -i - donnees_a_dechiffrer.age
 
 age --decrypt -i cle_privee.txt t.txt
 
+
+Pour serveur-ia, generation de clef:
+tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48 ; echo ''
+

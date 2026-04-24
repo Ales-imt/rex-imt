@@ -4,7 +4,7 @@
 # Nom du répertoire qui contiendra tous les fichiers (évite la pollution)
 DIR_NAME="mtls_certs"
 # Nom de domaine/CN pour le serveur (doit correspondre à ServerName dans la config TLS)
-SERVER_HOST="localhost"
+SERVER_HOST="159.31.247.10"
 # Nom pour le client (CN)
 CLIENT_NAME="mtls-client"
 
@@ -50,6 +50,7 @@ subjectAltName = @alt_names
 DNS.1 = $SERVER_HOST
 DNS.2 = localhost
 IP.1 = 127.0.0.1
+IP.2 = $SERVER_HOST
 EOF
 
 # 2c. Générer la demande de signature de certificat (CSR) du serveur

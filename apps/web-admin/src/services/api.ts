@@ -38,5 +38,15 @@ export function setupAxiosInterceptors() {
         return config;
     });
 
+    apiInstance.interceptors.response.use(
+        response => response,
+        error => {
+            if (error.response?.status === 403) {
+                getCredentialsProvider().signOut();
+            }
+            return Promise.reject(error);
+        }
+    );
+
     axosInit = true
 }
