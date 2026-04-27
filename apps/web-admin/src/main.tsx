@@ -15,6 +15,8 @@ import { FeedbackIndex } from './pages/feedback/FeedbackLayout.tsx';
 import { createFeedbackRoutes } from './pages/feedback/routes.tsx';
 import { ANALYSE } from './pages/analyse/def.ts';
 import { FeedbackDashboard } from './pages/analyse/FeedbackDashboard.tsx';
+import { DISCUSSION } from './pages/discussion/def.ts';
+import { DiscussionPanel } from './pages/discussion/DiscussionPanel.tsx';
 
 const routes = [
   {
@@ -42,6 +44,10 @@ const routes = [
           {
             path: ANALYSE,
             Component: FeedbackDashboard
+          },
+          {
+            path: DISCUSSION,
+            Component: DiscussionPanel
           }
         ]
       },

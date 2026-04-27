@@ -8,7 +8,7 @@ ORDER BY f.created_at DESC;
 SELECT f.id, f.content, f.created_at,
        c.promotion, c.groupe,
        c.categorie, c.sous_categorie, c.sentiment, c.urgence, c.resume,
-       f.strongbox
+       f.strongbox, f.pseudo, f.message_id
 FROM feedback f
 LEFT JOIN feedback_classification c ON c.feedback_id = f.id
 ORDER BY f.created_at DESC;
@@ -25,6 +25,16 @@ LEFT JOIN feedback_classification c ON c.feedback_id = f.id
 WHERE c.feedback_id IS NULL
 GROUP BY f.id, f.content, f.user_id, f.season_id, s.promotion
 ORDER BY f.created_at ASC;
+
+-- name: ListRecentFeedbacksWithClassification :many
+SELECT f.id, f.content, f.created_at,
+       c.promotion, c.groupe,
+       c.categorie, c.sous_categorie, c.sentiment, c.urgence, c.resume,
+       f.strongbox, f.pseudo, f.message_id
+FROM feedback f
+LEFT JOIN feedback_classification c ON c.feedback_id = f.id
+WHERE f.created_at >= now() - ($1 * interval '1 month')
+ORDER BY f.created_at DESC;
 
 -- name: InsertClassification :exec
 INSERT INTO feedback_classification (feedback_id, categorie, sous_categorie, sentiment, urgence, resume, promotion, groupe)

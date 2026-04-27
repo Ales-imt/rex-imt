@@ -5,6 +5,7 @@ import { type Authentication, type NavigationItem } from '@toolpad/core/AppProvi
 import PersonIcon from '@mui/icons-material/Person';
 import FeedbackIcon from '@mui/icons-material/Feedback';
 import BarChartIcon from '@mui/icons-material/BarChart';
+import ForumIcon from '@mui/icons-material/Forum';
 import { USER_WORKFLOW } from './pages/user/def';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import SessionContext, { type Session } from './SessionContext';
@@ -16,6 +17,7 @@ import { getCredentialsProvider } from './pages/login/CredentialProvider';
 import { setupAxiosInterceptors } from './services/api';
 import {  FEEDBACK_WORKFLOW } from './pages/feedback/def';
 import { ANALYSE } from './pages/analyse/def';
+import { DISCUSSION } from './pages/discussion/def';
 
 
 type NavigationItemWithRoles = NavigationItem & {
@@ -41,8 +43,12 @@ const NAVIGATION: NavigationItemWithRoles[] = [
     title: 'Analyse',
     icon: <BarChartIcon />,
     // requiredRoles: ['admin'],
-  }
-
+  },
+  {
+    segment: DISCUSSION,
+    title: 'Discussion',
+    icon: <ForumIcon />,
+  },
 ]
 
 

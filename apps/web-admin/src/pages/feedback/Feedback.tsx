@@ -20,6 +20,8 @@ const feedbackSchema = z.object({
     urgence: z.number().nullish(),
     resume: z.string().nullish(),
     strongbox: z.string().nullish(),
+    pseudo: z.string().nullish(),
+    message_id: z.string().nullish(),
 });
 
 export type Feedback = z.infer<typeof feedbackSchema>;
