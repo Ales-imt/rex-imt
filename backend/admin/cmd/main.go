@@ -8,6 +8,7 @@ import (
 	"back-rex-admin/pkg/ia/ollama"
 	"back-rex-admin/pkg/ia/rack"
 	"back-rex-admin/pkg/ia/ragarenn"
+	"back-rex-admin/pkg/reponse"
 	"back-rex-admin/pkg/reports"
 	"back-rex-admin/pkg/user"
 	"back-rex-common/pkg/auth"
@@ -50,7 +51,7 @@ func main() {
 	if !filepath.IsAbs(cfg.Rack.CaCertPath) {
 		cfg.Rack.CaCertPath = filepath.Join(configDir, cfg.Rack.CaCertPath)
 	}
-	r.Use(services.MakeDatabaseMiddleware(&cfg.Database))
+	r.Use(services.MakeDatabasePgMiddleware(&cfg.Database))
 	auth.StartRefreshTokenCleanup(&cfg.Database)
 	var iaConnector ia.IAConnector
 	switch cfg.IA.Provider {
@@ -104,6 +105,8 @@ func main() {
 			Route("/feedback", feedback.RouteFeedback)
 		r.With(auth.Security(cfg.JWT, &roles)).
 			Route("/reports", reports.RouteReports)
+		r.With(auth.Security(cfg.JWT, &roles)).
+			Route("/reponse", reponse.RouteReponse)
 	})
 
 	log.Printf("Serveur démarré sur le port %d (HTTP)", cfg.Server.Port)

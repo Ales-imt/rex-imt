@@ -8,15 +8,16 @@ import (
 )
 
 type Config struct {
-	Database DatabaseConfig `yaml:"database"`
-	Server   ServerConfig   `yaml:"server"`
-	JWT      JWTConfig      `yaml:"jwt"`
-	LDAP     LDAPConfig     `yaml:"ldap"`
-	IA       IAConfig       `yaml:"ia"`
-	Ollama   OllamaConfig   `yaml:"ollama"`
-	RAGaRenn RAGaRennConfig `yaml:"ragarenn"`
-	Age      AgeConfig      `yaml:"age"`
-	Rack     RackConfig     `yaml:"rack"`
+	Database      DatabaseConfig `yaml:"database"`
+	MariaDBConfig MariaDBConfig  `yaml:"mariaDB"`
+	Server        ServerConfig   `yaml:"server"`
+	JWT           JWTConfig      `yaml:"jwt"`
+	LDAP          LDAPConfig     `yaml:"ldap"`
+	IA            IAConfig       `yaml:"ia"`
+	Ollama        OllamaConfig   `yaml:"ollama"`
+	RAGaRenn      RAGaRennConfig `yaml:"ragarenn"`
+	Age           AgeConfig      `yaml:"age"`
+	Rack          RackConfig     `yaml:"rack"`
 }
 
 type AgeConfig struct {
@@ -67,6 +68,15 @@ type JWTConfig struct {
 type LDAPConfig struct {
 	URL    string `yaml:"url"`
 	BaseDN string `yaml:"baseDN"`
+}
+
+// MariaDBConfig regroupe les paramètres de connexion à la base de données.
+type MariaDBConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Database string `yaml:"database"`
 }
 
 // LoadConfig loads environment variables from a .env file and returns a Config struct

@@ -5,6 +5,13 @@ database:
   password: root
   name: db_rex  
 
+mariaDB:
+  host:     localhost
+  port:     3306
+  user:     root
+  password: root
+  database: cyber_notes_v2
+
 server:
   host: localhost
   port: 3300
