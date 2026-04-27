@@ -1,0 +1,163 @@
+package note
+
+import (
+	"back-rex-common/pkg/auth"
+	"back-rex-common/pkg/services"
+	"back-rex-eleve/pkg/note/gen"
+	"context"
+	"database/sql"
+	"net/http"
+	"regexp"
+	"strings"
+
+	"github.com/go-chi/render"
+)
+
+// ^(\d+\.\d+) capte "5.1", "7.1", "8.1"
+// \.?([A-Za-z])? capte le suffixe optionnel A/B après un point éventuel ("8.1.A." → "A")
+var uePrefixRe = regexp.MustCompile(`^(\d+\.\d+)\.?([A-Za-z])?`)
+
+func extractUEKey(name string) string {
+	m := uePrefixRe.FindStringSubmatch(name)
+	if m == nil {
+		return ""
+	}
+	if m[2] != "" {
+		return m[1] + strings.ToUpper(m[2])
+	}
+	return m[1]
+}
+
+type Matiere struct {
+	Nom         string  `json:"nom"`
+	Note        float64 `json:"note"`
+	Coefficient float64 `json:"coefficient"`
+	Date        string  `json:"date"`
+	Commentaire *string `json:"commentaire,omitempty"`
+}
+
+type UE struct {
+	Nom         string    `json:"nom"`
+	Score       float64   `json:"score"`
+	Coefficient float64   `json:"coefficient"`
+	Matieres    []Matiere `json:"matieres"`
+}
+
+type Periode struct {
+	Nom string  `json:"nom"`
+	GPA float64 `json:"gpa"`
+	UEs []UE    `json:"ues"`
+}
+
+func GetNotes(w http.ResponseWriter, r *http.Request) {
+	userID := auth.GetSecurityUserId(r.Context())
+	pgCtx := services.GetPgCtx(r.Context())
+	authQueries := auth.New(pgCtx.Db)
+
+	user, err := authQueries.GetUserById(context.Background(), int32(*userID))
+	if err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+
+	db := services.GetMariaDB(r)
+	if db == nil {
+		services.InternalServerError(w, r, "base de données MariaDB non disponible", services.NO_INFORMATION, nil)
+		return
+	}
+	queries := gen.New(db)
+
+	rows, err := queries.GetNotesByEleve(r.Context(), sql.NullString{String: user.Email, Valid: true})
+	if err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+
+	type periodeData struct {
+		ueRows   []gen.GetNotesByEleveRow
+		noteRows []gen.GetNotesByEleveRow
+	}
+	periodeMap := make(map[string]*periodeData)
+	var periodeOrder []string
+
+	for _, row := range rows {
+		promo := row.Promo.String
+		if _, ok := periodeMap[promo]; !ok {
+			periodeMap[promo] = &periodeData{}
+			periodeOrder = append(periodeOrder, promo)
+		}
+		if row.TypeExercice.String == "ECTS" {
+			periodeMap[promo].ueRows = append(periodeMap[promo].ueRows, row)
+		} else {
+			periodeMap[promo].noteRows = append(periodeMap[promo].noteRows, row)
+		}
+	}
+
+	var result []Periode
+	for _, promo := range periodeOrder {
+		data := periodeMap[promo]
+
+		ueByKey := make(map[string]*UE)
+		var ueOrder []string
+		for _, row := range data.ueRows {
+			key := extractUEKey(row.Matiere.String)
+			ueByKey[key] = &UE{
+				Nom:         row.Matiere.String,
+				Score:       row.Noteobtenue.Float64,
+				Coefficient: row.Coefficient.Float64,
+			}
+			ueOrder = append(ueOrder, key)
+		}
+
+		for _, row := range data.noteRows {
+			key := extractUEKey(row.Matiere.String)
+			if _, ok := ueByKey[key]; !ok {
+				if _, exists := ueByKey[""]; !exists {
+					ueByKey[""] = &UE{Nom: "Autres"}
+					ueOrder = append(ueOrder, "")
+				}
+				key = ""
+			}
+			m := Matiere{
+				Nom:         row.Matiere.String,
+				Note:        row.Noteobtenue.Float64,
+				Coefficient: row.Coefficient.Float64,
+				Date:        row.DateExercice.Time.Format("2006-01-02"),
+			}
+			if row.Commentaire.Valid {
+				s := row.Commentaire.String
+				m.Commentaire = &s
+			}
+			ueByKey[key].Matieres = append(ueByKey[key].Matieres, m)
+		}
+
+		var ues []UE
+		var totalWeight, weightedScore float64
+		seen := make(map[string]bool)
+		for _, key := range ueOrder {
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			ue := ueByKey[key]
+			ues = append(ues, *ue)
+			if ue.Coefficient > 0 {
+				totalWeight += ue.Coefficient
+				weightedScore += ue.Score * ue.Coefficient
+			}
+		}
+
+		gpa := 0.0
+		if totalWeight > 0 {
+			gpa = weightedScore / totalWeight
+		}
+
+		result = append(result, Periode{
+			Nom: promo,
+			GPA: gpa,
+			UEs: ues,
+		})
+	}
+
+	render.JSON(w, r, result)
+}

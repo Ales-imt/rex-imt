@@ -12,7 +12,7 @@ server:
 
 jwt:
   secret: lee0Op9iriThai7mXae5ahxuUpo2thaenaeL6mooaehahk1U
-  accessTokenExpiresIn: 2m
+  accessTokenExpiresIn: 15m
   refreshTokenExpiresIn: 168h
 
 ldap:

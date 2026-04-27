@@ -5,6 +5,7 @@ import (
 	"back-rex-common/pkg/services"
 	"back-rex-eleve/pkg/authentification"
 	"back-rex-eleve/pkg/feedback"
+	"back-rex-eleve/pkg/note"
 	"back-rex-eleve/pkg/reponse"
 	"fmt"
 	"log"
@@ -39,7 +40,8 @@ func main() {
 	if err != nil {
 		log.Fatal("Erreur chargement config YAML :", err)
 	}
-	r.Use(services.MakeDatabaseMiddleware(&cfg.Database))
+	r.Use(services.MakeDatabasePgMiddleware(&cfg.Database))
+	r.Use(services.MakeMariaDBMiddleware(&cfg.MariaDBConfig))
 	auth.StartRefreshTokenCleanup(&cfg.Database)
 
 	r.Use(services.FullLogRequest)
@@ -57,6 +59,7 @@ func main() {
 		role := []string{"ELEVE"}
 		r.With(auth.Security(cfg.JWT, &role)).Route("/feedback", feedback.MakeRouteFeedBack(cfg.Age.PublicKey))
 		r.With(auth.Security(cfg.JWT, &role)).Route("/reponse", reponse.MakeRouteReponse())
+		r.With(auth.Security(cfg.JWT, &role)).Route("/note", note.MakeRouteNote())
 
 	})
 
