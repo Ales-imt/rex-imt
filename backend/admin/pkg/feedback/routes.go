@@ -6,4 +6,5 @@ import (
 
 func RouteFeedback(r chi.Router) {
 	r.Get("/", GetAllFeedback)
+	r.Get("/recent", GetRecentFeedback)
 }

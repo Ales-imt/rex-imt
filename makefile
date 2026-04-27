@@ -1,6 +1,8 @@
 # --- Variables ---
 DB_URL=postgres://postgres:root@localhost:5432/db_rex
-SCHEMA_FILE=schema.sql
+	
+SCHEMA_FILE_POSTGRES=schema.sql
+SCHEMA_FILE_MARIADB=schema_maria_db.sql
 BACK_DIR=./backend
 INFRA_DIR=./infras
 DOCKER_DIR=./infras/container
@@ -40,17 +42,20 @@ post-infra:
 
 db-to-code:
 	@echo "--- 🐘 1. Extraction du schéma PostgreSQL ---"
-	pg_dump -s -x -O -d $(DB_URL) -T "databasechangelog*" > $(BACK_DIR)/$(SCHEMA_FILE)
+	pg_dump -s -x -O -d $(DB_URL) -T "databasechangelog*" > $(BACK_DIR)/$(SCHEMA_FILE_POSTGRES)
 	
 	@echo "--- 🧹 2. Nettoyage du fichier SQL ---"
-	sed -i '/restrict/d' $(BACK_DIR)/$(SCHEMA_FILE)
-	sed -i '/unrestrict/d' $(BACK_DIR)/$(SCHEMA_FILE)
-	sed -i '/^--/d' $(BACK_DIR)/$(SCHEMA_FILE)
+	sed -i '/restrict/d' $(BACK_DIR)/$(SCHEMA_FILE_POSTGRES)
+	sed -i '/unrestrict/d' $(BACK_DIR)/$(SCHEMA_FILE_POSTGRES)
+	sed -i '/^--/d' $(BACK_DIR)/$(SCHEMA_FILE_POSTGRES)
 	
 	@echo "--- 🏗️ 3. Lancement de sqlc generate ---"
 	cd $(BACK_DIR)/admin && sqlc generate
 	cd $(BACK_DIR)/common && sqlc generate
 	cd $(BACK_DIR)/student && sqlc generate
+
+	@echo "--- Extraction du schéma Mariadb ---"
+	docker exec mon-mysql mariadb-dump -u root -proot --no-data cyber_notes_v2 > $(BACK_DIR)/$(SCHEMA_FILE_MARIADB)
 
 clean:
 #-v pour tous supprimer.

@@ -7,8 +7,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { apiInstance } from '@/services/api';
 import { generateUUID, getPseudo } from '@/services/tokens';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Stack } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Stack, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Keyboard,
@@ -46,10 +46,6 @@ const yesterday = (() => {
 })();
 
 const INITIAL_MESSAGES: Message[] = [
-  { id: 'init-1', text: 'Salut ! Comment ça va ?', from: 'other', time: yesterday },
-  { id: 'init-2', text: 'Très bien merci, et toi ?', from: 'me', time: yesterday },
-  { id: 'init-3', text: 'Tu travailles sur quoi en ce moment ?', from: 'other', time: '09:42' },
-  { id: 'init-4', text: 'Une app React Native 🚀', from: 'me', time: '09:43' },
 ];
 
 const CHAT_FILE = `${FileSystem.documentDirectory}chat_messages.json`;
@@ -69,7 +65,6 @@ async function saveMessages(msgs: Message[]): Promise<void> {
   await FileSystem.writeAsStringAsync(CHAT_FILE, JSON.stringify(msgs));
 }
 
-let messageCache: Message[] = INITIAL_MESSAGES;
 
 function now() {
   return new Date().toISOString();
@@ -95,7 +90,6 @@ function formatDate(time: string): string {
 function Bubble({ message, colors }: { message: Message; colors: typeof Colors.light }) {
   const isMe = message.from === 'me';
   const today = isToday(message.time);
-  console.log(today)
   return (
     <View style={[styles.row, isMe ? styles.rowMe : styles.rowOther]}>
       <View style={styles.bubbleWrapper}>
@@ -124,11 +118,10 @@ function Bubble({ message, colors }: { message: Message; colors: typeof Colors.l
 export default function ChatScreen() {
   const colors = useTheme();
   const navMenu = useNavMenu('chat');
-  const [messages, setMessages] = useState<Message[]>(messageCache);
+  const [messages, setMessages] = useState<Message[]>([]);
 
   useEffect(() => {
     loadMessages().then(msgs => {
-      messageCache = msgs;
       setMessages(msgs);
     });
   }, []);
@@ -136,7 +129,6 @@ export default function ChatScreen() {
   function updateMessages(updater: (prev: Message[]) => Message[]) {
     setMessages(prev => {
       const next = updater(prev);
-      messageCache = next;
       saveMessages(next);
       return next;
     });
@@ -163,6 +155,18 @@ export default function ChatScreen() {
     return () => { show.remove(); hide.remove(); };
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      listRef.current?.scrollToEnd({ animated: false });
+    }, [])
+  );
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      listRef.current?.scrollToEnd({ animated: true });
+    }
+  }, [messages.length]);
+
   useEffect(() => {
     const poll = async () => {
       try {
@@ -171,15 +175,18 @@ export default function ChatScreen() {
         const res = await apiInstance.get<ReponseItem[]>('/reponse', { headers: { 'X-Pseudo': pseudo } });
         if (!res.data) return;
         if (res.data.length === 0) return;
-        updateMessages(prev => [
-          ...prev,
-          ...res.data.map(r => ({
-            id: `reponse-${r.id}`,
-            text: r.contenu,
-            from: 'other' as const,
-            time: r.cree_le,
-          })),
-        ]);
+        updateMessages(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const newOnes = res.data
+            .map(r => ({
+              id: `reponse-${r.id}`,
+              text: r.contenu,
+              from: 'other' as const,
+              time: r.cree_le,
+            }))
+            .filter(m => !existingIds.has(m.id));
+          return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+        });
       } catch (e) {
         console.error('Erreur poll réponses', e);
       }
@@ -241,10 +248,10 @@ export default function ChatScreen() {
           <FlatList
             ref={listRef}
             data={messages}
+            extraData={messages}
             keyExtractor={m => m.id}
             renderItem={({ item }) => <Bubble message={item} colors={colors} />}
             contentContainerStyle={styles.list}
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           />
 
           <View style={[styles.inputBar, dynamicStyles.inputBar]}>
