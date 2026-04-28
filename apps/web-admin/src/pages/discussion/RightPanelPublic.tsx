@@ -6,33 +6,42 @@ import Chip from '@mui/material/Chip';
 import Button from '@mui/material/Button';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import CircularProgress from '@mui/material/CircularProgress';
+import Tooltip from '@mui/material/Tooltip';
 import PushPinIcon from '@mui/icons-material/PushPin';
+import { useQuery } from '@tanstack/react-query';
+import { apiInstance } from '../../services/api';
 import type { Feedback } from '../feedback/Feedback';
 import { classifiedFeedbacks } from '../analyse/shared';
-import { POST_ITS, CONNECTIONS, type PostIt } from './data';
+import { POSTIT_COLORS } from './data';
 
-const TAG_COLORS: Record<string, string> = {
-  Algo: '#ede9fe',
-  Chimie: '#dcfce7',
-  Examens: '#dbeafe',
-  React: '#fce7f3',
-  Maths: '#fef9c3',
-  Infos: '#fff7ed',
-};
-
-const TAG_TEXT: Record<string, string> = {
-  Algo: '#7c3aed',
-  Chimie: '#166534',
-  Examens: '#1e40af',
-  React: '#be185d',
-  Maths: '#854d0e',
-  Infos: '#c2410c',
+type ApiPostit = {
+  id: number;
+  message_id: string;
+  texte: string;
+  cree_le: string;
+  auteur_nom: string;
+  auteur_prenom: string;
+  feedback_content: string;
+  categorie: string | null;
+  resume: string | null;
+  sentiment: string | null;
+  urgence: number | null;
 };
 
 const BOARD_WIDTH = 900;
 const BOARD_HEIGHT = 660;
 const POSTIT_W = 180;
-const POSTIT_H = 165;
+
+function postitPosition(idx: number, id: number) {
+  const col = idx % 4;
+  const row = Math.floor(idx / 4);
+  return {
+    x: 30 + col * 215 + (id % 3) * 12,
+    y: 55 + row * 195 + (id % 5) * 9,
+    rotation: ((id * 7) % 70) / 10 - 3.5,
+  };
+}
 
 interface Props {
   feedbacks: Feedback[];
@@ -43,15 +52,25 @@ export default function RightPanelPublic({ feedbacks, onPinNote }: Props) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [hovered, setHovered] = useState<number | null>(null);
 
-  const categories = useMemo(() => {
-    const set = new Set(classifiedFeedbacks(feedbacks).map(f => f.categorie).filter(Boolean) as string[]);
-    return Array.from(set).sort();
-  }, [feedbacks]);
+  const { data: postits = [], isLoading } = useQuery<ApiPostit[]>({
+    queryKey: ['postits'],
+    queryFn: async () => {
+      const res = await apiInstance.get<ApiPostit[]>('/api/v2/postit');
+      return res.data ?? [];
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
 
-  const visible: PostIt[] = POST_ITS.filter(p =>
-    activeCategory === null || p.tag.toLowerCase() === activeCategory.toLowerCase()
+  const categories = useMemo(() => {
+    const fromFeedbacks = classifiedFeedbacks(feedbacks).map(f => f.categorie).filter(Boolean) as string[];
+    const fromPostits = postits.map(p => p.categorie).filter(Boolean) as string[];
+    return Array.from(new Set([...fromFeedbacks, ...fromPostits])).sort();
+  }, [feedbacks, postits]);
+
+  const visible = postits.filter(p =>
+    activeCategory === null || (p.categorie ?? '').toLowerCase() === activeCategory.toLowerCase()
   );
-  const visibleIds = new Set(visible.map(p => p.id));
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -96,153 +115,133 @@ export default function RightPanelPublic({ feedbacks, onPinNote }: Props) {
 
       {/* Corkboard */}
       <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
-        <Box sx={{
-          position: 'relative',
-          width: BOARD_WIDTH,
-          minHeight: BOARD_HEIGHT,
-          mx: 'auto',
-          background: `
-            radial-gradient(circle at 15% 20%, rgba(100,120,200,0.08) 0%, transparent 45%),
-            radial-gradient(circle at 85% 75%, rgba(150,100,200,0.07) 0%, transparent 45%),
-            radial-gradient(circle at 50% 50%, rgba(80,100,180,0.05) 0%, transparent 60%),
-            #e8ebf4
-          `,
-          borderRadius: 2,
-          overflow: 'visible',
-        }}>
-          {/* SVG connection lines */}
-          <svg
-            style={{ position: 'absolute', inset: 0, width: BOARD_WIDTH, height: BOARD_HEIGHT, pointerEvents: 'none', overflow: 'visible' }}
-          >
-            <defs>
-              <marker id="dot-start" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5">
-                <circle cx="2.5" cy="2.5" r="2" fill="#9ca3af" />
-              </marker>
-              <marker id="dot-end" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5">
-                <circle cx="2.5" cy="2.5" r="2" fill="#9ca3af" />
-              </marker>
-            </defs>
-            {CONNECTIONS.map(([fromId, toId]) => {
-              if (!visibleIds.has(fromId) || !visibleIds.has(toId)) return null;
-              const from = POST_ITS.find(p => p.id === fromId)!;
-              const to = POST_ITS.find(p => p.id === toId)!;
+        {isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+            <CircularProgress size={28} />
+          </Box>
+        ) : (
+          <Box sx={{
+            position: 'relative',
+            width: BOARD_WIDTH,
+            minHeight: BOARD_HEIGHT,
+            mx: 'auto',
+            background: `
+              radial-gradient(circle at 15% 20%, rgba(100,120,200,0.08) 0%, transparent 45%),
+              radial-gradient(circle at 85% 75%, rgba(150,100,200,0.07) 0%, transparent 45%),
+              radial-gradient(circle at 50% 50%, rgba(80,100,180,0.05) 0%, transparent 60%),
+              #e8ebf4
+            `,
+            borderRadius: 2,
+            overflow: 'visible',
+          }}>
+            {visible.length === 0 && (
+              <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography color="text.disabled" variant="body2">Aucune note épinglée pour le moment.</Typography>
+              </Box>
+            )}
+
+            {visible.map((postit, idx) => {
+              const { x, y, rotation } = postitPosition(idx, postit.id);
+              const bgColor = POSTIT_COLORS[postit.id % POSTIT_COLORS.length].value;
+              const auteur = `${postit.auteur_nom} ${postit.auteur_prenom}`.toUpperCase();
+              const timestamp = new Date(postit.cree_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+              const tag = postit.categorie || 'Note';
+
               return (
-                <line
-                  key={`${fromId}-${toId}`}
-                  x1={from.x + POSTIT_W / 2}
-                  y1={from.y + POSTIT_H / 2}
-                  x2={to.x + POSTIT_W / 2}
-                  y2={to.y + POSTIT_H / 2}
-                  stroke="#9ca3af"
-                  strokeWidth="1.5"
-                  strokeDasharray="5 4"
-                  markerStart="url(#dot-start)"
-                  markerEnd="url(#dot-end)"
-                  opacity={0.7}
-                />
+                <Tooltip
+                  key={postit.id}
+                  title={
+                    <Box sx={{ maxWidth: 280 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.5 }}>Message original :</Typography>
+                      <Typography variant="caption" sx={{ display: 'block', mb: postit.resume ? 1 : 0 }}>{postit.feedback_content}</Typography>
+                      {postit.resume && (
+                        <>
+                          <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.5 }}>Résumé IA :</Typography>
+                          <Typography variant="caption" sx={{ display: 'block' }}>{postit.resume}</Typography>
+                        </>
+                      )}
+                    </Box>
+                  }
+                  placement="top"
+                  arrow
+                >
+                  <Box
+                    onMouseEnter={() => setHovered(postit.id)}
+                    onMouseLeave={() => setHovered(null)}
+                    sx={{
+                      position: 'absolute',
+                      left: x,
+                      top: y,
+                      width: POSTIT_W,
+                      transform: `rotate(${rotation}deg) scale(${hovered === postit.id ? 1.06 : 1})`,
+                      transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                      zIndex: hovered === postit.id ? 20 : 1,
+                      cursor: 'default',
+                    }}
+                  >
+                    <Paper
+                      elevation={hovered === postit.id ? 8 : 2}
+                      sx={{ bgcolor: bgColor, borderRadius: '2px', overflow: 'visible' }}
+                    >
+                      {/* Pin */}
+                      <Box sx={{
+                        position: 'absolute', top: -9, left: '50%', transform: 'translateX(-50%)',
+                        width: 18, height: 18, borderRadius: '50%',
+                        background: 'radial-gradient(circle at 38% 35%, #f87171, #dc2626)',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.25)', zIndex: 2,
+                      }} />
+
+                      <Box sx={{ p: 1.5, pt: 1.75 }}>
+                        {/* Author */}
+                        <Typography variant="caption" sx={{
+                          display: 'block', fontWeight: 700,
+                          letterSpacing: '0.05em', color: '#6b7280',
+                          fontSize: '0.6rem', mb: 0.75,
+                        }}>
+                          {auteur}
+                        </Typography>
+
+                        {/* Note text */}
+                        <Typography variant="body2" sx={{
+                          fontSize: '0.78rem', lineHeight: 1.45, color: '#1f2937', mb: 1.25,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 4,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}>
+                          {postit.texte}
+                        </Typography>
+
+                        {/* Footer */}
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Chip
+                            label={tag}
+                            size="small"
+                            sx={{ height: 17, fontSize: '0.6rem', fontWeight: 700, bgcolor: 'rgba(0,0,0,0.08)', color: '#374151' }}
+                          />
+                          <Typography variant="caption" sx={{ fontSize: '0.62rem', color: '#9ca3af' }}>
+                            {timestamp}
+                          </Typography>
+                        </Box>
+
+                        {/* Urgence badge */}
+                        {postit.urgence != null && postit.urgence >= 3 && (
+                          <Box sx={{ mt: 0.75 }}>
+                            <Chip
+                              label={`Urgence ${postit.urgence}`}
+                              size="small"
+                              sx={{ height: 15, fontSize: '0.58rem', fontWeight: 700, bgcolor: '#fee2e2', color: '#dc2626' }}
+                            />
+                          </Box>
+                        )}
+                      </Box>
+                    </Paper>
+                  </Box>
+                </Tooltip>
               );
             })}
-          </svg>
-
-          {/* Post-its */}
-          {visible.map(postit => (
-            <Box
-              key={postit.id}
-              onMouseEnter={() => setHovered(postit.id)}
-              onMouseLeave={() => setHovered(null)}
-              sx={{
-                position: 'absolute',
-                left: postit.x,
-                top: postit.y,
-                width: POSTIT_W,
-                transform: `rotate(${postit.rotation}deg) scale(${hovered === postit.id ? 1.06 : 1})`,
-                transition: 'transform 0.2s ease, box-shadow 0.2s ease, z-index 0s',
-                zIndex: hovered === postit.id ? 20 : 1,
-                cursor: 'default',
-              }}
-            >
-              <Paper
-                elevation={hovered === postit.id ? 8 : 2}
-                sx={{
-                  bgcolor: postit.bgColor,
-                  borderRadius: '2px',
-                  overflow: 'visible',
-                  ...(postit.isTeacher && {
-                    border: '2px dashed #d97706',
-                    bgcolor: '#fffbeb',
-                  }),
-                }}
-              >
-                {/* Pin */}
-                <Box sx={{
-                  position: 'absolute',
-                  top: -9,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  width: 18, height: 18,
-                  borderRadius: '50%',
-                  background: postit.isTeacher
-                    ? 'radial-gradient(circle at 38% 35%, #fcd34d, #d97706)'
-                    : 'radial-gradient(circle at 38% 35%, #f87171, #dc2626)',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.25)',
-                  zIndex: 2,
-                }} />
-
-                <Box sx={{ p: 1.5, pt: 1.75 }}>
-                  {/* Author */}
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      display: 'block',
-                      fontWeight: 700,
-                      letterSpacing: '0.05em',
-                      color: postit.isTeacher ? '#92400e' : '#6b7280',
-                      fontSize: '0.6rem',
-                      mb: 0.75,
-                    }}
-                  >
-                    {postit.author}
-                  </Typography>
-
-                  {/* Message */}
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontSize: '0.78rem',
-                      lineHeight: 1.45,
-                      color: '#1f2937',
-                      mb: 1.25,
-                      display: '-webkit-box',
-                      WebkitLineClamp: 4,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {postit.text}
-                  </Typography>
-
-                  {/* Footer */}
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Chip
-                      label={postit.tag}
-                      size="small"
-                      sx={{
-                        height: 17,
-                        fontSize: '0.6rem',
-                        fontWeight: 700,
-                        bgcolor: TAG_COLORS[postit.tag] ?? '#f1f5f9',
-                        color: TAG_TEXT[postit.tag] ?? '#475569',
-                      }}
-                    />
-                    <Typography variant="caption" sx={{ fontSize: '0.62rem', color: '#9ca3af' }}>
-                      {postit.timestamp}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Paper>
-            </Box>
-          ))}
-        </Box>
+          </Box>
+        )}
       </Box>
     </Box>
   );

@@ -7,8 +7,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { apiInstance } from '@/services/api';
 import { generateUUID, getPseudo } from '@/services/tokens';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Stack, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Stack } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Keyboard,
@@ -21,6 +21,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { FlashList } from "@shopify/flash-list";
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 
@@ -134,17 +135,17 @@ export default function ChatScreen() {
     });
   }
   const [input, setInput] = useState('');
-  const listRef = useRef<FlatList>(null);
+  const listRef = useRef<any>(null);
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
   const orientation = useOrientation();
   const [keyboardOffset, setKeyboardOffset] = useState(56);
 
-  console.log('ChatScreen messages', messages);
+  console.log('ChatScreen messages 2', messages);
 
 
   const safeEdges = useMemo((): ('bottom' | 'left' | 'right')[] => {
-    if (orientation === 'landscape-left')  return ['bottom', 'left'];
+    if (orientation === 'landscape-left') return ['bottom', 'left'];
     if (orientation === 'landscape-right') return ['bottom', 'right'];
     return ['bottom'];
   }, [orientation]);
@@ -155,15 +156,11 @@ export default function ChatScreen() {
     return () => { show.remove(); hide.remove(); };
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      listRef.current?.scrollToEnd({ animated: false });
-    }, [])
-  );
-
   useEffect(() => {
     if (messages.length > 0) {
-      listRef.current?.scrollToEnd({ animated: true });
+      // evite d'avoir des pertes de message.
+      const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 500);
+      return () => clearTimeout(t);
     }
   }, [messages.length]);
 
@@ -213,15 +210,16 @@ export default function ChatScreen() {
   async function send() {
     const text = input.trim();
     if (!text) return;
-    setInput('');
-    updateMessages(prev => [
-      ...prev,
-      { id: Date.now().toString(), text, from: 'me', time: now() },
-    ]);
+
     try {
       const pseudo = await getPseudo();
       const message_id = generateUUID();
       await apiInstance.post('/feedback', [{ content: text, pseudo, message_id }]);
+      setInput('');
+      updateMessages(prev => [
+        ...prev,
+        { id: Date.now().toString(), text, from: 'me', time: now() },
+      ])
     } catch (e) {
       console.error('Erreur envoi feedback', e);
     }
@@ -236,6 +234,7 @@ export default function ChatScreen() {
           ),
         }}
       />
+
       <SafeAreaView style={[styles.page, dynamicStyles.page]} edges={safeEdges}>
 
         <KeyboardAvoidingView
@@ -245,7 +244,7 @@ export default function ChatScreen() {
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : keyboardOffset}
         >
           <ZenBackground />
-          <FlatList
+          <FlashList
             ref={listRef}
             data={messages}
             extraData={messages}

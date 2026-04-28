@@ -54,7 +54,13 @@ export function DiscussionPanel() {
     setPinDrawerOpen(true);
   };
 
-  const handlePin = (_text: string, _color: string) => {
+  const handlePin = async (text: string, _color: string) => {
+    if (!pinFeedback?.message_id) return;
+    try {
+      await apiInstance.post('/api/v2/postit', { message_id: pinFeedback.message_id, texte: text });
+    } catch (e) {
+      console.error('Erreur épinglage postit', e);
+    }
     setPinDrawerOpen(false);
   };
 
