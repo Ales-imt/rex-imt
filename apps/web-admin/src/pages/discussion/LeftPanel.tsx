@@ -7,7 +7,6 @@ import Skeleton from '@mui/material/Skeleton';
 import Collapse from '@mui/material/Collapse';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import type { Feedback } from '../feedback/Feedback';
 import { urgenceColor, relativeTime, SENTIMENT_LABEL, SENTIMENT_COLOR } from '../analyse/shared';
 
