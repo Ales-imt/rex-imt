@@ -1,4 +1,4 @@
-export const API_BASE = 'http://10.13.6.46:3300/api/v2';
+export const API_BASE = 'http://10.24.182.46:3300/api/v2';
 
 export type LoginResponse = {
   name: string;

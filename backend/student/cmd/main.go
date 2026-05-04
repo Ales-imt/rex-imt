@@ -6,6 +6,7 @@ import (
 	"back-rex-eleve/pkg/authentification"
 	"back-rex-eleve/pkg/feedback"
 	"back-rex-eleve/pkg/note"
+	"back-rex-eleve/pkg/programme"
 	"back-rex-eleve/pkg/reponse"
 	"fmt"
 	"log"
@@ -44,7 +45,7 @@ func main() {
 	r.Use(services.MakeMariaDBMiddleware(&cfg.MariaDBConfig))
 	auth.StartRefreshTokenCleanup(&cfg.Database)
 
-	r.Use(services.FullLogRequest)
+	//r.Use(services.FullLogRequest)
 
 	// version api0
 	r.Route("/api/v2", func(r chi.Router) {
@@ -60,6 +61,7 @@ func main() {
 		r.With(auth.Security(cfg.JWT, &role)).Route("/feedback", feedback.MakeRouteFeedBack(cfg.Age.PublicKey))
 		r.With(auth.Security(cfg.JWT, &role)).Route("/reponse", reponse.MakeRouteReponse())
 		r.With(auth.Security(cfg.JWT, &role)).Route("/note", note.MakeRouteNote())
+		r.With(auth.Security(cfg.JWT, &role)).Route("/programme", programme.MakeRouteProgramme())
 
 	})
 
