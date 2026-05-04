@@ -8,7 +8,8 @@ import { apiInstance } from '@/services/api';
 import { generateUUID, getPseudo } from '@/services/tokens';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Stack } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Keyboard,
@@ -164,35 +165,37 @@ export default function ChatScreen() {
     }
   }, [messages.length]);
 
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const pseudo = await getPseudo();
-        if (!pseudo) return;
-        const res = await apiInstance.get<ReponseItem[]>('/reponse', { headers: { 'X-Pseudo': pseudo } });
-        if (!res.data) return;
-        if (res.data.length === 0) return;
-        updateMessages(prev => {
-          const existingIds = new Set(prev.map(m => m.id));
-          const newOnes = res.data
-            .map(r => ({
-              id: `reponse-${r.id}`,
-              text: r.contenu,
-              from: 'other' as const,
-              time: r.cree_le,
-            }))
-            .filter(m => !existingIds.has(m.id));
-          return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
-        });
-      } catch (e) {
-        console.error('Erreur poll réponses', e);
-      }
-    };
+  useFocusEffect(
+    useCallback(() => {
+      const poll = async () => {
+        try {
+          const pseudo = await getPseudo();
+          if (!pseudo) return;
+          const res = await apiInstance.get<ReponseItem[]>('/reponse', { headers: { 'X-Pseudo': pseudo } });
+          if (!res.data) return;
+          if (res.data.length === 0) return;
+          updateMessages(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const newOnes = res.data
+              .map(r => ({
+                id: `reponse-${r.id}`,
+                text: r.contenu,
+                from: 'other' as const,
+                time: r.cree_le,
+              }))
+              .filter(m => !existingIds.has(m.id));
+            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+          });
+        } catch (e) {
+          console.error('Erreur poll réponses', e);
+        }
+      };
 
-    poll();
-    const id = setInterval(poll, 10_000);
-    return () => clearInterval(id);
-  }, []);
+      poll();
+      const id = setInterval(poll, 10_000);
+      return () => clearInterval(id);
+    }, [])
+  );
 
   const dynamicStyles = useMemo(() => StyleSheet.create({
     page: { backgroundColor: colors.pageBg },
