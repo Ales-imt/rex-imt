@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { apiInstance } from '@/services/api';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { CalendarProvider, WeekCalendar } from 'react-native-calendars';
 import { UpdateSources } from 'react-native-calendars/src/expandableCalendar/commons';
 import CalendarContext from 'react-native-calendars/src/expandableCalendar/Context';
@@ -80,6 +80,59 @@ function localToday(): string {
   return fmtLocal(new Date());
 }
 
+const MONTHS_SHORT = Array.from({ length: 12 }, (_, i) =>
+  new Date(2000, i, 1).toLocaleDateString('fr-FR', { month: 'short' })
+);
+
+function MonthPicker({ visible, onClose, onSelect, selectedYear, selectedMonth }: {
+  visible: boolean;
+  onClose: () => void;
+  onSelect: (year: number, month: number) => void;
+  selectedYear: number;
+  selectedMonth: number;
+}) {
+  const colors = useTheme();
+  const [year, setYear] = useState(selectedYear);
+  useEffect(() => { if (visible) setYear(selectedYear); }, [visible]);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable style={[styles.monthPickerBox, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+          <View style={styles.yearRow}>
+            <TouchableOpacity onPress={() => setYear(y => y - 1)}>
+              <Text style={[styles.yearArrow, { color: colors.tint }]}>‹</Text>
+            </TouchableOpacity>
+            <Text style={[styles.yearText, { color: colors.textPrimary }]}>{year}</Text>
+            <TouchableOpacity onPress={() => setYear(y => y + 1)}>
+              <Text style={[styles.yearArrow, { color: colors.tint }]}>›</Text>
+            </TouchableOpacity>
+          </View>
+          {Array.from({ length: 4 }, (_, row) => (
+            <View key={row} style={styles.monthRow}>
+              {MONTHS_SHORT.slice(row * 3, row * 3 + 3).map((name, col) => {
+                const i = row * 3 + col;
+                const active = year === selectedYear && i === selectedMonth;
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    style={[styles.monthCell, active && { backgroundColor: colors.tint }]}
+                    onPress={() => { onSelect(year, i); onClose(); }}
+                  >
+                    <Text style={[styles.monthCellText, { color: active ? colors.background : colors.textPrimary }]}>
+                      {name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 function TodayButton({ today }: { today: string }) {
   const { setDate } = useContext(CalendarContext);
   const colors = useTheme();
@@ -104,8 +157,20 @@ export const ProgrammeScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [monthPickerVisible, setMonthPickerVisible] = useState(false);
   const initialMount = useRef(true);
   const weekStartRef = useRef(weekStart);
+
+  const selDate = parseLocal(selected);
+  const displayMonth = (() => {
+    const s = selDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  })();
+
+  const handleMonthSelect = (year: number, month: number) => {
+    const p = (n: number) => String(n).padStart(2, '0');
+    setSelected(`${year}-${p(month + 1)}-01`);
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -180,6 +245,9 @@ export const ProgrammeScreen = () => {
         <ZenBackground />
         <CalendarProvider date={selected} onDateChanged={setSelected}>
           <View style={[styles.calendarCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+            <TouchableOpacity style={styles.monthLabel} onPress={() => setMonthPickerVisible(true)}>
+              <Text style={[styles.monthLabelText, { color: colors.textPrimary }]}>{displayMonth} ▾</Text>
+            </TouchableOpacity>
             <WeekCalendar
               markedDates={markedDates}
               theme={calendarTheme}
@@ -222,6 +290,13 @@ export const ProgrammeScreen = () => {
             )}
           </ScrollView>
         </CalendarProvider>
+        <MonthPicker
+          visible={monthPickerVisible}
+          onClose={() => setMonthPickerVisible(false)}
+          onSelect={handleMonthSelect}
+          selectedYear={selDate.getFullYear()}
+          selectedMonth={selDate.getMonth()}
+        />
       </View>
     </>
   );
@@ -260,6 +335,31 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   todayBtnText: { fontSize: 12, fontWeight: '600' },
+  monthLabel: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 2 },
+  monthLabelText: { fontSize: 14, fontWeight: '600' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  monthPickerBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 16,
+    width: 280,
+  },
+  yearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  yearArrow: { fontSize: 24, paddingHorizontal: 8 },
+  yearText: { fontSize: 16, fontWeight: '600' },
+  monthRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  monthCell: { flex: 1, marginHorizontal: 3, paddingVertical: 8, borderRadius: 6, alignItems: 'center' },
+  monthCellText: { fontSize: 13 },
 });
 
 export default ProgrammeScreen;
