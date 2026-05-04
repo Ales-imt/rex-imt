@@ -6,7 +6,9 @@ import (
 	"back-rex-eleve/pkg/authentification"
 	"back-rex-eleve/pkg/feedback"
 	"back-rex-eleve/pkg/note"
+	mariadbnote "back-rex-eleve/pkg/note/mariadb"
 	"back-rex-eleve/pkg/programme"
+	webdfdprog "back-rex-eleve/pkg/programme/webdfd"
 	"back-rex-eleve/pkg/reponse"
 	"fmt"
 	"log"
@@ -42,8 +44,13 @@ func main() {
 		log.Fatal("Erreur chargement config YAML :", err)
 	}
 	r.Use(services.MakeDatabasePgMiddleware(&cfg.Database))
-	r.Use(services.MakeMariaDBMiddleware(&cfg.MariaDBConfig))
 	auth.StartRefreshTokenCleanup(&cfg.Database)
+
+	mariaDB, err := services.NewMariaDBConnection(cfg.MariaDBConfig)
+	if err != nil {
+		log.Fatal("Erreur connexion MariaDB :", err)
+	}
+	noteConnector := &mariadbnote.Connector{DB: mariaDB}
 
 	//r.Use(services.FullLogRequest)
 
@@ -60,8 +67,12 @@ func main() {
 		role := []string{"ELEVE"}
 		r.With(auth.Security(cfg.JWT, &role)).Route("/feedback", feedback.MakeRouteFeedBack(cfg.Age.PublicKey))
 		r.With(auth.Security(cfg.JWT, &role)).Route("/reponse", reponse.MakeRouteReponse())
-		r.With(auth.Security(cfg.JWT, &role)).Route("/note", note.MakeRouteNote())
-		r.With(auth.Security(cfg.JWT, &role)).Route("/programme", programme.MakeRouteProgramme())
+		r.With(auth.Security(cfg.JWT, &role)).Route("/note", note.MakeRouteNote(noteConnector))
+		progConnector := &webdfdprog.Connector{
+				ElevesURL:   "http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe?TYPE=eleves_txt",
+				PlanningURL: "http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe",
+			}
+			r.With(auth.Security(cfg.JWT, &role)).Route("/programme", programme.MakeRouteProgramme(progConnector))
 
 	})
 
