@@ -15,3 +15,8 @@ age --decrypt -i cle_privee.txt t.txt
 Pour serveur-ia, generation de clef:
 tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48 ; echo ''
 
+Pour utiliser cybema en local:
+    dans /etc/hosts
+   127.0.0.1       webdfd.mines-ales.fr
+   ssh -L 80:webdfd.mines-ales.fr:80  user_de@evaluation.mines-ales.fr
+
