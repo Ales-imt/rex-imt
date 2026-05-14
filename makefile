@@ -11,7 +11,7 @@ DOCKER_DIR=./infras/container
 
 all: infra db-to-code
 
-infra: docker liquibase post-infra
+infra: docker liquibase
 
 docker:
 	@echo "--- 🐳 Démarrage des conteneurs Docker ---"
@@ -32,13 +32,13 @@ liquibase:
 	cd $(INFRA_DIR)/liquibase/liquibase_libs && wget -nc https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.8/postgresql-42.7.8.jar || true
 	@echo "--- synchronize la bd et liquidbase"
 	cd $(INFRA_DIR)/liquibase && liquibase changelogSyncToTag v0.0.0
-	@echo "--- appliquer les migrations"
-	cd $(INFRA_DIR)/liquibase && liquibase update
-
-post-infra:
-	@echo "--- 🚀met a jour les strongBox ---"
+	@echo "--- 🏗️ migrations pré-suppression user_id (promotion, groupe, strongbox) ---"
+	cd $(INFRA_DIR)/liquibase && liquibase updateToTag pre-drop-user-id
+	@echo "--- 🚀 mise à jour des strongBox ---"
 	cd $(INFRA_DIR)/migration && go build
 	cd $(INFRA_DIR)/migration && ./migration
+	@echo "--- 🗑️ suppression user_id + mise à jour trigger ---"
+	cd $(INFRA_DIR)/liquibase && liquibase update
 
 db-to-code:
 	@echo "--- 🐘 1. Extraction du schéma PostgreSQL ---"

@@ -1,7 +1,6 @@
 -- name: ListFeedbacks :many
-SELECT id, content, created_at, promotion
+SELECT id, content, created_at
 FROM feedback f
-LEFT JOIN student s ON f.user_id = s.user_id
 ORDER BY f.created_at DESC;
 
 -- name: ListFeedbacksWithClassification :many
@@ -14,17 +13,11 @@ LEFT JOIN feedback_classification c ON c.feedback_id = f.id
 ORDER BY f.created_at DESC;
 
 -- name: ListPendingFeedbacks :many
-SELECT f.id, f.content, f.user_id, f.season_id,
-       s.promotion,
-       string_agg(g.name, ', ') AS groupe
+SELECT f.id, f.content, f.promotion, f.groupe
 FROM feedback f
-LEFT JOIN student s ON s.user_id = f.user_id
-LEFT JOIN eleve_groupe eg ON eg.num_etudiant = f.user_id
-LEFT JOIN groupe g ON g.id = eg.id_groupe
 LEFT JOIN feedback_classification c ON c.feedback_id = f.id
 WHERE c.feedback_id IS NULL
-GROUP BY f.id, f.content, f.user_id, f.season_id, s.promotion
-ORDER BY f.created_at ASC;
+ORDER BY f.created_at DESC;
 
 -- name: ListRecentFeedbacksWithClassification :many
 SELECT f.id, f.content, f.created_at,

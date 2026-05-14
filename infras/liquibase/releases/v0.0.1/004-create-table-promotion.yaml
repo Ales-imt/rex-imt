@@ -1,0 +1,36 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.2-004-create-table-promotion
+      author: vjo
+      changes:
+        - createTable:
+            tableName: promotion
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+              - column:
+                  name: annee_academique_id
+                  type: bigint
+                  constraints:
+                    nullable: true
+        - addForeignKeyConstraint:
+            baseTableName: promotion
+            baseTableSchemaName: public
+            baseColumnNames: annee_academique_id
+            referencedTableName: annee_academique
+            referencedTableSchemaName: public
+            referencedColumnNames: id
+            constraintName: promotion_annee_academique_id_fkey
+            onDelete: SET NULL
+      rollback:
+        - dropTable:
+            tableName: promotion
+            schemaName: public

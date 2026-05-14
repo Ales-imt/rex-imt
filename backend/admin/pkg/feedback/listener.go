@@ -15,8 +15,6 @@ import (
 type FeedbackNotification struct {
 	ID        int32   `json:"id"`
 	Content   string  `json:"content"`
-	UserID    int     `json:"user_id"`
-	SeasonID  int32   `json:"season_id"`
 	Promotion *string `json:"promotion"`
 	Groupe    *string `json:"groupe"`
 }

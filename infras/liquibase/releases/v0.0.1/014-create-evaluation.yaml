@@ -1,0 +1,458 @@
+databaseChangeLog:
+
+  # =============================================================
+  # CHANGESET 001 — eval_session
+  # Contexte de chaque évaluation (écran 0)
+  # Clé d'entrée : une ligne par (anon_id, cours_id, semestre)
+  # =============================================================
+  - changeSet:
+      id: 001-eval_session
+      author: app
+      changes:
+        - createTable:
+            tableName: eval_session
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              # Identifiant anonyme côté client (option B ou C)
+              - column:
+                  name: anon_id
+                  type: text
+                  constraints:
+                    nullable: false
+
+              # Référence à la matière
+              - column:
+                  name: matiere_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+
+              # Écran 0 : contexte de suivi
+              # PRESENTIEL | DISTANCIEL | HYBRIDE
+              - column:
+                  name: format_suivi
+                  type: text
+                  constraints:
+                    nullable: false
+
+              # PROGRES | STABLE | BAISSE
+              - column:
+                  name: tendance_semestre
+                  type: text
+                  constraints:
+                    nullable: false
+
+              # TOUTES | QUELQUES_ABSENCES | BEAUCOUP
+              - column:
+                  name: assiduite
+                  type: text
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+              # Permet de détecter une re-soumission (null = en cours)
+              - column:
+                  name: submitted_at
+                  type: TIMESTAMP WITH TIME ZONE
+
+        # Un étudiant anonyme ne peut évaluer une matière qu'une fois
+        - addUniqueConstraint:
+            tableName: eval_session
+            columnNames: anon_id, matiere_id
+            constraintName: uq_eval_session_anon_matiere
+
+        - createIndex:
+            tableName: eval_session
+            indexName: idx_eval_session_matiere
+            columns:
+              - column:
+                  name: matiere_id
+
+
+  # =============================================================
+  # CHANGESET 002 — eval_scores
+  # Scores quantitatifs (étoiles + Likert)
+  # Une ligne par session — jointure 1:1 avec eval_session
+  # =============================================================
+  - changeSet:
+      id: 002-eval_scores
+      author: app
+      changes:
+        - createTable:
+            tableName: eval_scores
+            columns:
+              - column:
+                  name: session_id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+                    foreignKeyName: fk_scores_session
+                    references: eval_session(id)
+
+              # Étape 1 : qualité pédagogique
+              # Étoiles 1–5
+              - column:
+                  name: score_peda_global
+                  type: SMALLINT
+
+              # Likert 1–5 : clarté des explications
+              - column:
+                  name: score_peda_clarte
+                  type: SMALLINT
+
+              # Étape 2 : contenu / programme
+              # Likert 1–5 : adéquation avec le programme annoncé
+              - column:
+                  name: score_contenu_adequation
+                  type: SMALLINT
+
+              # Étape 3 : charge de travail
+              # LEGERE | ADAPTEE | LOURDE
+              - column:
+                  name: charge_perception
+                  type: VARCHAR(10)
+
+              # H_MOINS_1 | H_1_3 | H_3_5 | H_PLUS_5
+              - column:
+                  name: charge_heures_semaine
+                  type: text
+
+              # Likert 1–5 : difficulté ressentie
+              - column:
+                  name: score_difficulte
+                  type: SMALLINT
+
+              # Étape 4 : supports de cours — étoiles 1–5
+              - column:
+                  name: score_supports
+                  type: SMALLINT
+
+              # Étape 5 : ambiance — Likert 1–5
+              - column:
+                  name: score_ambiance
+                  type: SMALLINT
+
+              # Étape 6 : NPS — 0–10
+              - column:
+                  name: nps
+                  type: SMALLINT
+
+        # Contraintes CHECK pour garantir la cohérence des données
+        - sql:
+            sql: >
+              ALTER TABLE eval_scores
+                ADD CONSTRAINT chk_score_peda_global
+                    CHECK (score_peda_global BETWEEN 1 AND 5),
+                ADD CONSTRAINT chk_score_peda_clarte
+                    CHECK (score_peda_clarte BETWEEN 1 AND 5),
+                ADD CONSTRAINT chk_score_contenu
+                    CHECK (score_contenu_adequation BETWEEN 1 AND 5),
+                ADD CONSTRAINT chk_score_difficulte
+                    CHECK (score_difficulte BETWEEN 1 AND 5),
+                ADD CONSTRAINT chk_score_supports
+                    CHECK (score_supports BETWEEN 1 AND 5),
+                ADD CONSTRAINT chk_score_ambiance
+                    CHECK (score_ambiance BETWEEN 1 AND 5),
+                ADD CONSTRAINT chk_nps
+                    CHECK (nps BETWEEN 0 AND 10),
+                ADD CONSTRAINT chk_charge_perception
+                    CHECK (charge_perception IN ('LEGERE','ADAPTEE','LOURDE')),
+                ADD CONSTRAINT chk_charge_heures
+                    CHECK (charge_heures_semaine IN
+                        ('H_MOINS_1','H_1_3','H_3_5','H_PLUS_5'));
+
+
+  # =============================================================
+  # CHANGESET 003 — eval_chip_ref
+  # Table de référence des chips disponibles (points forts/faibles)
+  # Séparation données / référentiel pour faciliter l'évolution
+  # =============================================================
+  - changeSet:
+      id: 003-eval_chip_ref
+      author: app
+      changes:
+        - createTable:
+            tableName: eval_chip_ref
+            columns:
+              - column:
+                  name: id
+                  type: text
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              # PEDAGOGIE | CONTENU | SUPPORTS | AMBIANCE
+              - column:
+                  name: dimension
+                  type: text
+                  constraints:
+                    nullable: false
+
+              # POSITIF | NEGATIF
+              - column:
+                  name: polarite
+                  type: text
+                  constraints:
+                    nullable: false
+
+              # Libellé affiché dans l'app
+              - column:
+                  name: libelle
+                  type: text
+                  constraints:
+                    nullable: false
+
+              # Ordre d'affichage dans l'écran
+              - column:
+                  name: display_order
+                  type: SMALLINT
+                  defaultValueNumeric: 0
+
+              - column:
+                  name: actif
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+
+  # =============================================================
+  # CHANGESET 004 — eval_chip_reponse
+  # Chips cochées par l'étudiant (table de jointure N:N)
+  # =============================================================
+  - changeSet:
+      id: 004-eval_chip_reponse
+      author: app
+      changes:
+        - createTable:
+            tableName: eval_chip_reponse
+            columns:
+              - column:
+                  name: session_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_chip_reponse_session
+                    references: eval_session(id)
+
+              - column:
+                  name: chip_id
+                  type: text
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_chip_reponse_ref
+                    references: eval_chip_ref(id)
+
+        - addPrimaryKey:
+            tableName: eval_chip_reponse
+            columnNames: session_id, chip_id
+            constraintName: pk_eval_chip_reponse
+
+        - createIndex:
+            tableName: eval_chip_reponse
+            indexName: idx_chip_reponse_chip_id
+            columns:
+              - column:
+                  name: chip_id
+
+
+  # =============================================================
+  # CHANGESET 005 — eval_verbatim
+  # Commentaires libres (un par dimension + NPS)
+  # Séparé des scores pour faciliter l'anonymisation RGPD :
+  # suppression ciblée sans toucher aux scores agrégés
+  # =============================================================
+  - changeSet:
+      id: 005-eval_verbatim
+      author: app
+      changes:
+        - createTable:
+            tableName: eval_verbatim
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              - column:
+                  name: session_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_verbatim_session
+                    references: eval_session(id)
+
+              # SUPPORTS | AMBIANCE | NPS — seules dimensions avec texte libre
+              - column:
+                  name: dimension
+                  type: text
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: texte
+                  type: TEXT
+                  constraints:
+                    nullable: false
+
+              # Horodatage propre pour purge RGPD indépendante
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: strongbox
+                  type: TEXT
+                  constraints:
+                    nullable: true
+
+        - sql:
+            sql: >
+              ALTER TABLE eval_verbatim
+                ADD CONSTRAINT chk_verbatim_dimension
+                    CHECK (dimension IN ('SUPPORTS','AMBIANCE','NPS'));
+
+        - createIndex:
+            tableName: eval_verbatim
+            indexName: idx_verbatim_session
+            columns:
+              - column:
+                  name: session_id
+
+
+  # =============================================================
+  # CHANGESET 006 — eval_synthese_ia
+  # Cache des synthèses générées par l'IA
+  # Évite de rappeler l'API à chaque consultation
+  # =============================================================
+  - changeSet:
+      id: 006-eval_synthese_ia
+      author: app
+      changes:
+        - createTable:
+            tableName: eval_synthese_ia
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              - column:
+                  name: matiere_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: semestre
+                  type: text
+                  constraints:
+                    nullable: false
+
+              # Nombre de répondants au moment de la génération
+              - column:
+                  name: nb_repondants
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+
+              # JSON des scores agrégés envoyés au prompt — auditabilité
+              - column:
+                  name: donnees_snapshot
+                  type: TEXT
+
+              # Texte brut retourné par l'IA
+              - column:
+                  name: synthese_texte
+                  type: TEXT
+                  constraints:
+                    nullable: false
+
+              # GENEREE | VALIDEE | ARCHIVEE
+              - column:
+                  name: statut
+                  type: text
+                  defaultValue: GENEREE
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: generated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+              # Signature du responsable pédagogique si validation manuelle
+              - column:
+                  name: validated_by
+                  type: text
+
+              - column:
+                  name: validated_at
+                  type: TIMESTAMP WITH TIME ZONE
+
+        - addUniqueConstraint:
+            tableName: eval_synthese_ia
+            columnNames: matiere_id, semestre, generated_at
+            constraintName: uq_synthese_matiere_semestre_date
+
+        - createIndex:
+            tableName: eval_synthese_ia
+            indexName: idx_synthese_matiere_semestre
+            columns:
+              - column:
+                  name: matiere_id
+              - column:
+                  name: semestre
+
+
+  # =============================================================
+  # CHANGESET 007 — seed eval_chip_ref
+  # Données de référence : chips affichées dans les étapes 2, 4, 5
+  # =============================================================
+  - changeSet:
+      id: 007-seed-eval_chip_ref
+      author: app
+      changes:
+        - sql:
+            sql: >
+              INSERT INTO eval_chip_ref (id, dimension, polarite, libelle, display_order) VALUES
+                ('EXEMPLES_CONCRETS',  'CONTENU',  'POSITIF',  'Exemples concrets',    1),
+                ('THEORIE_SOLIDE',     'CONTENU',  'POSITIF',  'Théorie solide',        2),
+                ('ACTUALITE',          'CONTENU',  'POSITIF',  'Actualité',             3),
+                ('CAS_PRATIQUES',      'CONTENU',  'POSITIF',  'Cas pratiques',         4),
+                ('TROP_THEORIQUE',     'CONTENU',  'NEGATIF',  'Trop théorique',        1),
+                ('HORS_PROGRAMME',     'CONTENU',  'NEGATIF',  'Hors programme',        2),
+                ('TROP_DENSE',         'CONTENU',  'NEGATIF',  'Trop dense',            3),
+                ('PAS_A_JOUR',         'CONTENU',  'NEGATIF',  'Pas à jour',            4),
+                ('PEU_EXEMPLES',       'SUPPORTS', 'NEGATIF',  'Peu d''exemples',       1),
+                ('SLIDES_ILLISIBLES',  'SUPPORTS', 'NEGATIF',  'Slides illisibles',     2),
+                ('PAS_A_JOUR_SUP',     'SUPPORTS', 'NEGATIF',  'Pas à jour',            3),
+                ('INCOMPLET',          'SUPPORTS', 'NEGATIF',  'Incomplet',             4),
+                ('PAS_DE_SUPPORT',     'SUPPORTS', 'NEGATIF',  'Pas de support',        5),
+                ('DISPONIBLE',         'AMBIANCE', 'POSITIF',  'Disponible',            1),
+                ('A_ECOUTE',           'AMBIANCE', 'POSITIF',  'À l''écoute',           2),
+                ('DYNAMIQUE',          'AMBIANCE', 'POSITIF',  'Dynamique',             3),
+                ('BIENVEILLANT',       'AMBIANCE', 'POSITIF',  'Bienveillant',          4),
+                ('PEU_DISPONIBLE',     'AMBIANCE', 'NEGATIF',  'Peu disponible',        1),
+                ('RYTHME_IMPOSE',      'AMBIANCE', 'NEGATIF',  'Rythme imposé',         2),
+                ('PEU_ECOUTE',         'AMBIANCE', 'NEGATIF',  'Peu à l''écoute',       3)
+              ;

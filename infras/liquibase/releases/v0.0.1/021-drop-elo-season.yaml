@@ -1,0 +1,117 @@
+databaseChangeLog:
+  - changeSet:
+      id: 021-update-feedback-notify-trigger
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE OR REPLACE FUNCTION notify_new_feedback()
+              RETURNS trigger AS $func$
+              BEGIN
+                PERFORM pg_notify(
+                  'new_feedback',
+                  json_build_object(
+                    'id',        NEW.id,
+                    'content',   NEW.content,
+                    'promotion', NEW.promotion,
+                    'groupe',    NEW.groupe
+                  )::text
+                );
+                RETURN NEW;
+              END;
+              $func$ LANGUAGE plpgsql;
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE OR REPLACE FUNCTION notify_new_feedback()
+              RETURNS trigger AS $func$
+              BEGIN
+                PERFORM pg_notify(
+                  'new_feedback',
+                  json_build_object(
+                    'id',        NEW.id,
+                    'content',   NEW.content,
+                    'season_id', NEW.season_id,
+                    'promotion', NEW.promotion,
+                    'groupe',    NEW.groupe
+                  )::text
+                );
+                RETURN NEW;
+              END;
+              $func$ LANGUAGE plpgsql;
+
+  - changeSet:
+      id: 021-drop-elo-season
+      author: vjo
+      changes:
+        - dropColumn:
+            tableName: feedback
+            columnName: season_id
+        - dropColumn:
+            tableName: student
+            columnName: elo
+        - dropColumn:
+            tableName: student
+            columnName: last_elo_gain
+        - dropTable:
+            tableName: elo_history
+        - dropTable:
+            tableName: season
+      rollback:
+        - createTable:
+            tableName: season
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+              - column:
+                  name: start_date
+                  type: TIMESTAMPTZ
+              - column:
+                  name: end_date
+                  type: TIMESTAMPTZ
+        - createTable:
+            tableName: elo_history
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+              - column:
+                  name: user_id
+                  type: INTEGER
+              - column:
+                  name: season_id
+                  type: INTEGER
+              - column:
+                  name: final_elo
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rank
+                  type: INTEGER
+        - addColumn:
+            tableName: feedback
+            columns:
+              - column:
+                  name: season_id
+                  type: INTEGER
+        - addColumn:
+            tableName: student
+            columns:
+              - column:
+                  name: elo
+                  type: INTEGER
+                  defaultValueNumeric: 0
+              - column:
+                  name: last_elo_gain
+                  type: INTEGER
+                  defaultValueNumeric: 0

@@ -1,0 +1,43 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.2-015-create-table-periode
+      author: vjo
+      changes:
+        - createTable:
+            tableName: periode
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigserial
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: promotion_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: periode
+            schemaName: public
+            columnNames: name, promotion_id
+            constraintName: uq_periode_name_promotion
+        - addForeignKeyConstraint:
+            baseTableName: periode
+            baseTableSchemaName: public
+            baseColumnNames: promotion_id
+            referencedTableName: promotion
+            referencedTableSchemaName: public
+            referencedColumnNames: id
+            constraintName: periode_promotion_id_fkey
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: periode
+            schemaName: public

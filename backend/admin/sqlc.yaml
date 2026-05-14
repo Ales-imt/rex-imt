@@ -46,6 +46,22 @@ sql:
         emit_json_tags: true
 
   - engine: "postgresql"
+    queries: "pkg/evaluation/query.sql"
+    schema: "../schema.sql"
+    gen:
+      go:
+        package: "evaluation"
+        out: "pkg/evaluation"
+        sql_package: "pgx/v5"
+        omit_unused_structs: true
+        emit_json_tags: true
+        overrides:
+          - db_type: "float8"
+            go_type:
+              import: "github.com/jackc/pgx/v5/pgtype"
+              type: "Float8"
+
+  - engine: "postgresql"
     queries: "pkg/reponse/query.sql"
     schema: "../schema.sql"
     gen:

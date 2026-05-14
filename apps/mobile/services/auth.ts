@@ -1,4 +1,4 @@
-export const API_BASE = 'http://10.24.182.46:3300/api/v2';
+export const API_BASE = 'http://10.41.93.46:3300/api/v2';
 
 export type LoginResponse = {
   name: string;
@@ -9,6 +9,8 @@ export type LoginResponse = {
 };
 
 export async function login(identifiant: string, password: string): Promise<LoginResponse> {
+
+
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -21,6 +23,7 @@ export async function login(identifiant: string, password: string): Promise<Logi
   }
 
   return res.json();
+
 }
 
 export async function logout(): Promise<void> {

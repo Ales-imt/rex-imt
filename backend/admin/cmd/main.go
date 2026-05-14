@@ -3,6 +3,7 @@ package main
 import (
 	"back-rex-admin/pkg/authentification"
 	"back-rex-admin/pkg/cohorte"
+	"back-rex-admin/pkg/evaluation"
 	"back-rex-admin/pkg/feedback"
 	ia "back-rex-admin/pkg/ia"
 	"back-rex-admin/pkg/ia/ollama"
@@ -110,6 +111,10 @@ func main() {
 			Route("/reponse", reponse.RouteReponse)
 		r.With(auth.Security(cfg.JWT, &roles)).
 			Route("/postit", postit.RoutePostit)
+		r.With(auth.Security(cfg.JWT, &roles)).
+			Route("/evaluation", func(r chi.Router) {
+				evaluation.RouteEvaluation(r, iaConnector)
+			})
 	})
 
 	log.Printf("Serveur démarré sur le port %d (HTTP)", cfg.Server.Port)

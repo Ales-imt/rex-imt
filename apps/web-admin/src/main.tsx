@@ -13,10 +13,12 @@ import SignIn from './pages/login/signin.tsx';
 import { FEEDBACK_WORKFLOW } from './pages/feedback/def.ts';
 import { FeedbackIndex } from './pages/feedback/FeedbackLayout.tsx';
 import { createFeedbackRoutes } from './pages/feedback/routes.tsx';
+import { EVALUATION_WORKFLOW } from './pages/evaluation/def.ts';
 import { ANALYSE } from './pages/analyse/def.ts';
 import { FeedbackDashboard } from './pages/analyse/FeedbackDashboard.tsx';
 import { DISCUSSION } from './pages/discussion/def.ts';
 import { DiscussionPanel } from './pages/discussion/DiscussionPanel.tsx';
+import { Evaluation } from './pages/evaluation/Evaluation.tsx';
 
 const routes = [
   {
@@ -48,6 +50,10 @@ const routes = [
           {
             path: DISCUSSION,
             Component: DiscussionPanel
+          },
+          {
+            path: EVALUATION_WORKFLOW,
+            Component: Evaluation
           }
         ]
       },
