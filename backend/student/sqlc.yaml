@@ -10,26 +10,6 @@ sql:
         sql_package: "pgx/v5"
         omit_unused_structs: true
 
-  - engine: "postgresql"
-    queries: "pkg/season/query.sql"
-    schema: "../schema.sql"
-    gen:
-      go:
-        package: "season"
-        out: "pkg/season"
-        sql_package: "pgx/v5"
-        omit_unused_structs: true
-
-  - engine: "postgresql"
-    queries: "pkg/student/query.sql"
-    schema: "../schema.sql"
-    gen:
-      go:
-        package: "student"
-        out: "pkg/student"
-        sql_package: "pgx/v5"
-        omit_unused_structs: true
-
 
   - engine: "postgresql"
     queries: "pkg/reponse/query.sql"
@@ -49,5 +29,26 @@ sql:
       go:
         package: "gen"
         out: "pkg/note/gen"
+        omit_unused_structs: true
+        emit_json_tags: true
+
+  - engine: "postgresql"
+    queries: "pkg/service/query.sql"
+    schema: "../schema.sql"
+    gen:
+      go:
+        package: "gen"
+        out: "pkg/service/gen"
+        sql_package: "pgx/v5"
+        omit_unused_structs: true
+
+  - engine: "postgresql"
+    queries: "pkg/evaluation/query.sql"
+    schema: "../schema.sql"
+    gen:
+      go:
+        package: "gen"
+        out: "pkg/evaluation/gen"
+        sql_package: "pgx/v5"
         omit_unused_structs: true
         emit_json_tags: true

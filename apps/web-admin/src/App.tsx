@@ -18,6 +18,7 @@ import { setupAxiosInterceptors } from './services/api';
 import {  FEEDBACK_WORKFLOW } from './pages/feedback/def';
 import { ANALYSE } from './pages/analyse/def';
 import { DISCUSSION } from './pages/discussion/def';
+import { EVALUATION_WORKFLOW } from './pages/evaluation/def';
 
 
 type NavigationItemWithRoles = NavigationItem & {
@@ -48,6 +49,11 @@ const NAVIGATION: NavigationItemWithRoles[] = [
     segment: DISCUSSION,
     title: 'Discussion',
     icon: <ForumIcon />,
+  },
+  {
+    segment: EVALUATION_WORKFLOW,
+    title: 'Évaluations',
+    icon: <BarChartIcon />,
   },
 ]
 

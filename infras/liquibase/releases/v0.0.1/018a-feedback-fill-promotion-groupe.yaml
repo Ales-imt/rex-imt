@@ -1,0 +1,21 @@
+databaseChangeLog:
+  - changeSet:
+      id: 018-feedback-fill-promotion-groupe
+      author: vjo
+      changes:
+        - sql:
+            sql: >-
+              UPDATE feedback f
+              SET
+                promotion = s.promotion,
+                groupe = (
+                  SELECT string_agg(g.name, ', ')
+                  FROM eleve_groupe eg
+                  JOIN groupe g ON g.id = eg.id_groupe
+                  WHERE eg.num_etudiant = f.user_id
+                )
+              FROM student s
+              WHERE s.user_id = f.user_id;
+      rollback:
+        - sql:
+            sql: UPDATE feedback SET promotion = NULL, groupe = NULL;
