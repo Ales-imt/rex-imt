@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - changeSet:
+      id: 019-feedback-add-promotion-groupe
+      author: vjo
+      changes:
+        - addColumn:
+            tableName: feedback
+            columns:
+              - column:
+                  name: promotion
+                  type: TEXT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: groupe
+                  type: TEXT
+                  constraints:
+                    nullable: true
+      rollback:
+        - dropColumn:
+            tableName: feedback
+            columnName: promotion
+        - dropColumn:
+            tableName: feedback
+            columnName: groupe

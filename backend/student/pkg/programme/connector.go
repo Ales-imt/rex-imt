@@ -8,12 +8,13 @@ type ProgrammeConnector interface {
 	GetProgramme(ctx context.Context, email, start, end string) ([]Cours, error)
 }
 
-// Cours est l'évènement renvoyé au front.
+// Cours est une séance planifiée. Cocle identifie la matière dans webdfd.
 type Cours struct {
-	Date  string `json:"date"` // YYYY-MM-DD
-	HD    string `json:"hd"`   // HH:MM
-	HF    string `json:"hf"`   // HH:MM
-	Cours string `json:"cours"`
+	Date  string `json:"date"`  // YYYY-MM-DD
+	HD    string `json:"hd"`    // HH:MM
+	HF    string `json:"hf"`    // HH:MM
+	Cocle string `json:"cocle"` // identifiant matière webdfd
+	Cours string `json:"cours"` // nom affiché
 	Salle string `json:"salle"`
 	Prof  string `json:"prof"`
 	Promo string `json:"promo"`

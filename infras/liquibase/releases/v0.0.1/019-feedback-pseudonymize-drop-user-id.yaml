@@ -1,0 +1,48 @@
+databaseChangeLog:
+
+  # =============================================================
+  # CHANGESET 001 — Remplir pseudo à partir de l'id
+  # Secret éphémère généré une seule fois pour le batch,
+  # jamais persisté. Même id → même pseudo.
+  # =============================================================
+  - changeSet:
+      id: 017-feedback-fill-pseudo
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+              DO $$
+              DECLARE
+                v_key BYTEA := gen_random_bytes(32);
+              BEGIN
+                UPDATE feedback
+                SET pseudo = encode(encrypt(user_id::text::bytea, v_key, 'aes'), 'hex')
+                WHERE pseudo IS NULL;
+              END $$;
+      rollback:
+        - sql:
+            sql: UPDATE feedback SET pseudo = NULL;
+
+  # =============================================================
+  # CHANGESET 002 — Suppression de user_id
+  # Exécuté uniquement après que pseudo soit rempli
+  # =============================================================
+  - changeSet:
+      id: 017-feedback-drop-user-id
+      author: vjo
+      changes:
+        - dropColumn:
+            tableName: feedback
+            columnName: user_id
+      rollback:
+        - addColumn:
+            tableName: feedback
+            columns:
+              - column:
+                  name: user_id
+                  type: INTEGER
+                  constraints:
+                    nullable: true

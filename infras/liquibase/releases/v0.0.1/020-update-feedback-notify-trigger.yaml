@@ -1,0 +1,56 @@
+databaseChangeLog:
+  - changeSet:
+      id: 018-update-feedback-notify-trigger
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE OR REPLACE FUNCTION notify_new_feedback()
+              RETURNS trigger AS $func$
+              BEGIN
+                PERFORM pg_notify(
+                  'new_feedback',
+                  json_build_object(
+                    'id',        NEW.id,
+                    'content',   NEW.content,
+                    'season_id', NEW.season_id,
+                    'promotion', NEW.promotion,
+                    'groupe',    NEW.groupe
+                  )::text
+                );
+                RETURN NEW;
+              END;
+              $func$ LANGUAGE plpgsql;
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE OR REPLACE FUNCTION notify_new_feedback()
+              RETURNS trigger AS $func$
+              DECLARE
+                v_promotion varchar(255);
+                v_groupe    text;
+              BEGIN
+                SELECT s.promotion INTO v_promotion
+                FROM student s WHERE s.user_id = NEW.user_id;
+
+                SELECT string_agg(g.name, ', ') INTO v_groupe
+                FROM eleve_groupe eg
+                JOIN groupe g ON g.id = eg.id_groupe
+                WHERE eg.num_etudiant = NEW.user_id;
+
+                PERFORM pg_notify(
+                  'new_feedback',
+                  json_build_object(
+                    'id',        NEW.id,
+                    'content',   NEW.content,
+                    'user_id',   NEW.user_id,
+                    'season_id', NEW.season_id,
+                    'promotion', v_promotion,
+                    'groupe',    v_groupe
+                  )::text
+                );
+                RETURN NEW;
+              END;
+              $func$ LANGUAGE plpgsql;

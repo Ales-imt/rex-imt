@@ -45,18 +45,11 @@ func rowToNotification(row ListPendingFeedbacksRow) FeedbackNotification {
 		ID:      row.ID,
 		Content: row.Content,
 	}
-	if row.UserID.Valid {
-		notif.UserID = int(row.UserID.Int32)
-	}
-	if row.SeasonID.Valid {
-		notif.SeasonID = row.SeasonID.Int32
-	}
 	if row.Promotion.Valid {
 		notif.Promotion = &row.Promotion.String
 	}
-	if row.Groupe != nil {
-		s := string(row.Groupe)
-		notif.Groupe = &s
+	if row.Groupe.Valid {
+		notif.Groupe = &row.Groupe.String
 	}
 	return notif
 }

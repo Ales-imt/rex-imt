@@ -62,6 +62,7 @@ export default function Layout() {
     >
       <ThemeProvider theme={theme}>
         <DashboardLayout
+          defaultSidebarCollapsed
           slots={{
             toolbarActions: CustomActions
           }}
