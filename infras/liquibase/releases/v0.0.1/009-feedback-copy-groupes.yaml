@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: v0.0.1-008-feedback-fk-cascade
+      id: v0.0.1-009-feedback-fk-cascade
       author: vjo
       changes:
         - dropForeignKeyConstraint:
@@ -31,7 +31,7 @@ databaseChangeLog:
             constraintName: feedback_student_id_fkey
 
   - changeSet:
-      id: v0.0.1-008-student-fk-cascade
+      id: v0.0.1-009-student-fk-cascade
       author: vjo
       changes:
         - dropForeignKeyConstraint:

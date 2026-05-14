@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: v0.0.2-004-create-table-groupe
+      id: v0.0.2-005-create-table-groupe
       author: vjo
       changes:
         - createTable:
@@ -16,6 +16,12 @@ databaseChangeLog:
               - column:
                   name: name
                   type: varchar(255)
+              - column:
+                  name: taille
+                  type: integer
+                  constraints:
+                    nullable: false
+                    defaultValueNumeric: 0
               - column:
                   name: promo_id
                   type: bigint

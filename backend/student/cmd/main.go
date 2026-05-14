@@ -4,12 +4,15 @@ import (
 	"back-rex-common/pkg/auth"
 	"back-rex-common/pkg/services"
 	"back-rex-eleve/pkg/authentification"
+	"back-rex-eleve/pkg/evaluation"
 	"back-rex-eleve/pkg/feedback"
 	"back-rex-eleve/pkg/note"
 	mariadbnote "back-rex-eleve/pkg/note/mariadb"
 	"back-rex-eleve/pkg/programme"
 	webdfdprog "back-rex-eleve/pkg/programme/webdfd"
 	"back-rex-eleve/pkg/reponse"
+	studentservice "back-rex-eleve/pkg/service"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -51,8 +54,21 @@ func main() {
 		log.Fatal("Erreur connexion MariaDB :", err)
 	}
 	noteConnector := &mariadbnote.Connector{DB: mariaDB}
+	progConnector := &webdfdprog.Connector{
+		ElevesURL:   "http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe?TYPE=eleves_txt",
+		PlanningURL: "http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe",
+	}
+	progConnector.Start(context.Background())
 
-	//r.Use(services.FullLogRequest)
+	pg := services.NewPG(context.Background(), services.ToDBS(&cfg.Database))
+	studentservice.StartSync(
+		context.Background(),
+		"http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe?TYPE=promos_txt",
+		"http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe?TYPE=cours_txt",
+		pg.Db,
+	)
+
+	r.Use(services.FullLogRequest)
 
 	// version api0
 	r.Route("/api/v2", func(r chi.Router) {
@@ -68,11 +84,8 @@ func main() {
 		r.With(auth.Security(cfg.JWT, &role)).Route("/feedback", feedback.MakeRouteFeedBack(cfg.Age.PublicKey))
 		r.With(auth.Security(cfg.JWT, &role)).Route("/reponse", reponse.MakeRouteReponse())
 		r.With(auth.Security(cfg.JWT, &role)).Route("/note", note.MakeRouteNote(noteConnector))
-		progConnector := &webdfdprog.Connector{
-				ElevesURL:   "http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe?TYPE=eleves_txt",
-				PlanningURL: "http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe",
-			}
-			r.With(auth.Security(cfg.JWT, &role)).Route("/programme", programme.MakeRouteProgramme(progConnector))
+		r.With(auth.Security(cfg.JWT, &role)).Route("/programme", programme.MakeRouteProgramme(progConnector))
+		r.With(auth.Security(cfg.JWT, &role)).Route("/evaluation", evaluation.MakeRouteEvaluation(progConnector, cfg.Age.PublicKey))
 
 	})
 

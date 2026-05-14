@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - changeSet:
+      id: tag-pre-drop-user-id
+      author: vjo
+      changes:
+        - tagDatabase:
+            tag: pre-drop-user-id

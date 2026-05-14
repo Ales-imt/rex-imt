@@ -1,0 +1,52 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.2-016-create-table-matiere
+      author: vjo
+      changes:
+        - createTable:
+            tableName: matiere
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: periode_id
+                  type: bigint
+                  constraints:
+                    nullable: true
+
+        - addForeignKeyConstraint:
+            baseTableName: eval_session
+            baseTableSchemaName: public
+            baseColumnNames: matiere_id
+            referencedTableName: matiere
+            referencedTableSchemaName: public
+            referencedColumnNames: id
+            constraintName: eval_session_matiere_id_fkey
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: eval_synthese_ia
+            baseTableSchemaName: public
+            baseColumnNames: matiere_id
+            referencedTableName: matiere
+            referencedTableSchemaName: public
+            referencedColumnNames: id
+            constraintName: eval_synthese_ia_matiere_id_fkey
+            onDelete: CASCADE
+      rollback:
+        - sql:
+            sql: ALTER TABLE eval_synthese_ia DROP CONSTRAINT IF EXISTS eval_synthese_ia_matiere_id_fkey
+        - sql:
+            sql: ALTER TABLE eval_session DROP CONSTRAINT IF EXISTS eval_session_matiere_id_fkey
+        - dropTable:
+            tableName: matiere
+            schemaName: public

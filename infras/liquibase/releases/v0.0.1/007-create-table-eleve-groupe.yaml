@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: v0.0.2-006-create-table-eleve-groupe
+      id: v0.0.2-007-create-table-eleve-groupe
       author: vjo
       changes:
         - createTable:

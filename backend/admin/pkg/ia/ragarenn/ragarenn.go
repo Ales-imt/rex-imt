@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // Connector appelle l'API RAGaRenn (compatible OpenAI) pour analyser un prompt.
@@ -35,6 +36,8 @@ type chatResponse struct {
 
 // Analyze envoie le prompt à RAGaRenn et retourne la réponse textuelle.
 func (c *Connector) Analyze(ctx context.Context, prompt string) (string, error) {
+	time.Sleep(1 * time.Second)
+
 	body, err := json.Marshal(chatRequest{
 		Model: c.Model,
 		Messages: []chatMessage{
