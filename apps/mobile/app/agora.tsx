@@ -4,8 +4,8 @@ import { useAgora } from '@/hooks/use-agora';
 import { useNavMenu } from '@/hooks/use-nav-menu';
 import { useTheme } from '@/hooks/use-theme';
 import { apiInstance, setupAxiosInterceptors } from '@/services/api';
-import { Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Stack, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -226,23 +226,26 @@ export default function AgoraScreen() {
             .catch(() => {});
     }, []);
 
-    useEffect(() => {
-        const fetch = (showLoader: boolean) => {
-            if (showLoader) setLoading(true);
-            setError(null);
-            const params: Record<string, string> = { months: String(months) };
-            if (promotion) params.promotion = promotion;
-            apiInstance
-                .get<PostItRow[]>('/postit', { params })
-                .then(res => setPostits(res.data.map(toPostIt)))
-                .catch(err => setError(err.message))
-                .finally(() => setLoading(false));
-        };
+    useFocusEffect(
+        useCallback(() => {
+            let cancelled = false;
+            const fetch = (showLoader: boolean) => {
+                if (showLoader) setLoading(true);
+                setError(null);
+                const params: Record<string, string> = { months: String(months) };
+                if (promotion) params.promotion = promotion;
+                apiInstance
+                    .get<PostItRow[]>('/postit', { params })
+                    .then(res => { if (!cancelled) setPostits(res.data.map(toPostIt)); })
+                    .catch(err => { if (!cancelled) setError(err.message); })
+                    .finally(() => { if (!cancelled) setLoading(false); });
+            };
 
-        fetch(true);
-        const interval = setInterval(() => fetch(false), 3 * 60_000);
-        return () => clearInterval(interval);
-    }, [months, promotion]);
+            fetch(true);
+            const interval = setInterval(() => fetch(false), 3 * 60_000);
+            return () => { cancelled = true; clearInterval(interval); };
+        }, [months, promotion])
+    );
 
     const monthOptions = MONTH_OPTIONS.map(m => ({ value: m, label: m === 1 ? '1 mois' : `${m} mois` }));
     const promoOptions = [

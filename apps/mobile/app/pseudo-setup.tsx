@@ -116,7 +116,7 @@ export default function PseudoSetupScreen() {
             <>
               {/* ── Chemin B : pseudo existant ── */}
               <Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>
-                Entrez votre pseudo (4 mots séparés par ·)
+                Entrez votre pseudo (4 mots séparés par .)
               </Text>
               <TextInput
                 style={[
@@ -126,7 +126,7 @@ export default function PseudoSetupScreen() {
                 ]}
                 value={existingInput}
                 onChangeText={v => { setExistingInput(v); setInputError(''); }}
-                placeholder="ex : cheval · nuage · fenêtre · bleu"
+                placeholder="ex : cheval . nuage . fenêtre . bleu"
                 placeholderTextColor={colors.textSecondary}
                 autoCapitalize="none"
                 autoCorrect={false}

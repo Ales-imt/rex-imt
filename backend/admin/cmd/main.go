@@ -82,7 +82,7 @@ func main() {
 	}
 	go feedback.ProcessPendingFeedbacks(&cfg.Database, iaConnector)
 	go feedback.ListenForNewFeedbacks(&cfg.Database, iaConnector)
-	rgpd.StartPurge(&cfg.Database)
+	rgpd.StartPurge(&cfg.Database, &cfg.MariaDBConfig)
 
 	//r.Use(services.FullLogRequest)
 
