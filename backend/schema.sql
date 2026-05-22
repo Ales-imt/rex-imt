@@ -338,7 +338,8 @@ CREATE TABLE public."user" (
     surname character varying(255) NOT NULL,
     email character varying(255) NOT NULL,
     roles text[] DEFAULT ARRAY['ELEVE'::text] NOT NULL,
-    blame boolean DEFAULT false
+    blame boolean DEFAULT false,
+    informed_at timestamp with time zone
 );
 
 

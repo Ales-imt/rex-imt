@@ -205,7 +205,6 @@ export const ProgrammeScreen = () => {
         if (!active) return;
         const newMap = toEventMap(res.data ?? []);
         if (JSON.stringify(newMap) !== JSON.stringify(eventsRef.current)) {
-          console.log("newMap:", newMap, "\noldMap:", eventsRef.current);
           eventsRef.current = newMap;
           setEvents(newMap);
         }
