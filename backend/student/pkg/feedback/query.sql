@@ -12,3 +12,7 @@ SET
   groupe    = NULL
 WHERE message_id = $1
   AND pseudo = $2;
+
+-- name: AnonymizePostitByFeedback :exec
+UPDATE postit SET message_modere = '[contenu supprimé à la demande de l''auteur]'
+WHERE message_id = $1;

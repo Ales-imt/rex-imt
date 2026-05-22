@@ -1,9 +1,16 @@
 database:
   host: localhost
   port: 5432
-  user: postgres
-  password: root
+  user: ${POSTGRES_USER}
+  password: ${POSTGRES_PASSWORD}
   name: db_rex
+
+mariaDB:
+  host:     localhost
+  port:     3306
+  user:     ${MARIADB_USER}
+  password: ${MARIADB_PASSWORD}
+  database: cyber_notes_v2
 
 server:
   host: localhost
@@ -11,7 +18,7 @@ server:
   certPath : ./x509/mtls_certs
 
 jwt:
-  secret: lee0Op9iriThai7mXae5ahxuUpo2thaenaeL6mooaehahk1U
+  secret: ${JWT_SECRET}
   accessTokenExpiresIn: 15m
   refreshTokenExpiresIn: 168h
 
