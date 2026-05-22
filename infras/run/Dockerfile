@@ -1,0 +1,52 @@
+# ── Stage 1 : build Go backend ──────────────────────────────────────────────
+FROM golang:1.25-alpine AS backend-builder
+
+WORKDIR /app
+
+# Copie du module common (référencé par replace directive dans admin/go.mod)
+COPY backend/common ./common
+
+# Copie du module admin
+COPY backend/admin ./admin
+
+WORKDIR /app/admin
+
+RUN go build -ldflags="-s -w" -o /rex-admin-server ./cmd
+
+# ── Stage 2 : build React frontend ──────────────────────────────────────────
+FROM node:22-alpine AS frontend-builder
+
+WORKDIR /app
+
+COPY apps/web-admin/package*.json ./
+RUN npm ci
+
+COPY apps/web-admin/ ./
+RUN npm run build
+
+# ── Stage 3 : image finale ───────────────────────────────────────────────────
+FROM alpine:3.21
+
+RUN apk add --no-cache nginx
+
+# Backend
+COPY --from=backend-builder /rex-admin-server /usr/local/bin/rex-admin-server
+
+# Frontend (fichiers statiques servis par nginx)
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
+
+# Configuration nginx
+COPY infras/run/nginx.conf /etc/nginx/nginx.conf
+
+# Répertoire de configuration de l'application
+RUN mkdir -p /opt/rex-admin/conf /opt/rex-admin/certs
+
+# Certificat CA pour mTLS
+COPY infras/x509/mtls_certs/ca.crt /opt/rex-admin/certs/ca.crt
+
+COPY infras/run/start.sh /start.sh
+RUN chmod +x /start.sh
+
+EXPOSE 80
+
+CMD ["/start.sh"]

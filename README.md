@@ -21,3 +21,7 @@ Pour utiliser cybema en local:
    sudo systemctl stop apache2
    sudo ssh -L 80:webdfd.mines-ales.fr:80 userdfx@vecu-etudiant-eleves-2.mines-ales.fr
 
+
+Pour expo,
+   npx expo start
+

@@ -1,0 +1,44 @@
+# ── Stage 1 : build Go backend élève ────────────────────────────────────────
+FROM golang:1.25-alpine AS backend-builder
+
+WORKDIR /app
+
+COPY backend/common ./common
+COPY backend/student ./student
+
+WORKDIR /app/student
+
+RUN go build -ldflags="-s -w" -o /rex-eleve-server ./cmd
+
+# ── Stage 2 : build Expo web ─────────────────────────────────────────────────
+FROM node:22-alpine AS frontend-builder
+
+WORKDIR /app
+
+COPY apps/mobile/package*.json ./
+RUN npm ci
+
+COPY apps/mobile/ ./
+
+# Relie l'API vers nginx (proxy /api → backend Go sur port 3300)
+ENV EXPO_PUBLIC_API_BASE=/api/v2
+
+RUN npx expo export --platform web --no-minify
+
+# ── Stage 3 : image finale ───────────────────────────────────────────────────
+FROM alpine:3.21
+
+RUN apk add --no-cache nginx
+
+COPY --from=backend-builder /rex-eleve-server /usr/local/bin/rex-eleve-server
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
+COPY infras/run/nginx-eleve.conf /etc/nginx/nginx.conf
+
+RUN mkdir -p /opt/rex-eleve/conf
+
+COPY infras/run/start-eleve.sh /start.sh
+RUN chmod +x /start.sh
+
+EXPOSE 80
+
+CMD ["/start.sh"]

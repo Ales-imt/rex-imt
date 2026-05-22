@@ -8,13 +8,16 @@ import (
 	"back-rex-eleve/pkg/service"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -22,8 +25,8 @@ import (
 // Les chips et verbatims sont optionnels (omitempty).
 type SubmitEvaluationRequest struct {
 	// Écran 0 — contexte
-	MatiereID   int64  `json:"matiere_id,string"`
-	FormatSuivi string `json:"format_suivi"` // PRESENTIEL | DISTANCIEL | HYBRIDE
+	MatiereID        int64  `json:"matiere_id,string"`
+	FormatSuivi      string `json:"format_suivi"`      // PRESENTIEL | DISTANCIEL | HYBRIDE
 	TendanceSemestre string `json:"tendance_semestre"` // PROGRES | STABLE | BAISSE
 	Assiduite        string `json:"assiduite"`         // TOUTES | QUELQUES_ABSENCES | BEAUCOUP
 
@@ -93,7 +96,7 @@ func sessionDone(date, hf string, now time.Time) bool {
 
 func getMatiere(connector programme.ProgrammeConnector) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		anonID := r.Header.Get("X-Anon-Id")
+		pseudo := r.Header.Get("X-Anon-Id")
 		ctx := context.Background()
 
 		userID := auth.GetSecurityUserId(r.Context())
@@ -146,9 +149,9 @@ func getMatiere(connector programme.ProgrammeConnector) http.HandlerFunc {
 			}
 		}
 
-		if anonID != "" {
+		if pseudo != "" {
 			queries := gen.New(pgCtx.Db)
-			submittedIDs, err := queries.GetSubmittedMatiereIDs(ctx, anonID)
+			submittedIDs, err := queries.GetSubmittedMatiereIDs(ctx, pseudo)
 			if err == nil {
 				for _, id := range submittedIDs {
 					if m, ok := eligible[strconv.FormatInt(id, 10)]; ok {
@@ -172,135 +175,135 @@ func getMatiere(connector programme.ProgrammeConnector) http.HandlerFunc {
 
 func SubmitEvaluation(agePublicKey string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-	// Identifiant anonyme transmis par le client (jamais lié au serveur d'auth)
-	anonID := r.Header.Get("X-Anon-Id")
-	if anonID == "" {
-		services.InvalidRequestError(w, r, "anon_id requis", services.NO_INFORMATION, nil)
-		return
-	}
+		// Identifiant anonyme transmis par le client (jamais lié au serveur d'auth)
+		pseudo := r.Header.Get("X-Anon-Id")
+		if pseudo == "" {
+			services.InvalidRequestError(w, r, "pseudo requis", services.NO_INFORMATION, nil)
+			return
+		}
 
-	var req SubmitEvaluationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		services.InvalidRequestError(w, r, "payload invalide", services.NO_INFORMATION, nil)
-		return
-	}
+		var req SubmitEvaluationRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			services.InvalidRequestError(w, r, "payload invalide", services.NO_INFORMATION, nil)
+			return
+		}
 
-	if err := validateRequest(&req); err != nil {
-		services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
+		if err := validateRequest(&req); err != nil {
+			services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
 
-	pgCtx := services.GetPgCtx(r.Context())
-	queries := gen.New(pgCtx.Db)
-	ctx := context.Background()
+		pgCtx := services.GetPgCtx(r.Context())
+		queries := gen.New(pgCtx.Db)
+		ctx := context.Background()
 
-	// Vérification anti-doublon avant toute insertion
-	alreadySubmitted, err := queries.EvalSessionExists(ctx, gen.EvalSessionExistsParams{
-		AnonID:    anonID,
-		MatiereID: req.MatiereID,
-	})
-	if err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
-	if alreadySubmitted {
-		services.InvalidRequestError(w, r, "évaluation déjà soumise pour ce cours ce semestre", services.NO_INFORMATION, nil)
-		return
-	}
+		// Vérification anti-doublon avant toute insertion
+		alreadySubmitted, err := queries.EvalSessionExists(ctx, gen.EvalSessionExistsParams{
+			Pseudo:    pseudo,
+			MatiereID: req.MatiereID,
+		})
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+		if alreadySubmitted {
+			services.InvalidRequestError(w, r, "évaluation déjà soumise pour ce cours ce semestre", services.NO_INFORMATION, nil)
+			return
+		}
 
-	// Toutes les insertions dans une transaction :
-	// si une étape échoue, rien n'est persisté
-	tx, err := pgCtx.Db.Begin(ctx)
-	if err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
-	defer tx.Rollback(ctx)
+		// Toutes les insertions dans une transaction :
+		// si une étape échoue, rien n'est persisté
+		tx, err := pgCtx.Db.Begin(ctx)
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+		defer tx.Rollback(ctx)
 
-	qtx := queries.WithTx(tx)
+		qtx := queries.WithTx(tx)
 
-	// 1 — Session (écran 0)
-	sessionID, err := qtx.InsertEvalSession(ctx, gen.InsertEvalSessionParams{
-		AnonID:           anonID,
-		MatiereID:        req.MatiereID,
-		FormatSuivi:      req.FormatSuivi,
-		TendanceSemestre: req.TendanceSemestre,
-		Assiduite:        req.Assiduite,
-	})
-	if err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
+		// 1 — Session (écran 0)
+		sessionID, err := qtx.InsertEvalSession(ctx, gen.InsertEvalSessionParams{
+			Pseudo:           pseudo,
+			MatiereID:        req.MatiereID,
+			FormatSuivi:      req.FormatSuivi,
+			TendanceSemestre: req.TendanceSemestre,
+			Assiduite:        req.Assiduite,
+		})
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
 
-	// 2 — Scores (étapes 1 à 6)
-	if err := qtx.InsertEvalScores(ctx, gen.InsertEvalScoresParams{
-		SessionID:              sessionID,
-		ScorePedaGlobal:        pgtype.Int2{Int16: int16(req.ScorePedaGlobal), Valid: true},
-		ScorePedaClarte:        pgtype.Int2{Int16: int16(req.ScorePedaClarte), Valid: true},
-		ScoreContenuAdequation: pgtype.Int2{Int16: int16(req.ScoreContenuAdequation), Valid: true},
-		ChargePerception:       pgtype.Text{String: req.ChargePerception, Valid: true},
-		ChargeHeuresSemaine:    pgtype.Text{String: req.ChargeHeuresSemaine, Valid: true},
-		ScoreDifficulte:        pgtype.Int2{Int16: int16(req.ScoreDifficulte), Valid: true},
-		ScoreSupports:          pgtype.Int2{Int16: int16(req.ScoreSupports), Valid: true},
-		ScoreAmbiance:          pgtype.Int2{Int16: int16(req.ScoreAmbiance), Valid: true},
-		Nps:                    pgtype.Int2{Int16: int16(req.Nps), Valid: true},
-	}); err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
-
-	// 3 — Chips (toutes dimensions confondues)
-	allChips := mergeChips(req.ChipsContenu, req.ChipsSupports, req.ChipsAmbiance)
-	for _, chipID := range allChips {
-		if err := qtx.InsertEvalChipReponse(ctx, gen.InsertEvalChipReponseParams{
-			SessionID: sessionID,
-			ChipID:    chipID,
+		// 2 — Scores (étapes 1 à 6)
+		if err := qtx.InsertEvalScores(ctx, gen.InsertEvalScoresParams{
+			SessionID:              sessionID,
+			ScorePedaGlobal:        pgtype.Int2{Int16: int16(req.ScorePedaGlobal), Valid: true},
+			ScorePedaClarte:        pgtype.Int2{Int16: int16(req.ScorePedaClarte), Valid: true},
+			ScoreContenuAdequation: pgtype.Int2{Int16: int16(req.ScoreContenuAdequation), Valid: true},
+			ChargePerception:       pgtype.Text{String: req.ChargePerception, Valid: true},
+			ChargeHeuresSemaine:    pgtype.Text{String: req.ChargeHeuresSemaine, Valid: true},
+			ScoreDifficulte:        pgtype.Int2{Int16: int16(req.ScoreDifficulte), Valid: true},
+			ScoreSupports:          pgtype.Int2{Int16: int16(req.ScoreSupports), Valid: true},
+			ScoreAmbiance:          pgtype.Int2{Int16: int16(req.ScoreAmbiance), Valid: true},
+			Nps:                    pgtype.Int2{Int16: int16(req.Nps), Valid: true},
 		}); err != nil {
 			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 			return
 		}
-	}
 
-	// 4 — Verbatims optionnels
-	strongbox, err := service.EncryptStrongbox(agePublicKey, r.RemoteAddr, 0)
-	if err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
-	verbatims := []struct {
-		dimension string
-		texte     string
-	}{
-		{"SUPPORTS", req.VerbatimSupports},
-		{"AMBIANCE", req.VerbatimAmbiance},
-		{"NPS", req.VerbatimNps},
-	}
-	for _, v := range verbatims {
-		if v.texte == "" {
-			continue
+		// 3 — Chips (toutes dimensions confondues)
+		allChips := mergeChips(req.ChipsContenu, req.ChipsSupports, req.ChipsAmbiance)
+		for _, chipID := range allChips {
+			if err := qtx.InsertEvalChipReponse(ctx, gen.InsertEvalChipReponseParams{
+				SessionID: sessionID,
+				ChipID:    chipID,
+			}); err != nil {
+				services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+				return
+			}
 		}
-		if err := qtx.InsertEvalVerbatim(ctx, gen.InsertEvalVerbatimParams{
-			SessionID: sessionID,
-			Dimension: v.dimension,
-			Texte:     v.texte,
-			Strongbox: services.ToPgText(strongbox),
-		}); err != nil {
+
+		// 4 — Verbatims optionnels
+		strongbox, err := service.EncryptStrongbox(agePublicKey, r.RemoteAddr, 0)
+		if err != nil {
 			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 			return
 		}
-	}
+		verbatims := []struct {
+			dimension string
+			texte     string
+		}{
+			{"SUPPORTS", req.VerbatimSupports},
+			{"AMBIANCE", req.VerbatimAmbiance},
+			{"NPS", req.VerbatimNps},
+		}
+		for _, v := range verbatims {
+			if v.texte == "" {
+				continue
+			}
+			if err := qtx.InsertEvalVerbatim(ctx, gen.InsertEvalVerbatimParams{
+				SessionID: sessionID,
+				Dimension: v.dimension,
+				Texte:     v.texte,
+				Strongbox: services.ToPgText(strongbox),
+			}); err != nil {
+				services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+				return
+			}
+		}
 
-	// 5 — Marquage de la session comme soumise
-	if err := qtx.SubmitEvalSession(ctx, sessionID); err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
+		// 5 — Marquage de la session comme soumise
+		if err := qtx.SubmitEvalSession(ctx, sessionID); err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
 
-	// Commit — tout ou rien
-	if err := tx.Commit(ctx); err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
+		// Commit — tout ou rien
+		if err := tx.Commit(ctx); err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
 
 		render.JSON(w, r, map[string]string{"session_id": sessionID.String()})
 	}
@@ -382,4 +385,101 @@ func checkScore(field string, val, min, max int32) error {
 // errorf est un raccourci local pour fmt.Errorf sans importer fmt au niveau du package.
 func errorf(format string, args ...any) error {
 	return fmt.Errorf(format, args...)
+}
+
+type SessionDetailResponse struct {
+	SessionID              string `json:"session_id"`
+	FormatSuivi            string `json:"format_suivi"`
+	TendanceSemestre       string `json:"tendance_semestre"`
+	Assiduite              string `json:"assiduite"`
+	ScorePedaGlobal        int16  `json:"score_peda_global"`
+	ScorePedaClarte        int16  `json:"score_peda_clarte"`
+	ScoreContenuAdequation int16  `json:"score_contenu_adequation"`
+	ChargePerception       string `json:"charge_perception"`
+	ChargeHeuresSemaine    string `json:"charge_heures_semaine"`
+	ScoreDifficulte        int16  `json:"score_difficulte"`
+	ScoreSupports          int16  `json:"score_supports"`
+	ScoreAmbiance          int16  `json:"score_ambiance"`
+	Nps                    int16  `json:"nps"`
+}
+
+func getSessionDetail() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		pseudo := r.Header.Get("X-Anon-Id")
+		if pseudo == "" {
+			services.InvalidRequestError(w, r, "pseudo requis", services.NO_INFORMATION, nil)
+			return
+		}
+
+		matiereIDStr := r.URL.Query().Get("matiere_id")
+		matiereID, err := strconv.ParseInt(matiereIDStr, 10, 64)
+		if err != nil {
+			services.InvalidRequestError(w, r, "matiere_id invalide", services.NO_INFORMATION, nil)
+			return
+		}
+
+		pgCtx := services.GetPgCtx(r.Context())
+		queries := gen.New(pgCtx.Db)
+		ctx := context.Background()
+
+		row, err := queries.GetSessionByMatiere(ctx, gen.GetSessionByMatiereParams{
+			Pseudo:    pseudo,
+			MatiereID: matiereID,
+		})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				http.Error(w, "session introuvable", http.StatusNotFound)
+				return
+			}
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+
+		render.JSON(w, r, SessionDetailResponse{
+			SessionID:              row.ID.String(),
+			FormatSuivi:            row.FormatSuivi,
+			TendanceSemestre:       row.TendanceSemestre,
+			Assiduite:              row.Assiduite,
+			ScorePedaGlobal:        row.ScorePedaGlobal.Int16,
+			ScorePedaClarte:        row.ScorePedaClarte.Int16,
+			ScoreContenuAdequation: row.ScoreContenuAdequation.Int16,
+			ChargePerception:       row.ChargePerception.String,
+			ChargeHeuresSemaine:    row.ChargeHeuresSemaine.String,
+			ScoreDifficulte:        row.ScoreDifficulte.Int16,
+			ScoreSupports:          row.ScoreSupports.Int16,
+			ScoreAmbiance:          row.ScoreAmbiance.Int16,
+			Nps:                    row.Nps.Int16,
+		})
+	}
+}
+
+func deleteSession() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		pseudo := r.Header.Get("X-Anon-Id")
+		if pseudo == "" {
+			services.InvalidRequestError(w, r, "pseudo requis", services.NO_INFORMATION, nil)
+			return
+		}
+
+		sessionIDStr := chi.URLParam(r, "sessionId")
+		var sessionID pgtype.UUID
+		if err := sessionID.Scan(sessionIDStr); err != nil {
+			services.InvalidRequestError(w, r, "sessionId invalide", services.NO_INFORMATION, nil)
+			return
+		}
+
+		pgCtx := services.GetPgCtx(r.Context())
+		queries := gen.New(pgCtx.Db)
+		ctx := context.Background()
+
+		if err := queries.DeleteEvalSession(ctx, gen.DeleteEvalSessionParams{
+			SessionID: sessionID,
+			Pseudo:    pseudo,
+		}); err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
 }

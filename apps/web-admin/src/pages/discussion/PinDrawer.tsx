@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Box from '@mui/material/Box';
 import Drawer from '@mui/material/Drawer';
 import Typography from '@mui/material/Typography';
@@ -6,49 +6,46 @@ import Chip from '@mui/material/Chip';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
-import Tooltip from '@mui/material/Tooltip';
 import Paper from '@mui/material/Paper';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import CloseIcon from '@mui/icons-material/Close';
-import FormatBoldIcon from '@mui/icons-material/FormatBold';
-import FormatItalicIcon from '@mui/icons-material/FormatItalic';
-import LinkIcon from '@mui/icons-material/Link';
-import EmojiEmotionsIcon from '@mui/icons-material/EmojiEmotions';
 import type { Feedback } from '../feedback/Feedback';
-import { POSTIT_COLORS } from './data';
+import { colorFromUrgence } from './data';
 
 interface PinDrawerProps {
   open: boolean;
   onClose: () => void;
-  onPin: (text: string, color: string) => void;
+  onPin: (reponse: string, messageModere: string) => void;
   feedback: Feedback | null;
 }
 
-const MAX_CHARS = 120;
+const MAX_REPONSE = 160;
 
 export default function PinDrawer({ open, onClose, onPin, feedback }: PinDrawerProps) {
-  const [text, setText] = useState('');
-  const [selectedColor, setSelectedColor] = useState(POSTIT_COLORS[0].value);
+  const [reponse, setReponse] = useState('');
+  const [messageModere, setMessageModere] = useState('');
 
   useEffect(() => {
     if (open && feedback) {
-      setText(feedback.content.slice(0, MAX_CHARS));
+      setMessageModere(feedback.content);
+      setReponse('');
     }
   }, [open, feedback]);
 
+  const noteColor = colorFromUrgence(feedback?.urgence);
+  const authorLabel = feedback?.groupe || feedback?.promotion || 'Étudiant';
+
   const handlePin = () => {
-    onPin(text, selectedColor);
+    onPin(reponse, messageModere);
     onClose();
   };
-
-  const authorLabel = feedback?.groupe || feedback?.promotion || 'Étudiant';
 
   return (
     <Drawer
       anchor="bottom"
       open={open}
       onClose={onClose}
-      PaperProps={{ sx: { borderRadius: '16px 16px 0 0', maxHeight: '70vh', overflow: 'visible' } }}
+      PaperProps={{ sx: { borderRadius: '16px 16px 0 0', maxHeight: '80vh', overflow: 'visible' } }}
     >
       {/* Handle */}
       <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1.5, pb: 0.5 }}>
@@ -64,95 +61,74 @@ export default function PinDrawer({ open, onClose, onPin, feedback }: PinDrawerP
         <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
       </Box>
 
-      {/* Two-column content */}
-      <Box sx={{
-        display: 'grid', gridTemplateColumns: '1fr 210px', gap: 3,
-        px: 3, pb: 3, overflow: 'auto',
-      }}>
-        {/* Editor */}
-        <Box>
+      {/* Content */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 210px', gap: 3, px: 3, pb: 3, overflow: 'auto' }}>
+
+        {/* Left column */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+
           {/* Student badge */}
-          <Box sx={{ mb: 1.5 }}>
-            <Chip
-              label={authorLabel}
+          <Chip
+            label={authorLabel}
+            size="small"
+            sx={{ alignSelf: 'flex-start', bgcolor: '#f0fdf4', color: '#166534', fontWeight: 700, border: '1px solid #86efac' }}
+          />
+
+          {/* Full message — read-only, for moderation */}
+          <Box>
+            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ display: 'block', mb: 0.75 }}>
+              Message complet
+            </Typography>
+            <Box sx={{
+              maxHeight: 160, overflowY: 'auto',
+              border: '1px solid', borderColor: 'divider',
+              borderRadius: 1, px: 1.5, py: 1,
+            }}>
+              <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary', whiteSpace: 'pre-wrap' }}>
+                {feedback?.content}
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* message_modere — editable public version */}
+          <Box>
+            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ display: 'block', mb: 0.75 }}>
+              Message modéré <Typography component="span" variant="caption" color="text.disabled">(version affichée sur le mur)</Typography>
+            </Typography>
+            <TextField
+              multiline minRows={2} maxRows={4} fullWidth
+              placeholder="Version publique du message…"
+              value={messageModere}
+              onChange={e => setMessageModere(e.target.value)}
               size="small"
-              sx={{ bgcolor: '#f0fdf4', color: '#166534', fontWeight: 700, border: '1px solid #86efac' }}
             />
           </Box>
 
-          {/* Original message */}
-          {feedback && (
-            <Box sx={{
-              borderLeft: '3px solid #f97316', pl: 1.5, py: 0.75,
-              bgcolor: '#fff7ed', borderRadius: '0 4px 4px 0', mb: 2,
-            }}>
-              <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mb: 0.25 }}>
-                Message original
-              </Typography>
-              <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-                {feedback.content}
-              </Typography>
-            </Box>
-          )}
-
-          {/* Editable textarea */}
-          <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
-            <Box sx={{ display: 'flex', gap: 0.25, px: 1, py: 0.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-              {[
-                { icon: <FormatBoldIcon fontSize="small" />, label: 'Gras' },
-                { icon: <FormatItalicIcon fontSize="small" />, label: 'Italique' },
-                { icon: <LinkIcon fontSize="small" />, label: 'Lien' },
-                { icon: <EmojiEmotionsIcon fontSize="small" />, label: 'Emoji' },
-              ].map(btn => (
-                <Tooltip key={btn.label} title={btn.label}>
-                  <IconButton size="small" sx={{ color: 'text.secondary' }}>{btn.icon}</IconButton>
-                </Tooltip>
-              ))}
-            </Box>
-            <TextField
-              multiline minRows={3} maxRows={5} fullWidth
-              placeholder="Texte de la note épinglée…"
-              value={text}
-              onChange={e => { if (e.target.value.length <= MAX_CHARS) setText(e.target.value); }}
-              variant="standard"
-              inputProps={{ maxLength: MAX_CHARS }}
-              sx={{
-                px: 1.5, py: 1,
-                '& .MuiInput-root': { fontSize: '0.875rem' },
-                '& .MuiInput-root::before, & .MuiInput-root::after': { display: 'none' },
-              }}
-            />
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 1.5, pb: 0.75 }}>
-              <Typography variant="caption" color={text.length >= MAX_CHARS ? 'error' : 'text.disabled'}>
-                {text.length}/{MAX_CHARS}
-              </Typography>
-            </Box>
-          </Paper>
-
-          {/* Color picker */}
-          <Box sx={{ mt: 2, mb: 2.5 }}>
-            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ display: 'block', mb: 1 }}>
-              Couleur de la note
+          {/* reponse — moderator's reply */}
+          <Box>
+            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ display: 'block', mb: 0.75 }}>
+              Réponse du modérateur
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              {POSTIT_COLORS.map(color => (
-                <Tooltip key={color.value} title={color.label}>
-                  <Box
-                    onClick={() => setSelectedColor(color.value)}
-                    sx={{
-                      width: 28, height: 28, borderRadius: '50%', bgcolor: color.value,
-                      cursor: 'pointer', border: '2px solid',
-                      borderColor: selectedColor === color.value ? 'text.primary' : 'transparent',
-                      boxShadow: selectedColor === color.value
-                        ? '0 0 0 2px white inset'
-                        : '0 1px 3px rgba(0,0,0,0.15)',
-                      transition: 'transform 0.15s',
-                      '&:hover': { transform: 'scale(1.15)' },
-                    }}
-                  />
-                </Tooltip>
-              ))}
-            </Box>
+            <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+              <TextField
+                multiline minRows={2} maxRows={4} fullWidth
+                placeholder="Votre réponse affichée sur la note…"
+                value={reponse}
+                onChange={e => { if (e.target.value.length <= MAX_REPONSE) setReponse(e.target.value); }}
+                variant="standard"
+                inputProps={{ maxLength: MAX_REPONSE }}
+                sx={{
+                  px: 1.5, py: 1,
+                  '& .MuiInput-root': { fontSize: '0.875rem' },
+                  '& .MuiInput-root::before, & .MuiInput-root::after': { display: 'none' },
+                }}
+              />
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 1.5, pb: 0.75 }}>
+                <Typography variant="caption" color={reponse.length >= MAX_REPONSE ? 'error' : 'text.disabled'}>
+                  {reponse.length}/{MAX_REPONSE}
+                </Typography>
+              </Box>
+            </Paper>
           </Box>
 
           {/* Buttons */}
@@ -164,7 +140,7 @@ export default function PinDrawer({ open, onClose, onPin, feedback }: PinDrawerP
               variant="contained"
               startIcon={<PushPinIcon />}
               onClick={handlePin}
-              disabled={!text.trim()}
+              disabled={!reponse.trim()}
               sx={{
                 borderRadius: 2, textTransform: 'none', fontWeight: 600, boxShadow: 'none',
                 background: 'linear-gradient(135deg, #f97316, #f59e0b)',
@@ -176,7 +152,7 @@ export default function PinDrawer({ open, onClose, onPin, feedback }: PinDrawerP
           </Box>
         </Box>
 
-        {/* Live preview */}
+        {/* Right column — preview */}
         <Box>
           <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ display: 'block', mb: 1 }}>
             Aperçu
@@ -189,8 +165,8 @@ export default function PinDrawer({ open, onClose, onPin, feedback }: PinDrawerP
               boxShadow: '0 2px 4px rgba(0,0,0,0.25)', zIndex: 2,
             }} />
             <Paper elevation={3} sx={{
-              bgcolor: selectedColor, borderRadius: '2px',
-              p: 1.5, pt: 1.75, transform: 'rotate(-1deg)', minHeight: 140,
+              bgcolor: noteColor, borderRadius: '2px',
+              p: 1.5, pt: 1.75, transform: 'rotate(-1deg)', minHeight: 160,
             }}>
               <Typography variant="caption" sx={{
                 display: 'block', fontWeight: 700,
@@ -199,9 +175,26 @@ export default function PinDrawer({ open, onClose, onPin, feedback }: PinDrawerP
               }}>
                 {authorLabel.toUpperCase()}
               </Typography>
-              <Typography variant="body2" sx={{ fontSize: '0.78rem', lineHeight: 1.45, color: '#1f2937', mb: 1 }}>
-                {text || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Votre texte ici…</span>}
+
+              {messageModere && (
+                <Typography variant="body2" sx={{
+                  fontSize: '0.7rem', lineHeight: 1.35, color: '#374151',
+                  mb: 0.75, fontStyle: 'italic',
+                  display: '-webkit-box', WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                }}>
+                  {messageModere}
+                </Typography>
+              )}
+
+              <Typography variant="body2" sx={{
+                fontSize: '0.78rem', lineHeight: 1.45, color: '#1f2937', mb: 1,
+                display: '-webkit-box', WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical', overflow: 'hidden',
+              }}>
+                {reponse || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Votre réponse…</span>}
               </Typography>
+
               <Chip
                 label={feedback?.categorie || 'Note'}
                 size="small"

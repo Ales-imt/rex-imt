@@ -5,6 +5,7 @@ import (
 	"back-rex-common/pkg/services"
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"time"
 
@@ -25,15 +26,16 @@ type FeedbackNotification struct {
 // À lancer dans une goroutine au démarrage du serveur admin.
 func ListenForNewFeedbacks(cfg *services.DatabaseConfig, connector ia.IAConnector) {
 	dsn := services.ToDBS(cfg)
+	pool := services.NewPG(context.Background(), dsn)
 	for {
-		if err := listenLoop(dsn, connector); err != nil {
+		if err := listenLoop(dsn, pool, connector); err != nil {
 			log.Printf("[feedback listener] connexion perdue: %v — reconnexion dans 5s", err)
 			time.Sleep(5 * time.Second)
 		}
 	}
 }
 
-func listenLoop(dsn string, connector ia.IAConnector) error {
+func listenLoop(dsn string, pool *services.Postgres, connector ia.IAConnector) error {
 	ctx := context.Background()
 
 	conn, err := pgx.Connect(ctx, dsn)
@@ -48,8 +50,17 @@ func listenLoop(dsn string, connector ia.IAConnector) error {
 	log.Println("[feedback listener] en écoute sur le canal 'new_feedback'")
 
 	for {
-		notification, err := conn.WaitForNotification(ctx)
+		waitCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		notification, err := conn.WaitForNotification(waitCtx)
+		cancel()
+
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				if pingErr := conn.Ping(ctx); pingErr != nil {
+					return pingErr
+				}
+				continue
+			}
 			return err
 		}
 
@@ -59,6 +70,6 @@ func listenLoop(dsn string, connector ia.IAConnector) error {
 			continue
 		}
 
-		CallbackFeedBack(notif, connector, conn)
+		go CallbackFeedBack(notif, connector, pool.Db)
 	}
 }

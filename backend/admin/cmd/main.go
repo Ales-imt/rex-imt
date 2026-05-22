@@ -12,6 +12,7 @@ import (
 	"back-rex-admin/pkg/postit"
 	"back-rex-admin/pkg/reponse"
 	"back-rex-admin/pkg/reports"
+	"back-rex-admin/pkg/rgpd"
 	"back-rex-admin/pkg/user"
 	"back-rex-common/pkg/auth"
 	"back-rex-common/pkg/services"
@@ -81,6 +82,7 @@ func main() {
 	}
 	go feedback.ProcessPendingFeedbacks(&cfg.Database, iaConnector)
 	go feedback.ListenForNewFeedbacks(&cfg.Database, iaConnector)
+	rgpd.StartPurge(&cfg.Database)
 
 	//r.Use(services.FullLogRequest)
 

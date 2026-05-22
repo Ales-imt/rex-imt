@@ -1,7 +1,7 @@
 -- name: InsertEvalSession :one
 INSERT INTO eval_session (
     id,
-    anon_id,
+    pseudo,
     matiere_id,
     format_suivi,
     tendance_semestre,
@@ -9,7 +9,7 @@ INSERT INTO eval_session (
     created_at
 ) VALUES (
     gen_random_uuid(),
-    @anon_id,
+    @pseudo,
     @matiere_id,
     @format_suivi,
     @tendance_semestre,
@@ -82,7 +82,7 @@ WHERE id = @session_id;
 -- name: GetSubmittedMatiereIDs :many
 SELECT es.matiere_id
 FROM eval_session es
-WHERE es.anon_id = @anon_id
+WHERE es.pseudo = @pseudo
   AND es.submitted_at IS NOT NULL;
 
 
@@ -90,6 +90,32 @@ WHERE es.anon_id = @anon_id
 SELECT EXISTS (
     SELECT 1
     FROM eval_session
-    WHERE anon_id  = @anon_id
+    WHERE pseudo = @pseudo
       AND matiere_id = @matiere_id
 ) AS already_submitted;
+
+
+-- name: GetSessionByMatiere :one
+SELECT
+    es.id,
+    es.format_suivi,
+    es.tendance_semestre,
+    es.assiduite,
+    sc.score_peda_global,
+    sc.score_peda_clarte,
+    sc.score_contenu_adequation,
+    sc.charge_perception,
+    sc.charge_heures_semaine,
+    sc.score_difficulte,
+    sc.score_supports,
+    sc.score_ambiance,
+    sc.nps
+FROM eval_session es
+JOIN eval_scores sc ON sc.session_id = es.id
+WHERE es.pseudo = @pseudo
+  AND es.matiere_id = @matiere_id
+  AND es.submitted_at IS NOT NULL;
+
+
+-- name: DeleteEvalSession :exec
+DELETE FROM eval_session WHERE id = @session_id AND pseudo = @pseudo;

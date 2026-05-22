@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Box from '@mui/material/Box';
 import Alert from '@mui/material/Alert';
 import Typography from '@mui/material/Typography';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiInstance } from '../../services/api';
 import { ENDPOINT_FEEDBACK } from '../feedback/def';
 import type { Feedback } from '../feedback/Feedback';
@@ -19,8 +19,8 @@ function useFeedbacks(months: number) {
       const res = await apiInstance.get<Feedback[]>(`${ENDPOINT_FEEDBACK}/recent?months=${months}`);
       return res.data;
     },
-    staleTime: 60_000,
-    refetchInterval: 2 * 60_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 }
 
@@ -30,10 +30,18 @@ export function DiscussionPanel() {
     const saved = localStorage.getItem('discussion.months');
     return saved ? Number(saved) : 1;
   });
+  const [promotion, setPromotion] = useState<string | null>(() =>
+    localStorage.getItem('discussion.promotion') || null
+  );
 
   const handleMonthsChange = (value: number) => {
     setMonths(value);
     localStorage.setItem('discussion.months', String(value));
+  };
+  const handlePromotionChange = (value: string | null) => {
+    setPromotion(value);
+    if (value) localStorage.setItem('discussion.promotion', value);
+    else localStorage.removeItem('discussion.promotion');
   };
   const [selectedFeedbackId, setSelectedFeedbackId] = useState<number | null>(null);
   const [pinDrawerOpen, setPinDrawerOpen] = useState(false);
@@ -41,23 +49,37 @@ export function DiscussionPanel() {
 
   const { data: feedbacks = [], isLoading, isError } = useFeedbacks(months);
 
+  const promotions = useMemo(
+    () => Array.from(new Set(feedbacks.map(f => f.promotion).filter(Boolean) as string[])).sort(),
+    [feedbacks]
+  );
+  const filteredFeedbacks = promotion
+    ? feedbacks.filter(f => f.promotion === promotion)
+    : feedbacks;
+
   useEffect(() => {
     if (feedbacks.length > 0 && selectedFeedbackId === null) {
       setSelectedFeedbackId(feedbacks[0].id);
     }
   }, [feedbacks, selectedFeedbackId]);
 
-  const selectedFeedback = feedbacks.find(f => f.id === selectedFeedbackId) ?? null;
+  const queryClient = useQueryClient();
+  const selectedFeedback = filteredFeedbacks.find(f => f.id === selectedFeedbackId) ?? null;
 
   const handleOpenPinDrawer = (fb: Feedback) => {
     setPinFeedback(fb);
     setPinDrawerOpen(true);
   };
 
-  const handlePin = async (text: string, _color: string) => {
+  const handlePin = async (reponse: string, messageModere: string) => {
     if (!pinFeedback?.message_id) return;
     try {
-      await apiInstance.post('/api/v2/postit', { message_id: pinFeedback.message_id, texte: text });
+      await apiInstance.post('/api/v2/postit', {
+        message_id: pinFeedback.message_id,
+        reponse,
+        message_modere: messageModere,
+      });
+      queryClient.invalidateQueries({ queryKey: ['postits'] });
     } catch (e) {
       console.error('Erreur épinglage postit', e);
     }
@@ -76,10 +98,13 @@ export function DiscussionPanel() {
     <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
       {/* Left panel */}
       <LeftPanel
-        feedbacks={feedbacks}
+        feedbacks={filteredFeedbacks}
         isLoading={isLoading}
         months={months}
         onMonthsChange={handleMonthsChange}
+        promotions={promotions}
+        promotion={promotion}
+        onPromotionChange={handlePromotionChange}
         selectedFeedbackId={selectedFeedbackId}
         onSelectFeedback={setSelectedFeedbackId}
       />
@@ -127,7 +152,7 @@ export function DiscussionPanel() {
           {mode === 'prive' ? (
             <RightPanelPrive feedback={selectedFeedback} allFeedbacks={feedbacks} />
           ) : (
-            <RightPanelPublic feedbacks={feedbacks} onPinNote={() => selectedFeedback && handleOpenPinDrawer(selectedFeedback)} />
+            <RightPanelPublic feedbacks={filteredFeedbacks} months={months} promotion={promotion} selectedFeedbackId={selectedFeedbackId} onPinNote={() => selectedFeedback && handleOpenPinDrawer(selectedFeedback)} onSelectMessage={setSelectedFeedbackId} />
           )}
         </Box>
       </Box>
