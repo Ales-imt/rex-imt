@@ -23,6 +23,7 @@ export default function EvaluationLayout() {
           }}
         >
           <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="eval-detail" />
           <Stack.Screen name="step0" />
           <Stack.Screen name="step1" />
           <Stack.Screen name="step2" />

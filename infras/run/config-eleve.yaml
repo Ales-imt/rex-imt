@@ -1,0 +1,30 @@
+database:
+  host: host.docker.internal
+  port: 5432
+  user: postgres
+  password: root
+  name: db_rex  
+
+mariaDB:
+  host:     host.docker.internal
+  port:     3306
+  user:     root
+  password: root
+  database: cyber_notes_v2
+
+server:
+  host: localhost
+  port: 3300
+
+jwt:
+  secret: lee0Op9iriThai7mXae5ahxuUpo2thaenaeL6mooaehahk1U
+  accessTokenExpiresIn: 15m
+  refreshTokenExpiresIn: 168h
+
+ldap:
+#url: 	ldap://ldap.mines-ales.fr:389
+  url: ldap://localhost:3890
+  baseDN: dc=ema,dc=fr
+
+age:
+  publicKey: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p

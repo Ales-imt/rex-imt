@@ -1,0 +1,30 @@
+meta {
+  name: create postit
+  type: http
+  seq: 8
+}
+
+post {
+  url: http://{{host}}/api/v2/postit
+  body: json
+  auth: bearer
+}
+
+headers {
+  Cookie: access_token={{access_token}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "message_id": "msg-123",
+    "texte": "À revoir avec l'étudiant"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

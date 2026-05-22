@@ -10,5 +10,7 @@ func MakeRouteEvaluation(connector programme.ProgrammeConnector, agePublicKey st
 	return func(r chi.Router) {
 		r.Post("/", SubmitEvaluation(agePublicKey))
 		r.Get("/matieres", getMatiere(connector))
+		r.Get("/session", getSessionDetail())
+		r.Delete("/session/{sessionId}", deleteSession())
 	}
 }

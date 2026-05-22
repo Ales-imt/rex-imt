@@ -1,6 +1,7 @@
 package feedback
 
 import (
+	"back-rex-common/pkg/auth"
 	"back-rex-common/pkg/services"
 	"back-rex-eleve/pkg/service"
 	"context"
@@ -41,7 +42,8 @@ func InsertFeedbacks(r *http.Request, inputs []FeedbackRequest, agePublicKey str
 	queries := New(pgCtx.Db)
 	now := time.Now()
 
-	studentID := 0
+	userID := auth.GetSecurityUserId(r.Context())
+	studentID := *userID
 
 	strongbox, err := service.EncryptStrongbox(agePublicKey, r.RemoteAddr, studentID)
 	if err != nil {

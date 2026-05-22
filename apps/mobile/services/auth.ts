@@ -1,4 +1,4 @@
-export const API_BASE = 'http://10.41.93.46:3300/api/v2';
+export const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://10.24.182.46:3300/api/v2';
 
 export type LoginResponse = {
   name: string;

@@ -1,0 +1,39 @@
+database:
+  host: host.docker.internal
+  port: 5432
+  user: postgres
+  password: root
+  name: db_rex
+
+server:
+  host: localhost
+  port: 3333
+  certPath : ./x509/mtls_certs
+
+jwt:
+  secret: lee0Op9iriThai7mXae5ahxuUpo2thaenaeL6mooaehahk1U
+  accessTokenExpiresIn: 15m
+  refreshTokenExpiresIn: 168h
+
+ldap:
+  url: ldap://ldap.mines-ales.fr:389
+  #url: ldap://localhost:3890
+  baseDN: dc=ema,dc=fr
+
+ia:
+  provider: rack # "ollama" ou "ragarenn" ou "rack"
+
+ollama:
+  baseURL: http://localhost:11434
+  model: mistral-nemo
+
+ragarenn:
+  baseURL: https://ragarenn.eskemm-numerique.fr/sso/ch@t
+  apiKey: ${RAGARENN_API_KEY} 
+  model: RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic # ilaas/gemma-4-31b  RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic
+
+rack:
+  baseURL: https://159.31.247.10
+  model: mistral-small:latest
+  apiKey: ${RACK_API_KEY}
+  caCertPath: /opt/rex-admin/certs/ca.crt

@@ -6,15 +6,15 @@ import { useOrientation } from '@/hooks/use-orientation';
 import { useTheme } from '@/hooks/use-theme';
 import { apiInstance } from '@/services/api';
 import { generateUUID, getPseudo } from '@/services/tokens';
-import * as FileSystem from 'expo-file-system/legacy';
-import { Stack } from 'expo-router';
-import { useFocusEffect } from 'expo-router';
+import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  FlatList,
+  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -25,7 +25,6 @@ import {
 import { FlashList } from "@shopify/flash-list";
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-
 type Message = {
   id: string;
   text: string;
@@ -33,40 +32,45 @@ type Message = {
   time: string;
 };
 
-type ReponseItem = {
-  id: number;
-  contenu: string;
-  auteur: string;
-  cree_le: string;
+type ChatItem = {
+  id: string;
+  text: string;
+  source: 'me' | 'other';
+  ts: string;
 };
 
-const yesterday = (() => {
-  const d = new Date();
-  d.setDate(d.getDate() - 10);
-  d.setHours(1, 0, 0, 0);
-  return d.toISOString();
-})();
+const MONTH_OPTIONS = [1, 3, 6, 12];
 
-const INITIAL_MESSAGES: Message[] = [
-];
-
-const CHAT_FILE = `${FileSystem.documentDirectory}chat_messages.json`;
-
-async function loadMessages(): Promise<Message[]> {
-  try {
-    const info = await FileSystem.getInfoAsync(CHAT_FILE);
-    if (!info.exists) return INITIAL_MESSAGES;
-    const json = await FileSystem.readAsStringAsync(CHAT_FILE);
-    return JSON.parse(json) as Message[];
-  } catch {
-    return INITIAL_MESSAGES;
-  }
+function DropdownModal({
+  visible, onClose, options, selected, onSelect,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  options: { value: number; label: string }[];
+  selected: number;
+  onSelect: (v: number) => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable style={styles.dropdown}>
+          <Text style={styles.dropdownTitle}>Période</Text>
+          {options.map(opt => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[styles.dropdownItem, opt.value === selected && styles.dropdownItemActive]}
+              onPress={() => { onSelect(opt.value); onClose(); }}
+            >
+              <Text style={[styles.dropdownItemText, opt.value === selected && styles.dropdownItemTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
 }
-
-async function saveMessages(msgs: Message[]): Promise<void> {
-  await FileSystem.writeAsStringAsync(CHAT_FILE, JSON.stringify(msgs));
-}
-
 
 function now() {
   return new Date().toISOString();
@@ -89,24 +93,72 @@ function formatDate(time: string): string {
   return new Date(time).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function Bubble({ message, colors }: { message: Message; colors: typeof Colors.light }) {
+function ConfirmDeleteModal({ visible, onConfirm, onCancel }: {
+  visible: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <Pressable style={styles.overlay} onPress={onCancel}>
+        <Pressable style={styles.confirmBox}>
+          <Text style={styles.confirmTitle}>Supprimer ce message</Text>
+          <Text style={styles.confirmBody}>
+            Conformément au RGPD, le contenu sera effacé définitivement.
+          </Text>
+          <View style={styles.confirmActions}>
+            <TouchableOpacity style={styles.confirmBtnCancel} onPress={onCancel}>
+              <Text style={styles.confirmBtnCancelText}>Annuler</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.confirmBtnDelete} onPress={onConfirm}>
+              <Text style={styles.confirmBtnDeleteText}>Supprimer</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function Bubble({ message, colors, onRequestDelete }: {
+  message: Message;
+  colors: typeof Colors.light;
+  onRequestDelete: (id: string) => void;
+}) {
   const isMe = message.from === 'me';
   const today = isToday(message.time);
+  const deleted = message.text === "[contenu supprimé à la demande de l'auteur]";
+
+  function handleLongPress() {
+    if (!isMe || deleted) return;
+    onRequestDelete(message.id);
+  }
+
   return (
     <View style={[styles.row, isMe ? styles.rowMe : styles.rowOther]}>
       <View style={styles.bubbleWrapper}>
-        <View style={[
-          styles.bubble,
-          isMe
-            ? [styles.bubbleMe, { backgroundColor: colors.bubbleMe }]
-            : [styles.bubbleOther, { backgroundColor: colors.bubbleOther }],
-        ]}>
-          <Text style={[styles.bubbleText, { color: colors.bubbleText }]}>{message.text}</Text>
-          <Text style={[
-            styles.time,
-            { color: isMe ? colors.bubbleTimeMeColor : colors.bubbleTime },
-          ]}>{formatTime(message.time)}</Text>
-        </View>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onLongPress={handleLongPress}
+          delayLongPress={400}
+        >
+          <View style={[
+            styles.bubble,
+            isMe
+              ? [styles.bubbleMe, { backgroundColor: colors.bubbleMe }]
+              : [styles.bubbleOther, { backgroundColor: colors.bubbleOther }],
+          ]}>
+            <Text style={[
+              styles.bubbleText,
+              { color: colors.bubbleText },
+              deleted && styles.bubbleDeleted,
+            ]}>{message.text}</Text>
+            <Text style={[
+              styles.time,
+              { color: isMe ? colors.bubbleTimeMeColor : colors.bubbleTime },
+            ]}>{formatTime(message.time)}</Text>
+          </View>
+        </TouchableOpacity>
         {!today && (
           <Text style={[styles.dateBelow, { textAlign: isMe ? 'right' : 'left', color: colors.bubbleTime }]}>
             {formatDate(message.time)}
@@ -121,29 +173,16 @@ export default function ChatScreen() {
   const colors = useTheme();
   const navMenu = useNavMenu('chat');
   const [messages, setMessages] = useState<Message[]>([]);
-
-  useEffect(() => {
-    loadMessages().then(msgs => {
-      setMessages(msgs);
-    });
-  }, []);
-
-  function updateMessages(updater: (prev: Message[]) => Message[]) {
-    setMessages(prev => {
-      const next = updater(prev);
-      saveMessages(next);
-      return next;
-    });
-  }
+  const [months, setMonths] = useState(1);
+  const [monthsOpen, setMonthsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const listRef = useRef<any>(null);
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
   const orientation = useOrientation();
   const [keyboardOffset, setKeyboardOffset] = useState(56);
-
-  console.log('ChatScreen messages 2', messages);
-
 
   const safeEdges = useMemo((): ('bottom' | 'left' | 'right')[] => {
     if (orientation === 'landscape-left') return ['bottom', 'left'];
@@ -159,7 +198,6 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (messages.length > 0) {
-      // evite d'avoir des pertes de message.
       const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 500);
       return () => clearTimeout(t);
     }
@@ -167,34 +205,34 @@ export default function ChatScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const poll = async () => {
+      let cancelled = false;
+      const fetchHistory = async (showLoader: boolean) => {
+        if (showLoader) setLoading(true);
         try {
           const pseudo = await getPseudo();
-          if (!pseudo) return;
-          const res = await apiInstance.get<ReponseItem[]>('/reponse', { headers: { 'X-Pseudo': pseudo } });
-          if (!res.data) return;
-          if (res.data.length === 0) return;
-          updateMessages(prev => {
-            const existingIds = new Set(prev.map(m => m.id));
-            const newOnes = res.data
-              .map(r => ({
-                id: `reponse-${r.id}`,
-                text: r.contenu,
-                from: 'other' as const,
-                time: r.cree_le,
-              }))
-              .filter(m => !existingIds.has(m.id));
-            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+          if (!pseudo || cancelled) return;
+          const res = await apiInstance.get<ChatItem[]>('/reponse/history', {
+            headers: { 'X-Pseudo': pseudo },
+            params: { months: String(months) },
           });
+          if (!cancelled) {
+            setMessages(res.data.map(item => ({
+              id: item.id,
+              text: item.text,
+              from: item.source,
+              time: item.ts,
+            })));
+          }
         } catch (e) {
-          console.error('Erreur poll réponses', e);
+          console.error('Erreur chargement historique chat', e);
+        } finally {
+          if (!cancelled) setLoading(false);
         }
       };
-
-      poll();
-      const id = setInterval(poll, 10_000);
-      return () => clearInterval(id);
-    }, [])
+      fetchHistory(true);
+      const interval = setInterval(() => fetchHistory(false), 15_000);
+      return () => { cancelled = true; clearInterval(interval); };
+    }, [months])
   );
 
   const dynamicStyles = useMemo(() => StyleSheet.create({
@@ -210,19 +248,35 @@ export default function ChatScreen() {
     },
   }), [colors]);
 
+  const monthOptions = MONTH_OPTIONS.map(m => ({ value: m, label: m === 1 ? '1 mois' : `${m} mois` }));
+
+  async function deleteMessage(messageId: string) {
+    try {
+      const pseudo = await getPseudo();
+      if (!pseudo) return;
+      await apiInstance.delete(`/feedback/${messageId}`, { headers: { 'X-Pseudo': pseudo } });
+      setMessages(prev => prev.map(m =>
+        m.id === messageId
+          ? { ...m, text: "[contenu supprimé à la demande de l'auteur]" }
+          : m
+      ));
+    } catch (e) {
+      console.error('Erreur suppression feedback', e);
+    }
+  }
+
   async function send() {
     const text = input.trim();
     if (!text) return;
-
     try {
       const pseudo = await getPseudo();
       const message_id = generateUUID();
       await apiInstance.post('/feedback', [{ content: text, pseudo, message_id }]);
       setInput('');
-      updateMessages(prev => [
+      setMessages(prev => [
         ...prev,
-        { id: Date.now().toString(), text, from: 'me', time: now() },
-      ])
+        { id: message_id, text, from: 'me', time: now() },
+      ]);
     } catch (e) {
       console.error('Erreur envoi feedback', e);
     }
@@ -232,29 +286,57 @@ export default function ChatScreen() {
     <>
       <Stack.Screen
         options={{
-          headerRight: () => (
-            <HeaderMenu items={navMenu} />
-          ),
+          headerRight: () => <HeaderMenu items={navMenu} />,
         }}
       />
-
       <SafeAreaView style={[styles.page, dynamicStyles.page]} edges={safeEdges}>
-
         <KeyboardAvoidingView
-          key={isLandscape ? 'landscape' : 'portrait'} // Force le re-render
+          key={isLandscape ? 'landscape' : 'portrait'}
           style={styles.container}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : keyboardOffset}
         >
           <ZenBackground />
-          <FlashList
-            ref={listRef}
-            data={messages}
-            extraData={messages}
-            keyExtractor={m => m.id}
-            renderItem={({ item }) => <Bubble message={item} colors={colors} />}
-            contentContainerStyle={styles.list}
+
+          <View style={styles.filterRow}>
+            <TouchableOpacity
+              style={[styles.filterBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
+              onPress={() => setMonthsOpen(true)}
+            >
+              <Text style={[styles.filterBtnText, { color: colors.textPrimary }]}>
+                {months === 1 ? '1 mois' : `${months} mois`}
+              </Text>
+              <Text style={[styles.filterCaret, { color: colors.textSecondary }]}>▾</Text>
+            </TouchableOpacity>
+          </View>
+
+          <DropdownModal
+            visible={monthsOpen}
+            onClose={() => setMonthsOpen(false)}
+            options={monthOptions}
+            selected={months}
+            onSelect={setMonths}
           />
+
+          <ConfirmDeleteModal
+            visible={pendingDeleteId !== null}
+            onConfirm={() => { deleteMessage(pendingDeleteId!); setPendingDeleteId(null); }}
+            onCancel={() => setPendingDeleteId(null)}
+          />
+
+          {loading
+            ? <ActivityIndicator style={styles.loader} size="large" />
+            : (
+              <FlashList
+                ref={listRef}
+                data={messages}
+                extraData={messages}
+                keyExtractor={m => m.id}
+                renderItem={({ item }) => <Bubble message={item} colors={colors} onRequestDelete={setPendingDeleteId} />}
+                contentContainerStyle={styles.list}
+              />
+            )
+          }
 
           <View style={[styles.inputBar, dynamicStyles.inputBar]}>
             <TextInput
@@ -288,6 +370,59 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'transparent',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  filterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  filterBtnText: { fontSize: 13, fontWeight: '500' },
+  filterCaret: { fontSize: 10 },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dropdown: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 8,
+    minWidth: 180,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  dropdownTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    marginBottom: 4,
+  },
+  dropdownItem: { paddingHorizontal: 16, paddingVertical: 10 },
+  dropdownItemActive: { backgroundColor: '#e8f0fe' },
+  dropdownItemText: { fontSize: 14, color: '#333' },
+  dropdownItemTextActive: { color: '#1976d2', fontWeight: '600' },
+  loader: {
+    flex: 1,
+    marginTop: 40,
   },
   list: {
     flexGrow: 1,
@@ -372,5 +507,58 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     marginLeft: 2,
+  },
+  bubbleDeleted: {
+    fontStyle: 'italic',
+    opacity: 0.5,
+  },
+  confirmBox: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    width: '80%',
+    maxWidth: 320,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  confirmTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  confirmBody: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  confirmBtnCancel: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  confirmBtnCancelText: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  confirmBtnDelete: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#fee2e2',
+    borderRadius: 6,
+  },
+  confirmBtnDeleteText: {
+    fontSize: 14,
+    color: '#dc2626',
+    fontWeight: '600',
   },
 });
