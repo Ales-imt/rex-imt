@@ -1,0 +1,23 @@
+meta {
+  name: delete postit
+  type: http
+  seq: 9
+}
+
+delete {
+  url: http://{{host}}/api/v2/postit/1
+  body: none
+  auth: bearer
+}
+
+headers {
+  Cookie: access_token={{access_token}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+settings {
+  encodeUrl: true
+}

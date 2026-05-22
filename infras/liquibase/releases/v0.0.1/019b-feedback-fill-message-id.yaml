@@ -1,0 +1,21 @@
+databaseChangeLog:
+
+  # =============================================================
+  # CHANGESET 001 — Remplir message_id à partir d'un UUID aléatoire
+  # Chaque ligne sans message_id reçoit un UUID unique.
+  # =============================================================
+  - changeSet:
+      id: 019b-feedback-fill-message-id
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+              UPDATE feedback
+              SET message_id = gen_random_uuid()::text
+              WHERE message_id IS NULL;
+      rollback:
+        - sql:
+            sql: UPDATE feedback SET message_id = NULL WHERE message_id NOT LIKE '%-%-%-%-%';

@@ -1,8 +1,25 @@
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 const ACCESS_KEY = 'access_token';
 const REFRESH_KEY = 'refresh_token';
 const PSEUDO_KEY = 'pseudo';
+
+// expo-secure-store ne fonctionne pas sur web : fallback localStorage
+const storage = {
+  async getItem(key: string): Promise<string | null> {
+    if (Platform.OS === 'web') return localStorage.getItem(key);
+    return SecureStore.getItemAsync(key);
+  },
+  async setItem(key: string, value: string): Promise<void> {
+    if (Platform.OS === 'web') { localStorage.setItem(key, value); return; }
+    return SecureStore.setItemAsync(key, value);
+  },
+  async deleteItem(key: string): Promise<void> {
+    if (Platform.OS === 'web') { localStorage.removeItem(key); return; }
+    return SecureStore.deleteItemAsync(key);
+  },
+};
 
 export function generateUUID(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -12,35 +29,35 @@ export function generateUUID(): string {
 }
 
 export async function getOrCreatePseudo(): Promise<string> {
-  let pseudo = await SecureStore.getItemAsync(PSEUDO_KEY);
+  let pseudo = await storage.getItem(PSEUDO_KEY);
   if (!pseudo) {
     pseudo = generateUUID();
-    await SecureStore.setItemAsync(PSEUDO_KEY, pseudo);
+    await storage.setItem(PSEUDO_KEY, pseudo);
   }
   return pseudo;
 }
 
 export async function getPseudo(): Promise<string | null> {
-  return SecureStore.getItemAsync(PSEUDO_KEY);
+  return storage.getItem(PSEUDO_KEY);
 }
 
 export async function saveTokens(access: string, refresh: string): Promise<void> {
-  await SecureStore.setItemAsync(ACCESS_KEY, access);
-  await SecureStore.setItemAsync(REFRESH_KEY, refresh);
+  await storage.setItem(ACCESS_KEY, access);
+  await storage.setItem(REFRESH_KEY, refresh);
 }
 
 export async function getAccessToken(): Promise<string | null> {
-  return SecureStore.getItemAsync(ACCESS_KEY);
+  return storage.getItem(ACCESS_KEY);
 }
 
 export async function getRefreshToken(): Promise<string | null> {
-  return SecureStore.getItemAsync(REFRESH_KEY);
+  return storage.getItem(REFRESH_KEY);
 }
 
 export async function clearTokens(): Promise<void> {
-  await SecureStore.deleteItemAsync(ACCESS_KEY);
-  await SecureStore.deleteItemAsync(REFRESH_KEY);
-  await SecureStore.deleteItemAsync(PSEUDO_KEY);
+  await storage.deleteItem(ACCESS_KEY);
+  await storage.deleteItem(REFRESH_KEY);
+  await storage.deleteItem(PSEUDO_KEY);
 }
 
 export function isExpiringSoon(token: string, thresholdSec = 30): boolean {
