@@ -22,6 +22,8 @@ export function RootLayout() {
         <Stack.Screen name="notes" options={{ title: 'Notes', headerBackVisible: false, headerLeft: () => null }} />
         <Stack.Screen name="programme" options={{ title: 'Programme', headerBackVisible: false, headerLeft: () => null }} />
         <Stack.Screen name="apropos" options={{ title: 'A propos' }} />
+        <Stack.Screen name="apropos-first-login" options={{ title: 'À propos', headerBackVisible: false, headerLeft: () => null }} />
+        <Stack.Screen name="pseudo-setup" options={{ headerShown: false }} />
         <Stack.Screen name="evaluation" options={{ title: 'Évaluations', headerBackVisible: false, headerLeft: () => null }} />
       </Stack>
       <StatusBar style="auto" />

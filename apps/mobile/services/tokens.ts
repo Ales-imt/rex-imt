@@ -28,17 +28,58 @@ export function generateUUID(): string {
   });
 }
 
-export async function getOrCreatePseudo(): Promise<string> {
-  let pseudo = await storage.getItem(PSEUDO_KEY);
-  if (!pseudo) {
-    pseudo = generateUUID();
-    await storage.setItem(PSEUDO_KEY, pseudo);
-  }
-  return pseudo;
+// ─── Liste de mots français simples du quotidien ─────────────────────────────
+
+const WORDS = [
+  'arbre', 'bateau', 'bière', 'bois', 'bougie', 'branche', 'brique', 'brume',
+  'bureau', 'canard', 'carnet', 'cerise', 'chaise', 'champ', 'chapeau', 'chat',
+  'cheval', 'chien', 'ciel', 'citron', 'clé', 'colline', 'couleur', 'crayon',
+  'drap', 'dune', 'eau', 'écharpe', 'école', 'écran', 'été', 'étoile',
+  'fenêtre', 'feuille', 'fleur', 'forêt', 'four', 'fraise', 'fromage', 'fruit',
+  'gare', 'gazon', 'genou', 'glace', 'globe', 'gomme', 'grain', 'graine',
+  'herbe', 'hiver', 'horloge', 'image', 'jardin', 'journal', 'jouet', 'jupe',
+  'lac', 'lampe', 'lapin', 'lettre', 'lièvre', 'livre', 'loup', 'lumière',
+  'lune', 'main', 'maison', 'matin', 'mer', 'miel', 'miroir', 'montagne',
+  'mouton', 'mur', 'nuit', 'nuage', 'oiseau', 'orange', 'oreille', 'os',
+  'pain', 'papier', 'parc', 'pied', 'pierre', 'plage', 'plante', 'pluie',
+  'poisson', 'pomme', 'pont', 'porte', 'poule', 'prairie', 'printemps', 'puits',
+  'queue', 'racine', 'radio', 'renard', 'repas', 'rivière', 'robe', 'rocher',
+  'rose', 'route', 'ruban', 'sable', 'saison', 'sel', 'sentier', 'soleil',
+  'soupe', 'source', 'stylo', 'sucre', 'table', 'tasse', 'terre', 'toit',
+  'torche', 'tour', 'train', 'vallée', 'vase', 'vent', 'vitre', 'voile',
+  'abricot', 'accord', 'agenda', 'aiguille', 'aile', 'algue', 'amande', 'ami',
+  'ancre', 'ange', 'année', 'ardoise', 'armoire', 'automne', 'avion', 'bague',
+  'balcon', 'balle', 'banane', 'banc', 'bandeau', 'bâton', 'beurre', 'biberon',
+  'bocal', 'botte', 'bouche', 'bouée', 'bourgeon', 'boussole', 'brindille',
+  'broche', 'brouette', 'bulle', 'cabane', 'caillou', 'calendrier', 'canapé',
+  'canard', 'caramel', 'carotte', 'carreau', 'cartable', 'casque', 'castor',
+  'cerf', 'chou', 'cible', 'cire', 'cloche', 'cœur', 'coin', 'colombe',
+  'compas', 'corde', 'couteau', 'couvercle', 'crabe', 'crème', 'crochet',
+  'cueillette', 'dauphin', 'dessin', 'digue', 'dossier', 'élan', 'éponge',
+  'escalier', 'étang', 'facette', 'falaise', 'fameux', 'farine', 'faucon',
+  'figue', 'fil', 'flûte', 'fond', 'fontaine', 'foulard', 'frêne', 'fuseau',
+];
+
+export function generatePseudo(): string {
+  const shuffled = [...WORDS].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 4).join(' . ');
+}
+
+export async function savePseudo(pseudo: string): Promise<void> {
+  await storage.setItem(PSEUDO_KEY, pseudo);
 }
 
 export async function getPseudo(): Promise<string | null> {
   return storage.getItem(PSEUDO_KEY);
+}
+
+export async function getOrCreatePseudo(): Promise<string> {
+  let pseudo = await storage.getItem(PSEUDO_KEY);
+  if (!pseudo) {
+    pseudo = generatePseudo();
+    await storage.setItem(PSEUDO_KEY, pseudo);
+  }
+  return pseudo;
 }
 
 export async function saveTokens(access: string, refresh: string): Promise<void> {

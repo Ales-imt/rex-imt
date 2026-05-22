@@ -38,7 +38,6 @@ export default function EvalStep6Screen() {
     if (!canSubmit || loading) return;
     setLoading(true);
     try {
-      console.log("state to submit", state);
       const anonId = await getOrCreatePseudo();
       await apiInstance.post(
         '/evaluation',

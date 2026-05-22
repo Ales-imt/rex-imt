@@ -10,6 +10,7 @@ import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -224,7 +225,7 @@ export default function ChatScreen() {
             })));
           }
         } catch (e) {
-          console.error('Erreur chargement historique chat', e);
+          Alert.alert('Erreur', 'Impossible de charger les messages.');
         } finally {
           if (!cancelled) setLoading(false);
         }
@@ -261,7 +262,7 @@ export default function ChatScreen() {
           : m
       ));
     } catch (e) {
-      console.error('Erreur suppression feedback', e);
+      Alert.alert('Erreur', 'Impossible de supprimer le message.');
     }
   }
 
@@ -278,7 +279,7 @@ export default function ChatScreen() {
         { id: message_id, text, from: 'me', time: now() },
       ]);
     } catch (e) {
-      console.error('Erreur envoi feedback', e);
+      Alert.alert('Erreur', 'Impossible d\'envoyer le message.');
     }
   }
 
