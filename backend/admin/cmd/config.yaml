@@ -20,7 +20,7 @@ server:
 jwt:
   secret: ${JWT_SECRET}
   accessTokenExpiresIn: 15m
-  refreshTokenExpiresIn: 168h
+  refreshTokenExpiresIn: 2160h
 
 ldap:
   url: ldap://ldap.mines-ales.fr:389

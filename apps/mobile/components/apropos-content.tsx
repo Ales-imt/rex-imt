@@ -108,7 +108,7 @@ export function AproposContent({ colors, children }: AproposContentProps) {
         <Row label="Contenu de vos feedbacks" value="3 ans à compter de la publication" colors={colors} />
         <Row label="Données d'identification (IP chiffrée)" value="1 an à compter de la publication" colors={colors} />
         <Row label="Évaluations anonymes" value="Conservées à des fins statistiques" colors={colors} />
-        <Row label="Tokens de session" value="7 jours puis suppression automatique" colors={colors} />
+        <Row label="Tokens de session" value="3 mois  puis suppression automatique" colors={colors} />
       </Section>
 
       {/* ── 4. Obligation LCEN ─────────────────────────────────────────── */}
