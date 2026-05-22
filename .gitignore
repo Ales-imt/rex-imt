@@ -19,5 +19,6 @@ infras/serveur-ia/serveur-ia
 **/models.go
 **/query.sql.go
 **/cmd
+**/testconfig.yaml
 
 
