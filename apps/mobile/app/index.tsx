@@ -1,9 +1,9 @@
 import { Colors } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { login } from '@/services/auth';
+import { API_BASE, login } from '@/services/auth';
 import { getOrCreatePseudo, saveTokens } from '@/services/tokens';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -72,6 +72,9 @@ export default function SignInScreen() {
     card: { backgroundColor: colors.cardBg, borderColor: colors.cardBorder },
     dividerLine: { backgroundColor: colors.dividerLine },
   }), [colors]);
+
+
+  console.log("API_BASE: ", API_BASE, "EXPO_PUBLIC_API_BASE: ", process.env.EXPO_PUBLIC_API_BASE); // ex: "192.168.1.42
 
   async function handleSignIn() {
     if (!email || !password) {

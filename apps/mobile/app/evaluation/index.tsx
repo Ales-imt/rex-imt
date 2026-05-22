@@ -56,7 +56,10 @@ export default function CoursListScreen() {
   const done = cours.filter((c) => c.fait).length;
 
   function handlePress(c: MatiereSummary) {
-    if (c.fait) return;
+    if (c.fait) {
+      router.push({ pathname: '/evaluation/eval-detail', params: { matiereId: c.matiereId, nom: c.nom } });
+      return;
+    }
     init(c.matiereId);
     router.push('/evaluation/step0');
   }
@@ -78,11 +81,9 @@ export default function CoursListScreen() {
                 style={[
                   styles.card,
                   { backgroundColor: colors.cardBg, borderColor: colors.cardBorder },
-                  item.fait && styles.cardDone,
                 ]}
                 onPress={() => handlePress(item)}
-                activeOpacity={item.fait ? 1 : 0.7}
-                disabled={item.fait}
+                activeOpacity={0.7}
               >
                 <View style={styles.cardBody}>
                   <Text style={[styles.coursName, { color: colors.textPrimary }]} numberOfLines={2}>

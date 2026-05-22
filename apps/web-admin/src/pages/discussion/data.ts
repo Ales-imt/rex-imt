@@ -154,3 +154,18 @@ export const POSTIT_COLORS = [
   { label: 'Vert', value: '#dcfce7' },
   { label: 'Orange', value: '#fed7aa' },
 ];
+
+const POSTIT_DEFAULT_COLOR = '#fef9c3';
+
+const URGENCE_COLORS: Record<number, string> = {
+  1: '#dcfce7', // vert  — faible
+  2: '#dbeafe', // bleu  — bas
+  3: '#fef9c3', // jaune — moyen
+  4: '#fed7aa', // orange — élevé
+  5: '#fce7f3', // rose  — critique
+};
+
+export function colorFromUrgence(urgence?: number | null): string {
+  if (urgence == null) return POSTIT_DEFAULT_COLOR;
+  return URGENCE_COLORS[urgence] ?? POSTIT_DEFAULT_COLOR;
+}

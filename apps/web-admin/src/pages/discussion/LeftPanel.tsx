@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
@@ -23,6 +23,9 @@ interface LeftPanelProps {
   isLoading: boolean;
   months: number;
   onMonthsChange: (months: number) => void;
+  promotions: string[];
+  promotion: string | null;
+  onPromotionChange: (p: string | null) => void;
   selectedFeedbackId: number | null;
   onSelectFeedback: (id: number) => void;
 }
@@ -32,10 +35,20 @@ export default function LeftPanel({
   isLoading,
   months,
   onMonthsChange,
+  promotions,
+  promotion,
+  onPromotionChange,
   selectedFeedbackId,
   onSelectFeedback,
 }: LeftPanelProps) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
+  useEffect(() => {
+    if (selectedFeedbackId != null) {
+      itemRefs.current.get(selectedFeedbackId)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [selectedFeedbackId]);
 
   const handleCardClick = (fb: Feedback) => {
     onSelectFeedback(fb.id);
@@ -76,12 +89,33 @@ export default function LeftPanel({
             }}
           >
             {MONTH_OPTIONS.map(o => (
-              <MenuItem key={o.value} value={o.value} sx={{ fontSize: '0.8rem' }}>
-                {o.label}
-              </MenuItem>
+              <MenuItem key={o.value} value={o.value} sx={{ fontSize: '0.8rem' }}>{o.label}</MenuItem>
             ))}
           </Select>
         </Box>
+        {promotions.length > 0 && (
+          <Box sx={{ mt: 1 }}>
+            <Select
+              value={promotion ?? ''}
+              onChange={e => onPromotionChange(e.target.value || null)}
+              variant="standard"
+              disableUnderline
+              displayEmpty
+              fullWidth
+              sx={{
+                fontSize: '0.72rem',
+                color: 'text.secondary',
+                '& .MuiSelect-select': { py: 0, pr: '20px !important' },
+                '& .MuiSelect-icon': { fontSize: '1rem', top: 'calc(50% - 8px)' },
+              }}
+            >
+              <MenuItem value="" sx={{ fontSize: '0.8rem' }}>Toutes les promotions</MenuItem>
+              {promotions.map(p => (
+                <MenuItem key={p} value={p} sx={{ fontSize: '0.8rem' }}>{p}</MenuItem>
+              ))}
+            </Select>
+          </Box>
+        )}
       </Box>
 
       {/* Scrollable feedback list */}
@@ -104,7 +138,7 @@ export default function LeftPanel({
             const sentimentColor = fb.sentiment ? SENTIMENT_COLOR[fb.sentiment] : undefined;
 
             return (
-              <Box key={fb.id}>
+              <Box key={fb.id} ref={(el: HTMLDivElement | null) => { if (el) itemRefs.current.set(fb.id, el); else itemRefs.current.delete(fb.id); }}>
                 <Paper
                   elevation={0}
                   onClick={() => handleCardClick(fb)}

@@ -21,7 +21,12 @@ databaseChangeLog:
               references: feedback(message_id)
               deleteCascade: true
         - column:
-            name: texte
+            name: message_modere
+            type: TEXT
+            constraints:
+              nullable: true
+        - column:
+            name: reponse
             type: TEXT
             constraints:
               nullable: false

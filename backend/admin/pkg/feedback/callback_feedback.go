@@ -7,14 +7,20 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func CallbackFeedBack(notif FeedbackNotification, connector ia.IAConnector, conn *pgx.Conn) {
+// callbackMu sérialise les appels à l'IA : une seule requête à la fois.
+var callbackMu sync.Mutex
+
+func CallbackFeedBack(notif FeedbackNotification, connector ia.IAConnector, pool *pgxpool.Pool) {
+	callbackMu.Lock()
+	defer callbackMu.Unlock()
+
 	start := time.Now()
 	defer func() {
 		log.Printf("[IA] feedback #%d traité en %s", notif.ID, time.Since(start))
@@ -52,7 +58,7 @@ func CallbackFeedBack(notif FeedbackNotification, connector ia.IAConnector, conn
 		return pgtype.Text{String: *s, Valid: true}
 	}
 
-	if err := New(conn).InsertClassification(context.Background(), InsertClassificationParams{
+	if err := New(pool).InsertClassification(context.Background(), InsertClassificationParams{
 		FeedbackID:    notif.ID,
 		Categorie:     result.Categorie,
 		SousCategorie: result.SousCateg,

@@ -3,7 +3,7 @@ databaseChangeLog:
   # =============================================================
   # CHANGESET 001 — eval_session
   # Contexte de chaque évaluation (écran 0)
-  # Clé d'entrée : une ligne par (anon_id, cours_id, semestre)
+  # Clé d'entrée : une ligne par (pseudo, cours_id, semestre)
   # =============================================================
   - changeSet:
       id: 001-eval_session
@@ -19,9 +19,9 @@ databaseChangeLog:
                     primaryKey: true
                     nullable: false
 
-              # Identifiant anonyme côté client (option B ou C)
+              # Pseudonyme côté client
               - column:
-                  name: anon_id
+                  name: pseudo
                   type: text
                   constraints:
                     nullable: false
@@ -67,11 +67,11 @@ databaseChangeLog:
                   name: submitted_at
                   type: TIMESTAMP WITH TIME ZONE
 
-        # Un étudiant anonyme ne peut évaluer une matière qu'une fois
+        # Un étudiant ne peut évaluer une matière qu'une fois
         - addUniqueConstraint:
             tableName: eval_session
-            columnNames: anon_id, matiere_id
-            constraintName: uq_eval_session_anon_matiere
+            columnNames: pseudo, matiere_id
+            constraintName: uq_eval_session_pseudo_matiere
 
         - createIndex:
             tableName: eval_session
@@ -456,3 +456,27 @@ databaseChangeLog:
                 ('RYTHME_IMPOSE',      'AMBIANCE', 'NEGATIF',  'Rythme imposé',         2),
                 ('PEU_ECOUTE',         'AMBIANCE', 'NEGATIF',  'Peu à l''écoute',       3)
               ;
+
+
+  # =============================================================
+  # CHANGESET 008 — ON DELETE CASCADE sur eval_session
+  # Permet la suppression d'une session et de toutes ses données
+  # =============================================================
+  - changeSet:
+      id: 008-eval-session-cascade-delete
+      author: app
+      changes:
+        - sql:
+            sql: >
+              ALTER TABLE eval_scores
+                DROP CONSTRAINT fk_scores_session,
+                ADD CONSTRAINT fk_scores_session
+                  FOREIGN KEY (session_id) REFERENCES eval_session(id) ON DELETE CASCADE;
+              ALTER TABLE eval_chip_reponse
+                DROP CONSTRAINT fk_chip_reponse_session,
+                ADD CONSTRAINT fk_chip_reponse_session
+                  FOREIGN KEY (session_id) REFERENCES eval_session(id) ON DELETE CASCADE;
+              ALTER TABLE eval_verbatim
+                DROP CONSTRAINT fk_verbatim_session,
+                ADD CONSTRAINT fk_verbatim_session
+                  FOREIGN KEY (session_id) REFERENCES eval_session(id) ON DELETE CASCADE;
