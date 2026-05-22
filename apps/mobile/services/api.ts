@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { router } from 'expo-router';
 import { API_BASE } from './auth';
 import { clearTokens, getAccessToken, getRefreshToken, isExpiringSoon, saveTokens } from './tokens';
 
@@ -37,6 +38,17 @@ export function setupAxiosInterceptors() {
     }
     return config;
   });
+
+  apiInstance.interceptors.response.use(
+    res => res,
+    async (error) => {
+      if (error.response?.status === 401) {
+        await clearTokens();
+        router.replace('/');
+      }
+      return Promise.reject(error);
+    }
+  );
 
   axiosInit = true;
 }

@@ -265,7 +265,9 @@ func SubmitEvaluation(agePublicKey string) http.HandlerFunc {
 		}
 
 		// 4 — Verbatims optionnels
-		strongbox, err := service.EncryptStrongbox(agePublicKey, r.RemoteAddr, 0)
+		userID := auth.GetSecurityUserId(r.Context())
+		studentID := *userID
+		strongbox, err := service.EncryptStrongbox(agePublicKey, r.RemoteAddr, studentID)
 		if err != nil {
 			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 			return

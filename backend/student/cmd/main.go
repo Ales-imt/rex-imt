@@ -8,6 +8,7 @@ import (
 	"back-rex-eleve/pkg/feedback"
 	"back-rex-eleve/pkg/note"
 	"back-rex-eleve/pkg/postit"
+	"back-rex-eleve/pkg/user"
 	mariadbnote "back-rex-eleve/pkg/note/mariadb"
 	"back-rex-eleve/pkg/programme"
 	webdfdprog "back-rex-eleve/pkg/programme/webdfd"
@@ -88,6 +89,7 @@ func main() {
 		r.With(auth.Security(cfg.JWT, &role)).Route("/programme", programme.MakeRouteProgramme(progConnector))
 		r.With(auth.Security(cfg.JWT, &role)).Route("/evaluation", evaluation.MakeRouteEvaluation(progConnector, cfg.Age.PublicKey))
 		r.With(auth.Security(cfg.JWT, &role)).Route("/postit", postit.MakeRoutePostit())
+		r.With(auth.Security(cfg.JWT, &role)).Route("/me", user.MakeRouteUser())
 
 	})
 

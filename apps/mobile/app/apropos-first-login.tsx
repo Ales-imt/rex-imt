@@ -1,5 +1,8 @@
 import { ZenBackground } from '@/components/zen-background';
 import { useTheme } from '@/hooks/use-theme';
+import { apiInstance } from '@/services/api';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -47,8 +50,20 @@ function InfoBox({ children, colors }: { children: React.ReactNode; colors: Retu
 
 // ─── Écran principal ──────────────────────────────────────────────────────────
 
-export default function AproposScreen() {
+export default function AproposFirstLoginScreen() {
   const colors = useTheme();
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  async function handleContinue() {
+    setLoading(true);
+    try {
+      await apiInstance.patch('/me/informed');
+    } finally {
+      setLoading(false);
+      router.replace('/agora');
+    }
+  }
 
   return (
     <SafeAreaView style={[styles.page, { backgroundColor: colors.pageBg }]} edges={['bottom']}>
@@ -194,6 +209,18 @@ export default function AproposScreen() {
             IMT Mines Alès — Tous droits réservés
           </Text>
         </View>
+
+        {/* ── Bouton de confirmation ─────────────────────────────────────── */}
+        <TouchableOpacity
+          style={[styles.continueBtn, { backgroundColor: colors.tint }, loading && { opacity: 0.6 }]}
+          onPress={handleContinue}
+          activeOpacity={0.85}
+          disabled={loading}
+        >
+          <Text style={styles.continueBtnText}>
+            {loading ? 'Chargement…' : 'J\'ai compris, continuer'}
+          </Text>
+        </TouchableOpacity>
 
       </ScrollView>
     </SafeAreaView>
@@ -368,5 +395,19 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
+  },
+
+  // Bouton de confirmation
+  continueBtn: {
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  continueBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
 });

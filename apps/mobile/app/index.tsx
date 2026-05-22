@@ -1,9 +1,10 @@
 import { Colors } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { API_BASE, login } from '@/services/auth';
-import { getOrCreatePseudo, saveTokens } from '@/services/tokens';
+import { apiInstance } from '@/services/api';
+import { getPseudo, saveTokens } from '@/services/tokens';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import {  useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -74,8 +75,6 @@ export default function SignInScreen() {
   }), [colors]);
 
 
-  console.log("API_BASE: ", API_BASE, "EXPO_PUBLIC_API_BASE: ", process.env.EXPO_PUBLIC_API_BASE); // ex: "192.168.1.42
-
   async function handleSignIn() {
     if (!email || !password) {
       setError('Veuillez renseigner tous les champs.');
@@ -86,8 +85,17 @@ export default function SignInScreen() {
     try {
       const resp = await login(email, password);
       await saveTokens(resp.access_token, resp.refresh_token);
-      await getOrCreatePseudo();
-      router.replace('/agora');
+      const pseudo = await getPseudo();
+      if (!pseudo) {
+        router.replace('/pseudo-setup');
+        return;
+      }
+      const me = await apiInstance.get('/me');
+      if (!me.data.informed_at) {
+        router.replace('/apropos-first-login');
+      } else {
+        router.replace('/agora');
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erreur de connexion');
     } finally {
