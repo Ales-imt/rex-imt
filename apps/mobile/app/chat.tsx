@@ -130,7 +130,7 @@ function Bubble({ message, colors, onRequestDelete }: {
   const today = isToday(message.time);
   const deleted = message.text === "[contenu supprimé à la demande de l'auteur]";
 
-  function handleLongPress() {
+  function handleDelete() {
     if (!isMe || deleted) return;
     onRequestDelete(message.id);
   }
@@ -140,7 +140,8 @@ function Bubble({ message, colors, onRequestDelete }: {
       <View style={styles.bubbleWrapper}>
         <TouchableOpacity
           activeOpacity={0.85}
-          onLongPress={handleLongPress}
+          onPress={Platform.OS === 'web' ? handleDelete : undefined}
+          onLongPress={Platform.OS !== 'web' ? handleDelete : undefined}
           delayLongPress={400}
         >
           <View style={[

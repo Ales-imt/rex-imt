@@ -21,11 +21,30 @@ func anonymizeFeedbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pgCtx := services.GetPgCtx(r.Context())
-	if err := New(pgCtx.Db).AnonymizeFeedback(context.Background(), AnonymizeFeedbackParams{
+	pool := services.GetPgCtx(r.Context()).Db
+	tx, err := pool.Begin(context.Background())
+	if err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+	defer tx.Rollback(context.Background())
+
+	q := New(tx)
+
+	if err := q.AnonymizeFeedback(context.Background(), AnonymizeFeedbackParams{
 		MessageID: services.ToPgText(messageID),
 		Pseudo:    services.ToPgText(pseudo),
 	}); err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+
+	if err := q.AnonymizePostitByFeedback(context.Background(), messageID); err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+
+	if err := tx.Commit(context.Background()); err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}
