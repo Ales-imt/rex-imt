@@ -1,0 +1,60 @@
+dn: uid=alice.martin,ou=people,dc=ema,dc=fr
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+uid: alice.martin
+sn: Martin
+givenName: Alice
+cn: Alice Martin
+mail: alice.martin@etu.mines-ales.fr
+ou: 3A-INFO
+userPassword: password
+
+dn: uid=bob.dupont,ou=people,dc=ema,dc=fr
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+uid: bob.dupont
+sn: Dupont
+givenName: Bob
+cn: Bob Dupont
+mail: bob.dupont@etu.mines-ales.fr
+ou: 2A-GC
+userPassword: password
+
+dn: uid=clara.leroy,ou=people,dc=ema,dc=fr
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+uid: clara.leroy
+sn: Leroy
+givenName: Clara
+cn: Clara Leroy
+mail: clara.leroy@etu.mines-ales.fr
+ou: 1A
+userPassword: password
+
+dn: uid=jean.bernard,ou=people,dc=ema,dc=fr
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+uid: jean.bernard
+sn: Bernard
+givenName: Jean
+cn: Jean Bernard
+mail: jean.bernard@mines-ales.fr
+ou: PROF
+userPassword: password
+
+dn: uid=david.simon,ou=people,dc=ema,dc=fr
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+uid: david.simon
+sn: Simon
+givenName: David
+cn: David Simon
+mail: david.simon@etu.mines-ales.fr
+ou: 2A-INFO-RED
+userPassword: password
+

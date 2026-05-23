@@ -1,0 +1,5 @@
+dn: ou=people,dc=ema,dc=fr
+objectClass: organizationalUnit
+ou: people
+description: Utilisateurs IMT Mines Ales
+
