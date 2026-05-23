@@ -12,12 +12,10 @@ func TestLdapPwd(t *testing.T) {
 		//URL:    "ldap://ldap.mines-ales.fr:389",
 		BaseDN: "dc=ema,dc=fr",
 	}
-	// ACHARIAN	Marceau
 
-	pwd := "toto"
-	//	id, err := LdapAuthenticate(cfg, "joel.vlasak@mines-ales.fr", pwd)
+	pwd := "password"
 
-	id, err := LdapAuthenticate(cfg, "anais.tapia-calvo@mines-ales.fr", pwd)
+	id, err := LdapAuthenticate(cfg, "alice.martin@etu.mines-ales.fr", pwd)
 
 	if err != nil {
 		t.Errorf("1-LdapAuthenticate failed for email: %v", err)
