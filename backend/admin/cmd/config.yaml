@@ -23,8 +23,8 @@ jwt:
   refreshTokenExpiresIn: 2160h
 
 ldap:
-  url: ldap://ldap.mines-ales.fr:389
-  #url: ldap://localhost:3890
+  #url: ldap://ldap.mines-ales.fr:389
+  url: ldap://localhost:3890
   baseDN: dc=ema,dc=fr
 
 ia:

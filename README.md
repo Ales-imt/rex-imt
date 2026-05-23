@@ -1,3 +1,8 @@
+## Licence
+Ce projet est distribué sous licence [AGPL v3](LICENSE).
+
+
+
 Coffre fort numerique:
     sudo apt  install age
     age-keygen -o cle_privee.txt
