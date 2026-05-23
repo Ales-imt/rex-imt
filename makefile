@@ -15,7 +15,7 @@ ELEVE_CONTAINER=rex-eleve
 ELEVE_CONFIG=$(RUN_DIR)/config-eleve.yaml
 SECRETS_FILE=.vscode/secrets.env
 
-.PHONY: infra db-to-code docker liquibase clean start stop  start-admin stop-admin start-eleve stop-eleve
+.PHONY: infra db-to-code docker liquibase clean start stop  start-admin stop-admin start-eleve stop-eleve ldap-start ldap-reset
 
 all: infra db-to-code
 
@@ -65,9 +65,9 @@ db-to-code:
 	cd $(BACK_DIR)/common && sqlc generate
 	cd $(BACK_DIR)/student && sqlc generate
 
-start : start-admin start-eleve
+start : ldap-start start-admin start-eleve 
 
-stop : stop-admin stop-eleve
+stop : ldap-reset stop-admin stop-eleve
 
 start-admin:
 	@echo "--- 🐳 Build de l'image admin ---"
@@ -104,6 +104,17 @@ start-eleve:
 stop-eleve:
 	@echo "--- 🛑 Arrêt du container élève ---"
 	docker rm -f $(ELEVE_CONTAINER) 2>/dev/null || true
+
+ldap-start:
+	@echo "--- 🔑 Démarrage du LDAP local ---"
+	cd $(DOCKER_DIR) && docker compose up -d openldap
+	@echo "--- ✅ LDAP disponible sur ldap://localhost:3890 (dc=ema,dc=fr) ---"
+
+ldap-reset:
+	@echo "--- 🗑️ Réinitialisation du LDAP local ---"
+	cd $(DOCKER_DIR) && docker compose rm -sf openldap
+	docker volume rm imt-rex_openldap-data imt-rex_openldap-config 2>/dev/null || true
+	@echo "--- ✅ Volumes supprimés — relancer 'make ldap-start' ---"
 
 clean:
 #-v pour tous supprimer.

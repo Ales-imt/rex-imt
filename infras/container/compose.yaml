@@ -55,5 +55,30 @@ services:
       retries: 10
       start_period: 10s
 
+  openldap:
+    image: osixia/openldap:1.5.0
+    container_name: openldap-rex
+    restart: always
+    ports:
+      - "3890:389"
+    environment:
+      LDAP_ORGANISATION: "IMT Mines Ales"
+      LDAP_DOMAIN: "ema.fr"
+      LDAP_ADMIN_PASSWORD: adminpassword
+      LDAP_TLS: "false"
+      LDAP_REMOVE_CONFIG_AFTER_SETUP: "false"
+    volumes:
+      - openldap-data:/var/lib/ldap
+      - openldap-config:/etc/ldap/slapd.d
+      - ./ldap/bootstrap:/container/service/slapd/assets/config/bootstrap/ldif/custom
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost:389", "-D", "cn=admin,dc=ema,dc=fr", "-w", "adminpassword", "-b", "dc=ema,dc=fr"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
 volumes:
   ollama-data:
+  openldap-data:
+  openldap-config:
