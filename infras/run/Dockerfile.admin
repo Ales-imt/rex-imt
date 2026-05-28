@@ -1,6 +1,8 @@
 # ── Stage 1 : build Go backend ──────────────────────────────────────────────
 FROM golang:1.25-alpine AS backend-builder
 
+RUN apk add --no-cache git
+
 WORKDIR /app
 
 # Copie du module common (référencé par replace directive dans admin/go.mod)
@@ -9,9 +11,16 @@ COPY backend/common ./common
 # Copie du module admin
 COPY backend/admin ./admin
 
+# Copie de l'historique git pour git describe
+COPY .git ./.git
+
 WORKDIR /app/admin
 
-RUN go build -ldflags="-s -w" -o /rex-admin-server ./cmd
+ARG VERSION
+ARG BUILD_TIME
+RUN VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}" && \
+    BUILD_TIME="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" && \
+    go build -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" -o /rex-admin-server ./cmd
 
 # ── Stage 2 : build React frontend ──────────────────────────────────────────
 FROM node:22-alpine AS frontend-builder
@@ -36,7 +45,7 @@ COPY --from=backend-builder /rex-admin-server /usr/local/bin/rex-admin-server
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
 # Configuration nginx
-COPY infras/run/nginx.conf /etc/nginx/nginx.conf
+COPY infras/run/nginx-admin.conf /etc/nginx/nginx.conf
 
 # Répertoire de configuration de l'application
 RUN mkdir -p /opt/rex-admin/conf /opt/rex-admin/certs
@@ -44,7 +53,7 @@ RUN mkdir -p /opt/rex-admin/conf /opt/rex-admin/certs
 # Certificat CA pour mTLS
 COPY infras/x509/mtls_certs/ca.crt /opt/rex-admin/certs/ca.crt
 
-COPY infras/run/start.sh /start.sh
+COPY infras/run/start-admin.sh /start.sh
 RUN chmod +x /start.sh
 
 EXPOSE 80

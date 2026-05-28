@@ -2,23 +2,27 @@ package main
 
 import (
 	"back-rex-common/pkg/auth"
+	"back-rex-common/pkg/health"
 	"back-rex-common/pkg/services"
 	"back-rex-eleve/pkg/authentification"
 	"back-rex-eleve/pkg/evaluation"
 	"back-rex-eleve/pkg/feedback"
 	"back-rex-eleve/pkg/note"
-	"back-rex-eleve/pkg/postit"
-	"back-rex-eleve/pkg/user"
 	mariadbnote "back-rex-eleve/pkg/note/mariadb"
+	"back-rex-eleve/pkg/postit"
 	"back-rex-eleve/pkg/programme"
 	webdfdprog "back-rex-eleve/pkg/programme/webdfd"
 	"back-rex-eleve/pkg/reponse"
 	studentservice "back-rex-eleve/pkg/service"
+	"back-rex-eleve/pkg/user"
 	"context"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -31,6 +35,8 @@ var (
 )
 
 func main() {
+
+	startTime := time.Now()
 
 	// Affiche les informations de compilation
 	log.Printf("Application version: %s", version)
@@ -48,13 +54,22 @@ func main() {
 	if err != nil {
 		log.Fatal("Erreur chargement config YAML :", err)
 	}
+
+	fmt.Printf("config: %+v\n", cfg)
 	r.Use(services.MakeDatabasePgMiddleware(&cfg.Database))
 	auth.StartRefreshTokenCleanup(&cfg.Database)
 
-	mariaDB, err := services.NewMariaDBConnection(cfg.MariaDBConfig)
-	if err != nil {
-		log.Fatal("Erreur connexion MariaDB :", err)
-	}
+	pg := services.NewPG(context.Background(), services.ToDBS(&cfg.Database))
+	services.ConnectWithRetry("PostgreSQL", 5*time.Minute, func() error {
+		return pg.Ping(context.Background())
+	})
+
+	var mariaDB *sql.DB
+	services.ConnectWithRetry("MariaDB", 5*time.Minute, func() error {
+		var err error
+		mariaDB, err = services.NewMariaDBConnection(cfg.MariaDBConfig)
+		return err
+	})
 	noteConnector := &mariadbnote.Connector{DB: mariaDB}
 	progConnector := &webdfdprog.Connector{
 		ElevesURL:   "http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe?TYPE=eleves_txt",
@@ -62,7 +77,6 @@ func main() {
 	}
 	progConnector.Start(context.Background())
 
-	pg := services.NewPG(context.Background(), services.ToDBS(&cfg.Database))
 	studentservice.StartSync(
 		context.Background(),
 		"http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe?TYPE=promos_txt",
@@ -78,6 +92,32 @@ func main() {
 			log.Println("Ping reçu api 1!")
 			w.Write([]byte("pong"))
 		})
+		r.Get("/health", health.MakeHealthHandler(
+			health.Checker{
+				Name: "postgres",
+				Check: func(ctx context.Context) error {
+					return services.GetPgCtx(ctx).Ping(ctx)
+				},
+			},
+			health.Checker{
+				Name: "mariadb",
+				Check: func(ctx context.Context) error {
+					return mariaDB.PingContext(ctx)
+				},
+			},
+		))
+		r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{
+				"version":   version,
+				"buildTime": buildTime,
+			})
+		})
+		r.Get("/status", health.MakeStatusHandler(
+			version, buildTime, startTime,
+			health.HTTPChecker("webdfd", progConnector.PlanningURL),
+			health.LDAPChecker("ldap", cfg.LDAP.URL),
+		))
 
 		r.Route("/auth", func(r chi.Router) {
 			auth.RoutesAuth(r, cfg, authentification.PostLdap)

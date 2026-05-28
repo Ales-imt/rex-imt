@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/go-ldap/ldap/v3"
 	"github.com/golang-jwt/jwt/v5"
@@ -20,6 +21,8 @@ func LdapAuthenticate(cfg services.LDAPConfig, identifiant string, password stri
 		return nil, services.NewAppInternalError("Erreur d'authentification")
 	}
 	defer l.Close()
+
+	identifiant = strings.ToLower(identifiant)
 
 	var filter string
 	if services.IsValidEmail(identifiant) {
@@ -61,7 +64,7 @@ func GetLdapIdentity(entry *ldap.Entry) *LdapIdentity {
 
 	identity.Name = entry.GetAttributeValue("sn")
 	identity.Surname = entry.GetAttributeValue("givenName")
-	identity.Mail = entry.GetAttributeValue("mail")
+	identity.Mail = strings.ToLower(entry.GetAttributeValue("mail"))
 	identity.Promotion = entry.GetAttributeValue("ou")
 	return &identity
 }

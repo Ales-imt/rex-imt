@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 023-user-email-lowercase
+      author: vjo
+      changes:
+        - sql:
+            sql: UPDATE "user" SET email = LOWER(email);
+      rollback:
+        - empty
