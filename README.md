@@ -30,3 +30,6 @@ Pour utiliser cybema en local:
 Pour expo,
    npx expo start
 
+dump de la bd:
+ssh -L 5433:sql2.mines-ales.fr:5433 userde@vecu-etudiant.mines-ales.fr
+pg_dump -h localhost -p 5433  -U devedbuserext  -d devedb -F c -f db_rex_backup.dump

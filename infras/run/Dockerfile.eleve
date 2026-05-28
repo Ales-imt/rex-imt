@@ -1,14 +1,23 @@
 # ── Stage 1 : build Go backend élève ────────────────────────────────────────
 FROM golang:1.25-alpine AS backend-builder
 
+RUN apk add --no-cache git
+
 WORKDIR /app
 
 COPY backend/common ./common
 COPY backend/student ./student
 
+# Copie de l'historique git pour git describe
+COPY .git ./.git
+
 WORKDIR /app/student
 
-RUN go build -ldflags="-s -w" -o /rex-eleve-server ./cmd
+ARG VERSION
+ARG BUILD_TIME
+RUN VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}" && \
+    BUILD_TIME="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" && \
+    go build -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" -o /rex-eleve-server ./cmd
 
 # ── Stage 2 : build Expo web ─────────────────────────────────────────────────
 FROM node:22-alpine AS frontend-builder

@@ -1,14 +1,14 @@
-dn: uid=alice.martin,ou=people,dc=ema,dc=fr
+dn: uid=clement.trens,ou=people,dc=ema,dc=fr
 objectClass: inetOrgPerson
 objectClass: organizationalPerson
 objectClass: person
-uid: alice.martin
-sn: Martin
-givenName: Alice
+uid: clement.trens
+sn: Trens
+givenName: Clement
 cn: Alice Martin
-mail: alice.martin@etu.mines-ales.fr
+mail: clement.trens@etu.mines-ales.fr
 ou: 3A-INFO
-userPassword: password
+userPassword: t
 
 dn: uid=bob.dupont,ou=people,dc=ema,dc=fr
 objectClass: inetOrgPerson
@@ -56,5 +56,17 @@ givenName: David
 cn: David Simon
 mail: david.simon@etu.mines-ales.fr
 ou: 2A-INFO-RED
+userPassword: password
+
+dn: uid=joel.vlasak,ou=people,dc=ema,dc=fr
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+uid: joel.vlasak
+sn: Vlasak
+givenName: Joel
+cn: Joel Vlasak
+mail: Joel.Vlasak@mines-ales.fr
+ou: PROF
 userPassword: password
 
