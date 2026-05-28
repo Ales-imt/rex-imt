@@ -1,9 +1,16 @@
 database:
-  host: host.docker.internal
+  host: ${HOST}
   port: 5432
-  user: postgres
-  password: root
+  user: ${POSTGRES_USER}
+  password: ${POSTGRES_PASSWORD}
   name: db_rex
+
+mariaDB:
+  host:     ${HOST}
+  port:     3306
+  user:     ${MARIADB_USER}
+  password: ${MARIADB_PASSWORD}
+  database: cyber_notes_v2
 
 server:
   host: localhost
@@ -11,20 +18,20 @@ server:
   certPath : ./x509/mtls_certs
 
 jwt:
-  secret: lee0Op9iriThai7mXae5ahxuUpo2thaenaeL6mooaehahk1U
+  secret: ${JWT_SECRET}
   accessTokenExpiresIn: 15m
-  refreshTokenExpiresIn: 168h
+  refreshTokenExpiresIn: 2160h
 
 ldap:
-  url: ldap://ldap.mines-ales.fr:389
-  #url: ldap://localhost:3890
+  #url: ldap://ldap.mines-ales.fr:389
+  url: ldap://${HOST}:3890
   baseDN: dc=ema,dc=fr
 
 ia:
   provider: rack # "ollama" ou "ragarenn" ou "rack"
 
 ollama:
-  baseURL: http://localhost:11434
+  baseURL: http://${HOST}:11434
   model: mistral-nemo
 
 ragarenn:
@@ -36,4 +43,4 @@ rack:
   baseURL: https://159.31.247.10
   model: mistral-small:latest
   apiKey: ${RACK_API_KEY}
-  caCertPath: /opt/rex-admin/certs/ca.crt
+  caCertPath: /home/vjo/projets/rex/rex-imt/infras/x509/mtls_certs/ca.crt
