@@ -15,7 +15,7 @@ func TestLdapPwd(t *testing.T) {
 
 	pwd := "password"
 
-	id, err := LdapAuthenticate(cfg, "alice.martin@etu.mines-ales.fr", pwd)
+	id, err := LdapAuthenticate(cfg, "Joel.vlasak@mines-ales.fr", pwd)
 
 	if err != nil {
 		t.Errorf("1-LdapAuthenticate failed for email: %v", err)

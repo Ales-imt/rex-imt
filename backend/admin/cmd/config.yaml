@@ -1,12 +1,12 @@
 database:
-  host: localhost
+  host: ${HOST}
   port: 5432
   user: ${POSTGRES_USER}
   password: ${POSTGRES_PASSWORD}
   name: db_rex
 
 mariaDB:
-  host:     localhost
+  host:     ${HOST}
   port:     3306
   user:     ${MARIADB_USER}
   password: ${MARIADB_PASSWORD}
@@ -24,14 +24,14 @@ jwt:
 
 ldap:
   #url: ldap://ldap.mines-ales.fr:389
-  url: ldap://localhost:3890
+  url: ldap://${HOST}:3890
   baseDN: dc=ema,dc=fr
 
 ia:
   provider: rack # "ollama" ou "ragarenn" ou "rack"
 
 ollama:
-  baseURL: http://localhost:11434
+  baseURL: http://${HOST}:11434
   model: mistral-nemo
 
 ragarenn:

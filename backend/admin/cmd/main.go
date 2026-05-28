@@ -15,12 +15,16 @@ import (
 	"back-rex-admin/pkg/rgpd"
 	"back-rex-admin/pkg/user"
 	"back-rex-common/pkg/auth"
+	"back-rex-common/pkg/health"
 	"back-rex-common/pkg/services"
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -33,6 +37,8 @@ var (
 )
 
 func main() {
+
+	startTime := time.Now()
 
 	// Affiche les informations de compilation
 	log.Printf("Application version: %s", version)
@@ -50,12 +56,18 @@ func main() {
 	if err != nil {
 		log.Fatal("Erreur chargement config YAML :", err)
 	}
+
 	configDir := filepath.Dir(configPath)
 	if !filepath.IsAbs(cfg.Rack.CaCertPath) {
 		cfg.Rack.CaCertPath = filepath.Join(configDir, cfg.Rack.CaCertPath)
 	}
 	r.Use(services.MakeDatabasePgMiddleware(&cfg.Database))
 	auth.StartRefreshTokenCleanup(&cfg.Database)
+
+	pg := services.NewPG(context.Background(), services.ToDBS(&cfg.Database))
+	services.ConnectWithRetry("PostgreSQL", 5*time.Minute, func() error {
+		return pg.Ping(context.Background())
+	})
 	var iaConnector ia.IAConnector
 	switch cfg.IA.Provider {
 	case "ollama":
@@ -80,10 +92,11 @@ func main() {
 		log.Fatal("Ia inconnu")
 
 	}
-	go feedback.ProcessPendingFeedbacks(&cfg.Database, iaConnector)
+	//go feedback.ProcessPendingFeedbacks(&cfg.Database, iaConnector)
 	go feedback.ListenForNewFeedbacks(&cfg.Database, iaConnector)
 	rgpd.StartPurge(&cfg.Database, &cfg.MariaDBConfig)
 
+	fmt.Printf("config: %+v\n", cfg)
 	//r.Use(services.FullLogRequest)
 
 	// version api1
@@ -92,6 +105,35 @@ func main() {
 			log.Println("Ping reçu api 1!")
 			w.Write([]byte("pong"))
 		})
+		r.Get("/health", health.MakeHealthHandler(
+			health.Checker{
+				Name: "postgres",
+				Check: func(ctx context.Context) error {
+					return services.GetPgCtx(ctx).Ping(ctx)
+				},
+			},
+		))
+		r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{
+				"version":   version,
+				"buildTime": buildTime,
+			})
+		})
+		var iaBaseURL string
+		switch cfg.IA.Provider {
+		case "ollama":
+			iaBaseURL = cfg.Ollama.BaseURL
+		case "rack":
+			iaBaseURL = cfg.Rack.BaseURL
+		case "ragarenn":
+			iaBaseURL = cfg.RAGaRenn.BaseURL
+		}
+		r.Get("/status", health.MakeStatusHandler(
+			version, buildTime, startTime,
+			health.HTTPChecker("ia_"+cfg.IA.Provider, iaBaseURL),
+			health.LDAPChecker("ldap", cfg.LDAP.URL),
+		))
 		r.Route("/auth", func(r chi.Router) {
 			auth.RoutesAuth(r, cfg, authentification.PostLdap)
 		})

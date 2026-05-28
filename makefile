@@ -1,6 +1,6 @@
 # --- Variables ---
 DB_URL=postgres://postgres:root@localhost:5432/db_rex
-	
+
 SCHEMA_FILE_POSTGRES=schema.sql
 SCHEMA_FILE_MARIADB=schema_maria_db.sql
 BACK_DIR=./backend
@@ -9,13 +9,22 @@ DOCKER_DIR=./infras/container
 RUN_DIR=./infras/run
 ADMIN_IMAGE=rex-admin
 ADMIN_CONTAINER=rex-admin
-ADMIN_CONFIG=$(RUN_DIR)/config.yaml
+ADMIN_CONFIG=$(RUN_DIR)/config-admin.yaml
 ELEVE_IMAGE=rex-eleve
 ELEVE_CONTAINER=rex-eleve
 ELEVE_CONFIG=$(RUN_DIR)/config-eleve.yaml
 SECRETS_FILE=.vscode/secrets.env
 
-.PHONY: infra db-to-code docker liquibase clean start stop  start-admin stop-admin start-eleve stop-eleve ldap-start ldap-reset
+GHCR_REGISTRY=ghcr.io
+GHCR_ORG=ales-imt
+GHCR_ADMIN_IMAGE=$(GHCR_REGISTRY)/$(GHCR_ORG)/$(ADMIN_IMAGE)
+GHCR_ELEVE_IMAGE=$(GHCR_REGISTRY)/$(GHCR_ORG)/$(ELEVE_IMAGE)
+GITHUB_DOCKER_TOKEN=$(shell grep '^GITHUB_DOCKER_TOKEN=' $(SECRETS_FILE) | cut -d'=' -f2)
+VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+BUILD_TIME=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+HOST_IP=$(shell ip route get 1 | awk '{print $$7; exit}')
+
+.PHONY: infra db-to-code docker liquibase clean start stop  start-admin stop-admin start-eleve stop-eleve ldap-start ldap-reset push
 
 all: infra db-to-code
 
@@ -70,8 +79,13 @@ start : ldap-start start-admin start-eleve
 stop : ldap-reset stop-admin stop-eleve
 
 start-admin:
+	@echo "--- 📋 Copie de la configuration admin ---"
+	cp $(BACK_DIR)/admin/cmd/config.yaml $(RUN_DIR)/config-admin.yaml
 	@echo "--- 🐳 Build de l'image admin ---"
-	docker build -f $(RUN_DIR)/Dockerfile -t $(ADMIN_IMAGE) .
+	docker build -f $(RUN_DIR)/Dockerfile.admin \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		-t $(ADMIN_IMAGE) .
 	@echo "--- 🚀 Lancement du container admin ---"
 	docker rm -f $(ADMIN_CONTAINER) 2>/dev/null || true
 	docker run -d \
@@ -79,6 +93,7 @@ start-admin:
 		-p 8121:80 \
 		--add-host=host.docker.internal:host-gateway \
 		--env-file $(SECRETS_FILE) \
+		--env HOST=$(HOST_IP) \
 		-v $(shell pwd)/$(ADMIN_CONFIG):/opt/rex-admin/conf/config.yaml:ro \
 		$(ADMIN_IMAGE)
 	@echo "--- ✅ Container admin disponible sur http://localhost:8121 ---"
@@ -88,8 +103,13 @@ stop-admin:
 	docker rm -f $(ADMIN_CONTAINER) 2>/dev/null || true
 
 start-eleve:
+	@echo "--- 📋 Copie de la configuration élève ---"
+	cp $(BACK_DIR)/student/cmd/config.yaml $(RUN_DIR)/config-eleve.yaml
 	@echo "--- 🐳 Build de l'image élève ---"
-	docker build -f $(RUN_DIR)/Dockerfile.eleve -t $(ELEVE_IMAGE) .
+	docker build -f $(RUN_DIR)/Dockerfile.eleve \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		-t $(ELEVE_IMAGE) .
 	@echo "--- 🚀 Lancement du container élève ---"
 	docker rm -f $(ELEVE_CONTAINER) 2>/dev/null || true
 	docker run -d \
@@ -97,6 +117,8 @@ start-eleve:
 		-p 8131:80 \
 		--add-host=host.docker.internal:host-gateway \
 		--add-host=webdfd.mines-ales.fr:host-gateway \
+		--env-file $(SECRETS_FILE) \
+		--env HOST=$(HOST_IP) \
 		-v $(shell pwd)/$(ELEVE_CONFIG):/opt/rex-eleve/conf/config.yaml:ro \
 		$(ELEVE_IMAGE)
 	@echo "--- ✅ Container élève disponible sur http://localhost:8131 ---"
@@ -115,6 +137,27 @@ ldap-reset:
 	cd $(DOCKER_DIR) && docker compose rm -sf openldap
 	docker volume rm imt-rex_openldap-data imt-rex_openldap-config 2>/dev/null || true
 	@echo "--- ✅ Volumes supprimés — relancer 'make ldap-start' ---"
+
+push:
+	@echo "--- 🐳 Build de l'image admin ---"
+	docker build -f $(RUN_DIR)/Dockerfile.admin \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		-t $(ADMIN_IMAGE) .
+	@echo "--- 🐳 Build de l'image élève ---"
+	docker build -f $(RUN_DIR)/Dockerfile.eleve \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		-t $(ELEVE_IMAGE) .
+	@echo "--- 🔑 Connexion à GHCR ---"
+	echo "$(GITHUB_DOCKER_TOKEN)" | docker login $(GHCR_REGISTRY) -u $(GHCR_ORG) --password-stdin
+	@echo "--- 🏷️ Tag des images ---"
+	docker tag $(ADMIN_IMAGE) $(GHCR_ADMIN_IMAGE):latest
+	docker tag $(ELEVE_IMAGE) $(GHCR_ELEVE_IMAGE):latest
+	@echo "--- 🚀 Push vers GHCR ---"
+	docker push $(GHCR_ADMIN_IMAGE):latest
+	docker push $(GHCR_ELEVE_IMAGE):latest
+	@echo "--- ✅ Images publiées sur $(GHCR_REGISTRY)/$(GHCR_ORG) ---"
 
 clean:
 #-v pour tous supprimer.

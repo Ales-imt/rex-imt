@@ -1,15 +1,15 @@
 database:
-  host: host.docker.internal
+  host: ${HOST}
   port: 5432
-  user: postgres
-  password: root
-  name: db_rex  
+  user: ${POSTGRES_USER}
+  password: ${POSTGRES_PASSWORD}
+  name: db_rex
 
 mariaDB:
-  host:     host.docker.internal
+  host:     ${HOST}
   port:     3306
-  user:     root
-  password: root
+  user:     ${MARIADB_USER}
+  password: ${MARIADB_PASSWORD}
   database: cyber_notes_v2
 
 server:
@@ -17,13 +17,13 @@ server:
   port: 3300
 
 jwt:
-  secret: lee0Op9iriThai7mXae5ahxuUpo2thaenaeL6mooaehahk1U
+  secret: ${JWT_SECRET}
   accessTokenExpiresIn: 15m
-  refreshTokenExpiresIn: 168h
+  refreshTokenExpiresIn: 2160h
 
 ldap:
 #url: 	ldap://ldap.mines-ales.fr:389
-  url: ldap://localhost:3890
+  url: ldap://${HOST}:3890
   baseDN: dc=ema,dc=fr
 
 age:
