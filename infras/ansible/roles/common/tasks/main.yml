@@ -1,0 +1,60 @@
+---
+- name: Mettre à jour tous les paquets du système
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+
+- name: Installer les paquets requis
+  ansible.builtin.dnf:
+    name:
+      - podman
+      - podman-docker
+      - nginx
+      - unzip
+      - nmap
+      - firewalld
+      - python3-firewall
+      - python3-libsemanage
+    state: present
+
+- name: Activer et démarrer firewalld
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: true
+    state: started
+
+- name: Activer podman-restart.service
+  ansible.builtin.systemd:
+    name: podman-restart.service
+    enabled: true
+    state: started
+
+- name: Récupérer l'UID de {{ app_user }}
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ app_user }}"
+
+- name: Activer le linger pour {{ app_user }}
+  ansible.builtin.command:
+    cmd: "loginctl enable-linger {{ app_user }}"
+  changed_when: false
+
+- name: Autoriser nginx à ouvrir des connexions réseau (SELinux)
+  ansible.posix.seboolean:
+    name: httpd_can_network_connect
+    state: true
+    persistent: true
+
+- name: Ouvrir le port HTTP
+  ansible.posix.firewalld:
+    service: http
+    permanent: true
+    state: enabled
+    immediate: true
+
+- name: Ouvrir le port HTTPS
+  ansible.posix.firewalld:
+    service: https
+    permanent: true
+    state: enabled
+    immediate: true

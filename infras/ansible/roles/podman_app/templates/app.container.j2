@@ -1,0 +1,23 @@
+[Unit]
+Description={{ container_name }} container
+After=network-online.target
+
+[Container]
+Image={{ container_image }}
+ContainerName={{ container_name }}
+PublishPort={{ container_port }}:8080
+AddHost=host.containers.internal:host-gateway
+Environment=HOST={{ ansible_default_ipv4.address }}
+EnvironmentFile={{ app_dir }}/secrets.env
+Volume={{ app_dir }}/config-{{ app_name }}.yaml:{{ config_dest_in_container }}:ro,z
+{% if ca_cert_container_path %}
+Volume={{ app_dir }}/x509/mtls_certs/ca.crt:{{ ca_cert_container_path }}:ro,z
+{% endif %}
+AutoUpdate=registry
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

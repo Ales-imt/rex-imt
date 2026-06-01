@@ -15,7 +15,6 @@ mariaDB:
 server:
   host: localhost
   port: 3333
-  certPath : ./x509/mtls_certs
 
 jwt:
   secret: ${JWT_SECRET}
@@ -43,4 +42,4 @@ rack:
   baseURL: https://159.31.247.10
   model: mistral-small:latest
   apiKey: ${RACK_API_KEY}
-  caCertPath: /home/vjo/projets/rex/rex-imt/infras/x509/mtls_certs/ca.crt
+  caCertPath: /opt/rex-admin/certs/ca.crt

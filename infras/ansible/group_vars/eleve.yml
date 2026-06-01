@@ -1,0 +1,17 @@
+---
+app_name: eleve
+server_name: vecu-etudiant-eleves-2.mines-ales.fr
+ssl_dir: "/etc/ssl/{{ server_name }}"
+container_name: rex-eleve
+container_image: ghcr.io/ales-imt/rex-eleve:latest
+container_port: 8131
+app_dir: /home/userdfx/rex-eleve
+config_dest_in_container: /opt/rex-eleve/conf/config.yaml
+ca_cert_container_path: "/opt/rex-eleve/certs/ca.crt"
+
+postgres_host: "{{ postgres_host }}"
+postgres_port: "{{ postgres_port }}"
+postgres_db: "{{ postgres_db }}"
+mariadb_host: "{{ mariadb_host }}"
+mariadb_port: "{{ mariadb_port }}"
+mariadb_database: "{{ mariadb_database }}"

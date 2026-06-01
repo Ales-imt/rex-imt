@@ -11,8 +11,6 @@ databaseChangeLog:
         - sql:
             splitStatements: false
             sql: |
-              CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
               UPDATE feedback
               SET message_id = gen_random_uuid()::text
               WHERE message_id IS NULL;
