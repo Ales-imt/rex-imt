@@ -8,7 +8,7 @@ givenName: Clement
 cn: Alice Martin
 mail: clement.trens@etu.mines-ales.fr
 ou: 3A-INFO
-userPassword: t
+userPassword: password
 
 dn: uid=bob.dupont,ou=people,dc=ema,dc=fr
 objectClass: inetOrgPerson

@@ -1,0 +1,10 @@
+/tmp/nginx_access.log /tmp/nginx_error.log {
+    daily
+    rotate 7
+    compress
+    missingok
+    notifempty
+    postrotate
+        nginx -s reopen
+    endscript
+}

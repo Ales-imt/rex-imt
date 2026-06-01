@@ -1,0 +1,9 @@
+database:
+  host: ${POSTGRES_HOST}
+  port: ${POSTGRES_PORT}
+  user: ${POSTGRES_USER}
+  password: ${POSTGRES_PASSWORD}
+  name: ${POSTGRES_DB}
+
+age:
+  publicKey: age1czrjv6gfl8yky8efj2x5mc9rcnudvjdrnz49ah496a2shryyx3fqdnfz7s

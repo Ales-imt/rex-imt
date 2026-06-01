@@ -36,7 +36,10 @@ RUN npm run build
 # ── Stage 3 : image finale ───────────────────────────────────────────────────
 FROM alpine:3.21
 
-RUN apk add --no-cache nginx
+RUN apk add --no-cache nginx logrotate
+
+# Utilisateur non-root
+RUN addgroup -S rex && adduser -S rex -G rex
 
 # Backend
 COPY --from=backend-builder /rex-admin-server /usr/local/bin/rex-admin-server
@@ -53,9 +56,17 @@ RUN mkdir -p /opt/rex-admin/conf /opt/rex-admin/certs
 # Certificat CA pour mTLS
 COPY infras/x509/mtls_certs/ca.crt /opt/rex-admin/certs/ca.crt
 
+COPY infras/run/logrotate-nginx /etc/logrotate.d/nginx
 COPY infras/run/start-admin.sh /start.sh
 RUN chmod +x /start.sh
 
-EXPOSE 80
+# Permissions pour l'utilisateur rex
+RUN chown -R rex:rex /usr/share/nginx/html /var/log/nginx /var/lib/nginx /opt/rex-admin && \
+    mkdir -p /tmp/client_body /tmp/proxy /tmp/fastcgi /tmp/uwsgi /tmp/scgi && \
+    chown -R rex:rex /tmp/client_body /tmp/proxy /tmp/fastcgi /tmp/uwsgi /tmp/scgi
+
+USER rex
+
+EXPOSE 8080
 
 CMD ["/start.sh"]

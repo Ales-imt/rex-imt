@@ -33,3 +33,10 @@ Pour expo,
 dump de la bd:
 ssh -L 5433:sql2.mines-ales.fr:5433 userde@vecu-etudiant.mines-ales.fr
 pg_dump -h localhost -p 5433  -U devedbuserext  -d devedb -F c -f db_rex_backup.dump
+
+
+utilisation d'ansible.
+    Renseigner les fichies secrets de .vscode
+    generate-vault-vars.sh
+    ansible-vault encrypt vault-vars.yml
+    ansible-playbook   -i inventory/prod  playbook-eleve.yml   --ask-vault-pass   --ask-pass   --ask-become-pass

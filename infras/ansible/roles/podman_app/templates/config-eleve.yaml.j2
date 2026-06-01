@@ -1,0 +1,29 @@
+database:
+  host: {{ postgres_host }}
+  port: {{ postgres_port }}
+  user: {{ postgres_user }}
+  password: {{ postgres_password }}
+  name: {{ postgres_db }}
+
+mariaDB:
+  host: {{ mariadb_host }}
+  port: {{ mariadb_port }}
+  user: {{ mariadb_user }}
+  password: {{ mariadb_password }}
+  database: {{ mariadb_database }}
+
+server:
+  host: localhost
+  port: 3300
+
+jwt:
+  secret: {{ jwt_secret }}
+  accessTokenExpiresIn: 15m
+  refreshTokenExpiresIn: 2160h
+
+ldap:
+  url: ldap://ldap.mines-ales.fr:389
+  baseDN: dc=ema,dc=fr
+
+age:
+  publicKey: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
