@@ -12,14 +12,12 @@ databaseChangeLog:
         - sql:
             splitStatements: false
             sql: |
-              CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
               DO $$
               DECLARE
-                v_key BYTEA := gen_random_bytes(32);
+                v_salt TEXT := gen_random_uuid()::text;
               BEGIN
                 UPDATE feedback
-                SET pseudo = encode(encrypt(user_id::text::bytea, v_key, 'aes'), 'hex')
+                SET pseudo = md5(user_id::text || v_salt)
                 WHERE pseudo IS NULL;
               END $$;
       rollback:

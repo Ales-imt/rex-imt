@@ -13,14 +13,6 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
-
-
-
-COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
-
-
-
 CREATE FUNCTION public.notify_new_feedback() RETURNS trigger
     LANGUAGE plpgsql
     AS $$

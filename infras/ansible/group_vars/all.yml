@@ -1,0 +1,12 @@
+---
+app_user: userdfx
+ghcr_org: ales-imt
+
+# Secrets — définir via ansible-vault (vault-vars.yml)
+# github_docker_token: ""
+# postgres_user: ""
+# postgres_password: ""
+# mariadb_user: ""
+# mariadb_password: ""
+# jwt_secret: ""
+# rack_api_key: ""

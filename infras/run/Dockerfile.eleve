@@ -39,6 +39,9 @@ FROM alpine:3.21
 
 RUN apk add --no-cache nginx
 
+# Utilisateur non-root
+RUN addgroup -S rex && adduser -S rex -G rex
+
 COPY --from=backend-builder /rex-eleve-server /usr/local/bin/rex-eleve-server
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 COPY infras/run/nginx-eleve.conf /etc/nginx/nginx.conf
@@ -48,6 +51,13 @@ RUN mkdir -p /opt/rex-eleve/conf
 COPY infras/run/start-eleve.sh /start.sh
 RUN chmod +x /start.sh
 
-EXPOSE 80
+# Permissions pour l'utilisateur rex
+RUN chown -R rex:rex /usr/share/nginx/html /var/log/nginx /var/lib/nginx /opt/rex-eleve && \
+    mkdir -p /tmp/client_body /tmp/proxy /tmp/fastcgi /tmp/uwsgi /tmp/scgi && \
+    chown -R rex:rex /tmp/client_body /tmp/proxy /tmp/fastcgi /tmp/uwsgi /tmp/scgi
+
+USER rex
+
+EXPOSE 8080
 
 CMD ["/start.sh"]

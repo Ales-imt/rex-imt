@@ -1,0 +1,97 @@
+---
+- name: Créer le répertoire {{ app_dir }}
+  ansible.builtin.file:
+    path: "{{ app_dir }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0750"
+
+- name: Créer le répertoire {{ app_dir }}/x509/mtls_certs
+  ansible.builtin.file:
+    path: "{{ app_dir }}/x509/mtls_certs"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0750"
+
+- name: Copier deploy-{{ app_name }}.sh
+  ansible.builtin.copy:
+    src: "deploy-{{ app_name }}.sh"
+    dest: "{{ app_dir }}/deploy-{{ app_name }}.sh"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0755"
+
+- name: Copier le certificat CA mTLS
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../x509/mtls_certs/ca.crt"
+    dest: "{{ app_dir }}/x509/mtls_certs/ca.crt"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0644"
+
+- name: Déployer config-{{ app_name }}.yaml
+  ansible.builtin.template:
+    src: "config-{{ app_name }}.yaml.j2"
+    dest: "{{ app_dir }}/config-{{ app_name }}.yaml"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0644"
+
+- name: Déployer secrets.env
+  ansible.builtin.template:
+    src: secrets.env.j2
+    dest: "{{ app_dir }}/secrets.env"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0600"
+
+- name: Créer le répertoire Quadlet pour {{ app_user }}
+  ansible.builtin.file:
+    path: "/home/{{ app_user }}/.config/containers/systemd"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0755"
+
+- name: S'authentifier sur ghcr.io avec podman
+  ansible.builtin.command:
+    cmd: "podman login ghcr.io --username {{ ghcr_org }} --password {{ github_docker_token }}"
+  become_user: "{{ app_user }}"
+  no_log: true
+  changed_when: false
+
+- name: Pré-télécharger l'image {{ container_image }}
+  ansible.builtin.command:
+    cmd: "podman pull {{ container_image }}"
+  become_user: "{{ app_user }}"
+  register: pull_result
+  changed_when: "'Copying' in pull_result.stdout"
+
+- name: Déployer le fichier Quadlet {{ container_name }}.container
+  ansible.builtin.template:
+    src: app.container.j2
+    dest: "/home/{{ app_user }}/.config/containers/systemd/{{ container_name }}.container"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0644"
+  notify: Reload user daemon
+
+- name: Recharger le daemon systemd user
+  ansible.builtin.systemd:
+    daemon_reload: true
+    scope: user
+  become_user: "{{ app_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[app_user][1] }}"
+
+- name: Activer et démarrer le service {{ container_name }}
+  ansible.builtin.systemd:
+    name: "{{ container_name }}"
+    enabled: true
+    state: started
+    scope: user
+  become_user: "{{ app_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[app_user][1] }}"

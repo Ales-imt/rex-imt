@@ -1,0 +1,26 @@
+---
+- name: Configure VM admin (prod)
+  hosts: admin
+  become: true
+
+  vars_files:
+    - vault-vars.yml
+
+  roles:
+    - common
+    - podman_app
+    - nginx_vhost
+
+  handlers:
+    - name: Reload nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+
+    - name: Reload user daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+        scope: user
+      become_user: "{{ app_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[app_user][1] }}"
