@@ -1,0 +1,8 @@
+[admin]
+vecu-etudiant-admin-2.mines-ales.fr ansible_user=userdfx ansible_become=true
+
+[eleve]
+vecu-etudiant-eleves-2.mines-ales.fr ansible_user=userdfx ansible_become=true
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3

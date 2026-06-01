@@ -57,6 +57,8 @@ func main() {
 		log.Fatal("Erreur chargement config YAML :", err)
 	}
 
+	fmt.Printf("config: %+v\n", cfg)
+
 	configDir := filepath.Dir(configPath)
 	if !filepath.IsAbs(cfg.Rack.CaCertPath) {
 		cfg.Rack.CaCertPath = filepath.Join(configDir, cfg.Rack.CaCertPath)
@@ -92,11 +94,20 @@ func main() {
 		log.Fatal("Ia inconnu")
 
 	}
-	//go feedback.ProcessPendingFeedbacks(&cfg.Database, iaConnector)
+
 	go feedback.ListenForNewFeedbacks(&cfg.Database, iaConnector)
 	rgpd.StartPurge(&cfg.Database, &cfg.MariaDBConfig)
 
-	fmt.Printf("config: %+v\n", cfg)
+	// permeet une analyse au lancement du programme.
+	go feedback.ProcessPendingFeedbacks(&cfg.Database, iaConnector)
+	go func() {
+		ticker := time.NewTicker(30 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			feedback.ProcessPendingFeedbacks(&cfg.Database, iaConnector)
+		}
+	}()
+
 	//r.Use(services.FullLogRequest)
 
 	// version api1

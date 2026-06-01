@@ -1,4 +1,4 @@
-.vscode/secrets.env
+.vscode/secrets-*.env
 infras/liquibase/liquibase_libs
 **/__debug*
 /back/**/gen/*
@@ -9,7 +9,7 @@ infras/liquibase/liquibase_libs
 apps/web-admin/node_modules
 apps/web-admin/.vite
 apps/web-admin/dist
-devedb_backup.dump
+*.dump
 feedback_classification.sql
 **/*.age*
 cle_privee.txt
@@ -20,5 +20,9 @@ infras/serveur-ia/serveur-ia
 **/query.sql.go
 **/cmd
 **/testconfig.yaml
+**/*.pem
 
 
+
+infras/migration/config-prod-runtime.yaml
+infras/ansible/vault-vars.yml

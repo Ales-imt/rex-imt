@@ -1,0 +1,3 @@
+---
+- import_playbook: playbook-admin.yml
+- import_playbook: playbook-eleve.yml

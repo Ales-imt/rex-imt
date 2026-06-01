@@ -1,0 +1,44 @@
+---
+- name: Créer le répertoire SSL pour {{ server_name }}
+  ansible.builtin.file:
+    path: "{{ ssl_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Déployer le bundle de certificat (Cert_bundle.pem)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/files/{{ server_name }}/Cert_bundle.pem"
+    dest: "{{ ssl_dir }}/Cert_bundle.pem"
+    owner: root
+    group: root
+    mode: "0644"
+
+# present sur le cerveur
+# - name: Déployer la clé privée
+#   ansible.builtin.copy:
+#     src: "{{ playbook_dir }}/files/{{ server_name }}/{{ server_name }}.key"
+#     dest: "{{ ssl_dir }}/{{ server_name }}.key"
+#     owner: root
+#     group: nginx
+#     mode: "0640"
+
+- name: Déployer la configuration nginx du vhost {{ server_name }}
+  ansible.builtin.template:
+    src: vhost.conf.j2
+    dest: "/etc/nginx/conf.d/{{ container_name }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Vérifier la configuration nginx
+  ansible.builtin.command: nginx -t
+  changed_when: false
+
+- name: Activer et démarrer nginx
+  ansible.builtin.systemd:
+    name: nginx
+    enabled: true
+    state: started

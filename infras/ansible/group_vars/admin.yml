@@ -1,0 +1,17 @@
+---
+app_name: admin
+server_name: vecu-etudiant-admin-2.mines-ales.fr
+ssl_dir: "/etc/ssl/{{ server_name }}"
+container_name: rex-admin
+container_image: ghcr.io/ales-imt/rex-admin:latest
+container_port: 8121
+app_dir: /home/userdfx/rex-admin
+config_dest_in_container: /opt/rex-admin/conf/config.yaml
+ca_cert_container_path: /opt/rex-admin/certs/ca.crt
+
+postgres_host: "{{ postgres_host }}"
+postgres_port: "{{ postgres_port }}"
+postgres_db: "{{ postgres_db }}"
+mariadb_host: "{{ mariadb_host }}"
+mariadb_port: "{{ mariadb_port }}"
+mariadb_database: "{{ mariadb_database }}"

@@ -1,0 +1,44 @@
+database:
+  host: {{ postgres_host }}
+  port: {{ postgres_port }}
+  user: {{ postgres_user }}
+  password: {{ postgres_password }}
+  name: {{ postgres_db }}
+
+mariaDB:
+  host: {{ mariadb_host }}
+  port: {{ mariadb_port }}
+  user: {{ mariadb_user }}
+  password: {{ mariadb_password }}
+  database: {{ mariadb_database }}
+
+server:
+  host: localhost
+  port: 3333
+
+jwt:
+  secret: {{ jwt_secret }}
+  accessTokenExpiresIn: 15m
+  refreshTokenExpiresIn: 2160h
+
+ldap:
+  url: ldap://ldap.mines-ales.fr:389
+  baseDN: dc=ema,dc=fr
+
+ia:
+  provider: rack
+
+ollama:
+  baseURL: ""
+  model: mistral-nemo
+
+ragarenn:
+  baseURL: https://ragarenn.eskemm-numerique.fr/sso/ch@t
+  apiKey: ""
+  model: RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic
+
+rack:
+  baseURL: https://159.31.247.10
+  model: mistral-small:latest
+  apiKey: {{ rack_api_key }}
+  caCertPath: /opt/rex-admin/certs/ca.crt

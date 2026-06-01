@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { apiInstance } from '@/services/api';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { CalendarProvider, WeekCalendar } from 'react-native-calendars';
 import { UpdateSources } from 'react-native-calendars/src/expandableCalendar/commons';
 import CalendarContext from 'react-native-calendars/src/expandableCalendar/Context';
@@ -69,6 +69,12 @@ function getMonday(dateStr: string): string {
 function getSunday(mondayStr: string): string {
   const d = parseLocal(mondayStr);
   d.setDate(d.getDate() + 6);
+  return fmtLocal(d);
+}
+
+function shiftWeek(mondayStr: string, delta: number): string {
+  const d = parseLocal(mondayStr);
+  d.setDate(d.getDate() + delta * 7);
   return fmtLocal(d);
 }
 
@@ -244,9 +250,21 @@ export const ProgrammeScreen = () => {
         <ZenBackground />
         <CalendarProvider date={selected} onDateChanged={setSelected}>
           <View style={[styles.calendarCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
-            <TouchableOpacity style={styles.monthLabel} onPress={() => setMonthPickerVisible(true)}>
-              <Text style={[styles.monthLabelText, { color: colors.textPrimary }]}>{displayMonth} ▾</Text>
-            </TouchableOpacity>
+            <View style={styles.monthHeader}>
+              {Platform.OS === 'web' && (
+                <TouchableOpacity onPress={() => setWeekStart(w => shiftWeek(w, -1))}>
+                  <Text style={[styles.weekArrow, { color: colors.tint }]}>‹</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.monthLabel} onPress={() => setMonthPickerVisible(true)}>
+                <Text style={[styles.monthLabelText, { color: colors.textPrimary }]}>{displayMonth} ▾</Text>
+              </TouchableOpacity>
+              {Platform.OS === 'web' && (
+                <TouchableOpacity onPress={() => setWeekStart(w => shiftWeek(w, 1))}>
+                  <Text style={[styles.weekArrow, { color: colors.tint }]}>›</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <WeekCalendar
               markedDates={markedDates}
               theme={calendarTheme}
@@ -334,6 +352,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   todayBtnText: { fontSize: 12, fontWeight: '600' },
+  monthHeader: { flexDirection: 'row', alignItems: 'center', paddingTop: 8, paddingBottom: 2 },
+  weekArrow: { fontSize: 24, paddingHorizontal: 10 },
   monthLabel: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 2 },
   monthLabelText: { fontSize: 14, fontWeight: '600' },
   modalOverlay: {
