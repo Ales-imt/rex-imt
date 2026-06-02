@@ -3,6 +3,7 @@ package reponse
 import (
 	"back-rex-common/pkg/services"
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -19,7 +20,7 @@ type ChatMessage struct {
 }
 
 func GetChatHistory(w http.ResponseWriter, r *http.Request) {
-	pseudo := r.Header.Get("X-Pseudo")
+	pseudo := services.GetPseudo(r)
 	if pseudo == "" {
 		services.InvalidRequestError(w, r, "pseudo requis", services.NO_INFORMATION, nil)
 		return
@@ -45,7 +46,7 @@ func GetChatHistory(w http.ResponseWriter, r *http.Request) {
 		WHERE f.pseudo = $1 AND r.cree_le >= $2
 		ORDER BY 4 ASC
 	`
-
+	fmt.Printf("Executing query with pseudo=%s (%x) and since=%s\n", pseudo, pseudo, since.Format(time.RFC3339))
 	pgCtx := services.GetPgCtx(r.Context())
 	rows, err := pgCtx.Db.Query(context.Background(), query, pgtype.Text{String: pseudo, Valid: true}, since)
 	if err != nil {

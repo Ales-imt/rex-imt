@@ -214,7 +214,7 @@ export default function ChatScreen() {
           const pseudo = await getPseudo();
           if (!pseudo || cancelled) return;
           const res = await apiInstance.get<ChatItem[]>('/reponse/history', {
-            headers: { 'X-Pseudo': pseudo },
+            headers: { 'X-Pseudo': encodeURIComponent(pseudo) },
             params: { months: String(months) },
           });
           if (!cancelled) {
@@ -256,7 +256,7 @@ export default function ChatScreen() {
     try {
       const pseudo = await getPseudo();
       if (!pseudo) return;
-      await apiInstance.delete(`/feedback/${messageId}`, { headers: { 'X-Pseudo': pseudo } });
+      await apiInstance.delete(`/feedback/${messageId}`, { headers: { 'X-Pseudo': encodeURIComponent(pseudo) } });
       setMessages(prev => prev.map(m =>
         m.id === messageId
           ? { ...m, text: "[contenu supprimé à la demande de l'auteur]" }
