@@ -2,8 +2,10 @@ package services
 
 import (
 	"net/http"
+	"net/url"
 	"regexp"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -59,6 +61,24 @@ func IsValidEmail(identifiant string) bool {
 	// Expression régulière simple pour valider un email
 	var re = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 	return re.MatchString(identifiant)
+}
+
+// GetPseudo lit le header X-Pseudo.
+// Cas 1 : valeur percent-encodée (encodeURIComponent côté client) → décodée proprement.
+// Cas 2 : fallback latin-1 pour anciens clients (0xe8 → è).
+func GetPseudo(r *http.Request) string {
+	s := r.Header.Get("X-Pseudo")
+	if decoded, err := url.PathUnescape(s); err == nil {
+		return decoded
+	}
+	if !utf8.ValidString(s) {
+		runes := make([]rune, len(s))
+		for i, b := range []byte(s) {
+			runes[i] = rune(b)
+		}
+		return string(runes)
+	}
+	return s
 }
 
 func CreateCookie(name string, path string, expires time.Time, value string) http.Cookie {
