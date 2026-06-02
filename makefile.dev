@@ -1,0 +1,63 @@
+.PHONY: infra-dev docker-dev liquibase-dev start stop start-admin stop-admin start-eleve stop-eleve ldap-start ldap-reset
+
+# ── Infra ─────────────────────────────────────────────────────────────────────
+
+infra-dev: docker-dev liquibase-dev
+
+docker-dev:
+	@echo "--- 🐳 Démarrage des conteneurs Docker ---"
+	cd $(DOCKER_DIR) && docker compose -f compose.yaml up -d
+
+	@echo "--- 🗑️ suppression de la bd db_rex ---"
+	docker exec -i postgres-16.10-alpine-rex psql -U postgres -c "DROP DATABASE IF EXISTS db_rex;"
+	@echo "--- 🆕 création de la bd db_rex ---"
+	docker exec -i postgres-16.10-alpine-rex psql -U postgres -c "CREATE DATABASE db_rex;"
+	@echo "--- 🚀 restitue la bd ---"
+	docker cp ./infras/devedb_backup.dump postgres-16.10-alpine-rex:/tmp/devedb_backup.dump
+	@echo "--- 🚀 restaure la bd ---"
+	docker exec -i postgres-16.10-alpine-rex pg_restore --no-owner -U postgres -d db_rex /tmp/devedb_backup.dump
+
+liquibase-dev:
+	@echo "--- 🚀 Application des migrations Liquibase ---"
+	mkdir -p $(INFRA_DIR)/liquibase/liquibase_libs
+	cd $(INFRA_DIR)/liquibase/liquibase_libs && wget -nc https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.8/postgresql-42.7.8.jar || true
+	@echo "--- synchronize la bd et liquibase ---"
+	cd $(INFRA_DIR)/liquibase && ./liquibase-dev.sh changelogSyncToTag v0.0.0
+	@echo "--- 🏗️ migrations pré-suppression user_id (promotion, groupe, strongbox) ---"
+	cd $(INFRA_DIR)/liquibase && ./liquibase-dev.sh updateToTag pre-drop-user-id
+	@echo "--- 🚀 mise à jour des strongBox ---"
+	cd $(INFRA_DIR)/migration && go build
+	cd $(INFRA_DIR)/migration && ./migration
+	@echo "--- 🗑️ suppression user_id + mise à jour trigger ---"
+	cd $(INFRA_DIR)/liquibase && ./liquibase-dev.sh update
+
+# ── Conteneurs locaux ─────────────────────────────────────────────────────────
+
+start: ldap-start start-admin start-eleve
+
+stop: ldap-reset stop-admin stop-eleve
+
+start-admin:
+	$(RUN_DIR)/dev-start-admin.sh
+
+stop-admin:
+	@echo "--- 🛑 Arrêt du container admin ---"
+	docker rm -f $(ADMIN_CONTAINER) 2>/dev/null || true
+
+start-eleve:
+	$(RUN_DIR)/dev-start-eleve.sh
+
+stop-eleve:
+	@echo "--- 🛑 Arrêt du container élève ---"
+	docker rm -f $(ELEVE_CONTAINER) 2>/dev/null || true
+
+ldap-start:
+	@echo "--- 🔑 Démarrage du LDAP local ---"
+	cd $(DOCKER_DIR) && docker compose up -d openldap
+	@echo "--- ✅ LDAP disponible sur ldap://localhost:3890 (dc=ema,dc=fr) ---"
+
+ldap-reset:
+	@echo "--- 🗑️ Réinitialisation du LDAP local ---"
+	cd $(DOCKER_DIR) && docker compose rm -sf openldap
+	docker volume rm imt-rex_openldap-data imt-rex_openldap-config 2>/dev/null || true
+	@echo "--- ✅ Volumes supprimés — relancer 'make ldap-start' ---"

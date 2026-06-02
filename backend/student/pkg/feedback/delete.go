@@ -9,7 +9,7 @@ import (
 )
 
 func anonymizeFeedbackHandler(w http.ResponseWriter, r *http.Request) {
-	pseudo := r.Header.Get("X-Pseudo")
+	pseudo := services.GetPseudo(r)
 	if pseudo == "" {
 		services.InvalidRequestError(w, r, "pseudo requis", services.NO_INFORMATION, nil)
 		return
