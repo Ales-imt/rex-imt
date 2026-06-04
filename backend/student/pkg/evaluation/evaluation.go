@@ -96,7 +96,7 @@ func sessionDone(date, hf string, now time.Time) bool {
 
 func getMatiere(connector programme.ProgrammeConnector) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		pseudo := r.Header.Get("X-Anon-Id")
+		pseudo := services.GetPseudo(r)
 		ctx := context.Background()
 
 		userID := auth.GetSecurityUserId(r.Context())
@@ -176,7 +176,7 @@ func getMatiere(connector programme.ProgrammeConnector) http.HandlerFunc {
 func SubmitEvaluation(agePublicKey string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Identifiant anonyme transmis par le client (jamais lié au serveur d'auth)
-		pseudo := r.Header.Get("X-Anon-Id")
+		pseudo := services.GetPseudo(r)
 		if pseudo == "" {
 			services.InvalidRequestError(w, r, "pseudo requis", services.NO_INFORMATION, nil)
 			return
@@ -197,10 +197,20 @@ func SubmitEvaluation(agePublicKey string) http.HandlerFunc {
 		queries := gen.New(pgCtx.Db)
 		ctx := context.Background()
 
+		// Résoudre l'external_id (CO webdfd) en surrogate matiere.id pour l'année courante
+		matiereID, err := queries.GetMatiereIDByExternalAndAnnee(ctx, gen.GetMatiereIDByExternalAndAnneeParams{
+			ExternalID: req.MatiereID,
+			Annee:      service.AcademicYear(time.Now()),
+		})
+		if err != nil {
+			services.InvalidRequestError(w, r, "matière introuvable pour l'année en cours", services.NO_INFORMATION, nil)
+			return
+		}
+
 		// Vérification anti-doublon avant toute insertion
 		alreadySubmitted, err := queries.EvalSessionExists(ctx, gen.EvalSessionExistsParams{
 			Pseudo:    pseudo,
-			MatiereID: req.MatiereID,
+			MatiereID: matiereID,
 		})
 		if err != nil {
 			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
@@ -225,7 +235,7 @@ func SubmitEvaluation(agePublicKey string) http.HandlerFunc {
 		// 1 — Session (écran 0)
 		sessionID, err := qtx.InsertEvalSession(ctx, gen.InsertEvalSessionParams{
 			Pseudo:           pseudo,
-			MatiereID:        req.MatiereID,
+			MatiereID:        matiereID,
 			FormatSuivi:      req.FormatSuivi,
 			TendanceSemestre: req.TendanceSemestre,
 			Assiduite:        req.Assiduite,
@@ -407,14 +417,14 @@ type SessionDetailResponse struct {
 
 func getSessionDetail() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		pseudo := r.Header.Get("X-Anon-Id")
+		pseudo := services.GetPseudo(r)
 		if pseudo == "" {
 			services.InvalidRequestError(w, r, "pseudo requis", services.NO_INFORMATION, nil)
 			return
 		}
 
 		matiereIDStr := r.URL.Query().Get("matiere_id")
-		matiereID, err := strconv.ParseInt(matiereIDStr, 10, 64)
+		externalID, err := strconv.ParseInt(matiereIDStr, 10, 64)
 		if err != nil {
 			services.InvalidRequestError(w, r, "matiere_id invalide", services.NO_INFORMATION, nil)
 			return
@@ -423,6 +433,15 @@ func getSessionDetail() http.HandlerFunc {
 		pgCtx := services.GetPgCtx(r.Context())
 		queries := gen.New(pgCtx.Db)
 		ctx := context.Background()
+
+		matiereID, err := queries.GetMatiereIDByExternalAndAnnee(ctx, gen.GetMatiereIDByExternalAndAnneeParams{
+			ExternalID: externalID,
+			Annee:      service.AcademicYear(time.Now()),
+		})
+		if err != nil {
+			http.Error(w, "matière introuvable", http.StatusNotFound)
+			return
+		}
 
 		row, err := queries.GetSessionByMatiere(ctx, gen.GetSessionByMatiereParams{
 			Pseudo:    pseudo,
@@ -457,7 +476,7 @@ func getSessionDetail() http.HandlerFunc {
 
 func deleteSession() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		pseudo := r.Header.Get("X-Anon-Id")
+		pseudo := services.GetPseudo(r)
 		if pseudo == "" {
 			services.InvalidRequestError(w, r, "pseudo requis", services.NO_INFORMATION, nil)
 			return

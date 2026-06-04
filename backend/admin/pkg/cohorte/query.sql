@@ -1,5 +1,5 @@
 -- name: GetPromotionById :one
-SELECT * FROM promotion where id = $1;
+SELECT id, name FROM promotion where id = $1;
 
 -- name: CreationPromotion :exec
 INSERT INTO promotion (id, name) 
@@ -8,7 +8,7 @@ SET
     name = EXCLUDED.name;
 
 -- name: GetPromotions :many
-SELECT * FROM promotion
+SELECT id, name FROM promotion
     ORDER BY name;
 
 -- name: GetGroupe :many

@@ -55,7 +55,6 @@ func main() {
 		log.Fatal("Erreur chargement config YAML :", err)
 	}
 
-	fmt.Printf("config: %+v\n", cfg)
 	r.Use(services.MakeDatabasePgMiddleware(&cfg.Database))
 	auth.StartRefreshTokenCleanup(&cfg.Database)
 

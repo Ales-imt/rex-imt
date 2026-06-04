@@ -8,7 +8,7 @@ import (
 
 func RouteEvaluation(r chi.Router, connector ia.IAConnector) {
 	r.Get("/annees", GetAnnees)
-	r.Get("/annees/{anneeId}/promotions", GetPromotionTree)
+	r.Get("/promotions", GetPromotionTree)
 	r.Get("/matieres/{matiereId}/stats", GetMatiereStats)
 	r.Get("/matieres/{matiereId}/verbatims", GetVerbatims)
 	r.Post("/matieres/{matiereId}/synthese", GenerateSynthese(connector))

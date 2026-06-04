@@ -37,7 +37,7 @@ export default function CoursListScreen() {
       setError('');
 
       getOrCreatePseudo()
-        .then((anonId) => apiInstance.get<MatiereSummary[]>('/evaluation/matieres', { headers: { 'X-Anon-Id': anonId } }))
+        .then((pseudo) => apiInstance.get<MatiereSummary[]>('/evaluation/matieres', { headers: { 'X-Pseudo': pseudo } }))
         .then(({ data }) => {
           if (!active) return;
           setCours(data ?? []);
