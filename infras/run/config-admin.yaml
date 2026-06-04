@@ -17,7 +17,7 @@ server:
   port: 3333
 
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET_ADMIN}
   accessTokenExpiresIn: 15m
   refreshTokenExpiresIn: 2160h
 
@@ -39,7 +39,7 @@ ragarenn:
   model: RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic # ilaas/gemma-4-31b  RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic
 
 rack:
-  baseURL: https://159.31.247.10
+  baseURL: https://${IP_SERVEUR_IA_DEV}
   model: mistral-small:latest
   apiKey: ${RACK_API_KEY}
   caCertPath: /opt/rex-admin/certs/ca.crt

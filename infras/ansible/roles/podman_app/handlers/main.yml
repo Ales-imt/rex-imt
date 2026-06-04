@@ -1,0 +1,9 @@
+---
+- name: Restart container
+  ansible.builtin.systemd:
+    name: "{{ container_name }}"
+    state: restarted
+    scope: user
+  become_user: "{{ app_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[app_user][1] }}"

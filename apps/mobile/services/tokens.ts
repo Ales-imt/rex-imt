@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
@@ -22,10 +23,7 @@ const storage = {
 };
 
 export function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = Math.random() * 16 | 0;
-    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-  });
+  return Crypto.randomUUID();
 }
 
 // ─── Liste de mots français simples du quotidien ─────────────────────────────
@@ -61,8 +59,12 @@ const WORDS = [
 ];
 
 export function generatePseudo(): string {
-  const shuffled = [...WORDS].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 4).join(' . ');
+  const arr = [...WORDS];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.slice(0, 4).join(' . ');
 }
 
 export async function savePseudo(pseudo: string): Promise<void> {

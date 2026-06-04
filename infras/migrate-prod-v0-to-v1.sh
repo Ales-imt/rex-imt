@@ -19,6 +19,7 @@ POSTGRES_PORT=$(get POSTGRES_PORT)
 POSTGRES_USER=$(get POSTGRES_USER)
 POSTGRES_PASSWORD=$(get POSTGRES_PASSWORD)
 POSTGRES_DB=$(get POSTGRES_DB)
+AGE_PUBLIC_KEY=$(get AGE_PUBLIC_KEY)
 
 export PGPASSWORD="$POSTGRES_PASSWORD"
 
@@ -64,6 +65,7 @@ sed \
     -e "s|\${POSTGRES_USER}|$POSTGRES_USER|g" \
     -e "s|\${POSTGRES_PASSWORD}|$POSTGRES_PASSWORD|g" \
     -e "s|\${POSTGRES_DB}|$POSTGRES_DB|g" \
+    -e "s|\${AGE_PUBLIC_KEY}|$AGE_PUBLIC_KEY|g" \
     "$INFRA_DIR/migration/config-prod.yaml" > "$MIGRATION_CONFIG"
 cd "$INFRA_DIR/migration" && go build
 cd "$INFRA_DIR/migration" && ./migration --config config-prod-runtime.yaml
