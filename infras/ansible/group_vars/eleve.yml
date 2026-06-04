@@ -15,3 +15,7 @@ postgres_db: "{{ postgres_db }}"
 mariadb_host: "{{ mariadb_host }}"
 mariadb_port: "{{ mariadb_port }}"
 mariadb_database: "{{ mariadb_database }}"
+
+jwt_secret: "{{ jwt_secret_eleve }}"
+
+age_public_key: "{{ age_public_key }}"

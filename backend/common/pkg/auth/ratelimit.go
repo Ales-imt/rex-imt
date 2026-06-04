@@ -2,7 +2,6 @@ package auth
 
 import (
 	"back-rex-common/pkg/services"
-	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -64,10 +63,13 @@ var loginRateLimiter = newRateLimiter(rate.Every(time.Minute/5), 5)
 
 func RateLimitLogin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			ip = r.RemoteAddr
+
+		ip := r.Header.Get("X-Real-IP")
+		if ip == "" {
+			services.AuthenticationError(w, r, "pas de header X-Real-IP", services.NO_INFORMATION, nil)
+			return
 		}
+
 		if !loginRateLimiter.get(ip).Allow() {
 			services.AuthenticationError(w, r, "trop de tentatives, réessayez plus tard", services.NO_INFORMATION, nil)
 			return

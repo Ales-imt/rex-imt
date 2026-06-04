@@ -38,6 +38,7 @@
     owner: "{{ app_user }}"
     group: "{{ app_user }}"
     mode: "0644"
+  notify: Restart container
 
 - name: Déployer secrets.env
   ansible.builtin.template:
@@ -46,6 +47,7 @@
     owner: "{{ app_user }}"
     group: "{{ app_user }}"
     mode: "0600"
+  notify: Restart container
 
 - name: Créer le répertoire Quadlet pour {{ app_user }}
   ansible.builtin.file:
@@ -67,7 +69,8 @@
     cmd: "podman pull {{ container_image }}"
   become_user: "{{ app_user }}"
   register: pull_result
-  changed_when: "'Copying' in pull_result.stdout"
+  changed_when: "'Copying' in pull_result.stderr"
+  notify: Restart container
 
 - name: Déployer le fichier Quadlet {{ container_name }}.container
   ansible.builtin.template:

@@ -73,9 +73,8 @@ func Security(
 				context.Role = &role
 			}
 
-			if allowedRoles != nil && context.Role != nil {
-				// Vérifie le rôle
-				if !containsRole(*context.Role, allowedRoles) {
+			if allowedRoles != nil {
+				if context.Role == nil || !containsRole(*context.Role, allowedRoles) {
 					services.AuthorizationError(w, r, "droit insuffissant", services.NO_INFORMATION, nil)
 					return
 				}
