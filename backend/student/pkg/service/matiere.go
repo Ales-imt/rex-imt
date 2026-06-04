@@ -22,6 +22,16 @@ const (
 	matiereRetryDelay = 5 * time.Minute
 )
 
+// AcademicYear retourne l'année de début de l'année académique courante.
+// Les données étant réinitialisées en juillet, juillet marque le début de la nouvelle année.
+// Ex : janvier-juin 2025 → 2024 ; juillet-décembre 2025 → 2025.
+func AcademicYear(now time.Time) int32 {
+	if now.Month() >= time.July {
+		return int32(now.Year())
+	}
+	return int32(now.Year() - 1)
+}
+
 func parseMatiereKV(line string) map[string]string {
 	parts := strings.Split(strings.TrimSpace(line), ";")
 	m := make(map[string]string, len(parts)/2)
@@ -64,6 +74,7 @@ func syncMatieres(ctx context.Context, url string, db *pgxpool.Pool) error {
 		return err
 	}
 
+	annee := AcademicYear(time.Now())
 	q := gen.New(db)
 
 	var count int
@@ -96,23 +107,25 @@ func syncMatieres(ctx context.Context, url string, db *pgxpool.Pool) error {
 				pid, err := q.UpsertPeriode(ctx, gen.UpsertPeriodeParams{
 					Name:        pname,
 					PromotionID: promotionID,
+					Annee:       annee,
 				})
 				if err != nil {
-					return fmt.Errorf("periode: upsert %q promotion %d: %w", pname, promotionID, err)
+					return fmt.Errorf("periode: upsert %q promotion %d annee %d: %w", pname, promotionID, annee, err)
 				}
 				periodeID = pgtype.Int8{Int64: pid, Valid: true}
 			}
 		}
 
 		if err = q.UpsertMatiere(ctx, gen.UpsertMatiereParams{
-			ID:        id,
-			Name:      nom,
-			PeriodeID: periodeID,
+			ExternalID: id,
+			Name:       nom,
+			PeriodeID:  periodeID,
+			Annee:      annee,
 		}); err != nil {
-			return fmt.Errorf("matiere: upsert id=%d: %w", id, err)
+			return fmt.Errorf("matiere: upsert external_id=%d annee=%d: %w", id, annee, err)
 		}
 		count++
 	}
-	log.Printf("matiere: %d matières synchronisées", count)
+	log.Printf("matiere: %d matières synchronisées (annee=%d)", count, annee)
 	return nil
 }

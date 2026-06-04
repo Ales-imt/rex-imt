@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { apiInstance } from '../../services/api';
-import type { AnneeAcademique, EvalStats, PromotionTree, SyntheseIA, VerbatimsPage } from './Evaluation';
+import type { EvalStats, PromotionTree, SyntheseIA, VerbatimsPage } from './Evaluation';
 import { ENDPOINT_EVALUATION } from './def';
 
 interface AsyncState<T> {
@@ -45,18 +45,18 @@ function useAsync<T>(fetchFn: () => Promise<T>, deps: unknown[]) {
 }
 
 export function useAnnees() {
-    return useAsync<AnneeAcademique[]>(
-        () => apiInstance.get<AnneeAcademique[]>(`${ENDPOINT_EVALUATION}/annees`).then(r => r.data),
+    return useAsync<number[]>(
+        () => apiInstance.get<number[]>(`${ENDPOINT_EVALUATION}/annees`).then(r => r.data),
         [],
     );
 }
 
-export function usePromotionTree(anneeId: number | null) {
+export function usePromotionTree(annee: number | null) {
     return useAsync<PromotionTree[]>(
-        () => anneeId != null
-            ? apiInstance.get<PromotionTree[]>(`${ENDPOINT_EVALUATION}/annees/${anneeId}/promotions`).then(r => r.data)
+        () => annee != null
+            ? apiInstance.get<PromotionTree[]>(`${ENDPOINT_EVALUATION}/promotions?annee=${annee}`).then(r => r.data)
             : Promise.resolve([]),
-        [anneeId],
+        [annee],
     );
 }
 

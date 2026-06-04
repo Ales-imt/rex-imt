@@ -68,7 +68,7 @@ func IsValidEmail(identifiant string) bool {
 // Cas 2 : fallback latin-1 pour anciens clients (0xe8 → è).
 func GetPseudo(r *http.Request) string {
 	s := r.Header.Get("X-Pseudo")
-	if decoded, err := url.PathUnescape(s); err == nil {
+	if decoded, err := url.PathUnescape(s); err == nil && utf8.ValidString(decoded) {
 		return decoded
 	}
 	if !utf8.ValidString(s) {
