@@ -22,9 +22,14 @@ mariadb_database: "$(get MARIADB_DB)"
 mariadb_user: "$(get MARIADB_USER)"
 mariadb_password: "$(get MARIADB_PASSWORD)"
 
-jwt_secret: "$(get JWT_SECRET)"
+jwt_secret_admin: "$(get JWT_SECRET_ADMIN)"
+jwt_secret_eleve: "$(get JWT_SECRET_ELEVE)"
 
 rack_api_key: "$(get RACK_API_KEY)"
+
+ip_serveur_ia_prod: "$(get IP_SERVEUR_IA_PROD)"
+
+age_public_key: "$(get AGE_PUBLIC_KEY)"
 
 EOF
 

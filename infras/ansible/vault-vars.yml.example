@@ -1,9 +1,0 @@
-# Copier en vault-vars.yml et chiffrer avec : ansible-vault encrypt vault-vars.yml
----
-github_docker_token: "ghp_XXXXXXXXXXXXXXXXXXXX"
-postgres_user: "rex_user"
-postgres_password: "CHANGEME"
-mariadb_user: "rex_user"
-mariadb_password: "CHANGEME"
-jwt_secret: "CHANGEME"
-rack_api_key: "CHANGEME"

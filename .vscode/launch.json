@@ -6,7 +6,7 @@
       "type": "go",
       "request": "launch",
       "mode": "auto",
-      "program": "${file}"
+      "program": "${file}",
     },
     {
       "name": "Debug rex-admin",
@@ -27,7 +27,8 @@
       "args": ["${workspaceFolder}/backend/student/cmd/config.yaml"],
       "cwd": "${workspaceFolder}/backend/student",
       "envFile": "${workspaceFolder}/.vscode/secrets-dev.env"
-    }
+    },
+
   ]
 }
 

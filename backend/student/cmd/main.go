@@ -87,10 +87,6 @@ func main() {
 
 	// version api0
 	r.Route("/api/v2", func(r chi.Router) {
-		r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-			log.Println("Ping reçu api 1!")
-			w.Write([]byte("pong"))
-		})
 		r.Get("/health", health.MakeHealthHandler(
 			health.Checker{
 				Name: "postgres",
