@@ -57,8 +57,6 @@ func main() {
 		log.Fatal("Erreur chargement config YAML :", err)
 	}
 
-	fmt.Printf("config: %+v\n", cfg)
-
 	configDir := filepath.Dir(configPath)
 	if !filepath.IsAbs(cfg.Rack.CaCertPath) {
 		cfg.Rack.CaCertPath = filepath.Join(configDir, cfg.Rack.CaCertPath)

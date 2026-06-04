@@ -82,7 +82,7 @@ export default function EvalDetailScreen() {
     getOrCreatePseudo()
       .then((pseudo) =>
         apiInstance.get<SessionDetail>('/evaluation/session', {
-          headers: { 'X-Anon-Id': pseudo },
+          headers: { 'X-Pseudo': pseudo },
           params: { matiere_id: matiereId },
         })
       )
@@ -109,7 +109,7 @@ export default function EvalDetailScreen() {
     try {
       const pseudo = await getOrCreatePseudo();
       await apiInstance.delete(`/evaluation/session/${session.session_id}`, {
-        headers: { 'X-Anon-Id': pseudo },
+        headers: { 'X-Pseudo': pseudo },
       });
       router.replace('/evaluation');
     } catch {

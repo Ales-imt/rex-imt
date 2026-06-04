@@ -23,11 +23,16 @@ databaseChangeLog:
                   type: bigint
                   constraints:
                     nullable: false
+              - column:
+                  name: annee
+                  type: integer
+                  constraints:
+                    nullable: false
         - addUniqueConstraint:
             tableName: periode
             schemaName: public
-            columnNames: name, promotion_id
-            constraintName: uq_periode_name_promotion
+            columnNames: name, promotion_id, annee
+            constraintName: uq_periode_name_promotion_annee
         - addForeignKeyConstraint:
             baseTableName: periode
             baseTableSchemaName: public
