@@ -1,11 +1,3 @@
-export interface AnneeAcademique {
-    id: number;
-    libelle: string;
-    debut: string | null;
-    fin: string | null;
-    active: boolean;
-}
-
 export interface MatiereStatus {
     id: number;
     name: string;

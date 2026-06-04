@@ -16,20 +16,6 @@ databaseChangeLog:
               - column:
                   name: name
                   type: varchar(255)
-              - column:
-                  name: annee_academique_id
-                  type: bigint
-                  constraints:
-                    nullable: true
-        - addForeignKeyConstraint:
-            baseTableName: promotion
-            baseTableSchemaName: public
-            baseColumnNames: annee_academique_id
-            referencedTableName: annee_academique
-            referencedTableSchemaName: public
-            referencedColumnNames: id
-            constraintName: promotion_annee_academique_id_fkey
-            onDelete: SET NULL
       rollback:
         - dropTable:
             tableName: promotion

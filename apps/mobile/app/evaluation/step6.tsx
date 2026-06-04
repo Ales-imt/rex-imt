@@ -38,7 +38,7 @@ export default function EvalStep6Screen() {
     if (!canSubmit || loading) return;
     setLoading(true);
     try {
-      const anonId = await getOrCreatePseudo();
+      const pseudo = await getOrCreatePseudo();
       await apiInstance.post(
         '/evaluation',
         {
@@ -62,7 +62,7 @@ export default function EvalStep6Screen() {
           nps:                     state.nps,
           verbatim_nps:            state.verbatimNps,
         },
-        { headers: { 'X-Anon-Id': anonId } }
+        { headers: { 'X-Pseudo': pseudo } }
       );
       reset();
       router.replace('/evaluation');

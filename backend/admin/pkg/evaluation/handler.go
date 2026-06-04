@@ -20,14 +20,6 @@ import (
 
 // ─── Response types ───────────────────────────────────────────────────────────
 
-type anneeAcademiqueResp struct {
-	ID      int64   `json:"id"`
-	Libelle string  `json:"libelle"`
-	Debut   *string `json:"debut"`
-	Fin     *string `json:"fin"`
-	Active  bool    `json:"active"`
-}
-
 type matiereStatus struct {
 	ID           int64  `json:"id"`
 	Name         string `json:"name"`
@@ -178,37 +170,42 @@ func verbatimFromRow(row GetVerbatimsByMatiereRow) verbatimResp {
 
 func GetAnnees(w http.ResponseWriter, r *http.Request) {
 	q := New(services.GetPgCtx(r.Context()).Db)
-	rows, err := q.GetAnneesAcademiques(context.Background())
+	annees, err := q.GetDistinctAnnees(context.Background())
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}
-
-	result := make([]anneeAcademiqueResp, len(rows))
-	for i, a := range rows {
-		result[i] = anneeAcademiqueResp{
-			ID:     a.ID,
-			Active: a.Active,
-			Debut:  fmtTimestamp(a.Debut),
-			Fin:    fmtTimestamp(a.Fin),
-		}
-		if a.Libelle.Valid {
-			result[i].Libelle = a.Libelle.String
-		}
+	if annees == nil {
+		annees = []int32{}
 	}
-	render.JSON(w, r, result)
+	render.JSON(w, r, annees)
 }
 
 func GetPromotionTree(w http.ResponseWriter, r *http.Request) {
-	anneeIDStr := chi.URLParam(r, "anneeId")
-	anneeID, err := strconv.ParseInt(anneeIDStr, 10, 64)
-	if err != nil {
-		services.InvalidRequestError(w, r, "invalid anneeId", services.NO_INFORMATION, nil)
-		return
+	anneeStr := r.URL.Query().Get("annee")
+	var annee int32
+	if anneeStr != "" {
+		v, err := strconv.ParseInt(anneeStr, 10, 32)
+		if err != nil {
+			services.InvalidRequestError(w, r, "annee invalide", services.NO_INFORMATION, nil)
+			return
+		}
+		annee = int32(v)
 	}
 
 	q := New(services.GetPgCtx(r.Context()).Db)
-	rows, err := q.GetPromotionTreeByAnnee(context.Background(), pgtype.Int8{Int64: anneeID, Valid: true})
+	ctx := context.Background()
+
+	if annee == 0 {
+		annees, err := q.GetDistinctAnnees(ctx)
+		if err != nil || len(annees) == 0 {
+			render.JSON(w, r, []promotionTree{})
+			return
+		}
+		annee = annees[0]
+	}
+
+	rows, err := q.GetAllPromotionTree(ctx, annee)
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return

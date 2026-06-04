@@ -9,9 +9,14 @@ databaseChangeLog:
             columns:
               - column:
                   name: id
-                  type: bigint
+                  type: bigserial
                   constraints:
                     primaryKey: true
+                    nullable: false
+              - column:
+                  name: external_id
+                  type: bigint
+                  constraints:
                     nullable: false
               - column:
                   name: name
@@ -23,7 +28,25 @@ databaseChangeLog:
                   type: bigint
                   constraints:
                     nullable: true
-
+              - column:
+                  name: annee
+                  type: integer
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: matiere
+            schemaName: public
+            columnNames: external_id, annee
+            constraintName: uq_matiere_external_id_annee
+        - addForeignKeyConstraint:
+            baseTableName: matiere
+            baseTableSchemaName: public
+            baseColumnNames: periode_id
+            referencedTableName: periode
+            referencedTableSchemaName: public
+            referencedColumnNames: id
+            constraintName: matiere_periode_id_fkey
+            onDelete: SET NULL
         - addForeignKeyConstraint:
             baseTableName: eval_session
             baseTableSchemaName: public
@@ -47,6 +70,8 @@ databaseChangeLog:
             sql: ALTER TABLE eval_synthese_ia DROP CONSTRAINT IF EXISTS eval_synthese_ia_matiere_id_fkey
         - sql:
             sql: ALTER TABLE eval_session DROP CONSTRAINT IF EXISTS eval_session_matiere_id_fkey
+        - sql:
+            sql: ALTER TABLE matiere DROP CONSTRAINT IF EXISTS matiere_periode_id_fkey
         - dropTable:
             tableName: matiere
             schemaName: public

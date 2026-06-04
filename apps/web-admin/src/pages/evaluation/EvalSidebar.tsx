@@ -12,7 +12,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CircularProgress from '@mui/material/CircularProgress';
 import { useTheme } from '@mui/material/styles';
 import { useAnnees, usePromotionTree } from './useEvaluations';
-import type { AnneeAcademique, SelectedMatiere } from './Evaluation';
+import type { SelectedMatiere } from './Evaluation';
 
 const DOT_COLOR: Record<string, string> = {
     OK:   '#10b981',
@@ -27,22 +27,22 @@ interface Props {
 
 export function EvalSidebar({ selectedMatiereId, onSelectMatiere }: Props) {
     const theme = useTheme();
+
     const { data: annees, loading: anneesLoading } = useAnnees();
+    const [selectedAnnee, setSelectedAnnee] = useState<number | null>(null);
+    const annee = selectedAnnee ?? (annees?.[0] ?? null);
 
-    const activeAnnee = annees?.find(a => a.active) ?? annees?.[0] ?? null;
-    const [selectedAnneeId, setSelectedAnneeId] = useState<number | null>(null);
-
-    const anneeId = selectedAnneeId ?? (activeAnnee?.id ?? null);
-    const { data: tree, loading: treeLoading } = usePromotionTree(anneeId);
+    const { data: tree, loading: treeLoading } = usePromotionTree(annee);
 
     const [selectedPromoId, setSelectedPromoId] = useState<number | null>(null);
     useEffect(() => { setSelectedPromoId(tree?.[0]?.id ?? null); }, [tree]);
 
     const selectedPromo = tree?.find(p => p.id === selectedPromoId) ?? null;
 
-    function handleAnneeChange(a: AnneeAcademique) {
-        setSelectedAnneeId(a.id);
-    }
+    const [expandedPeriodeId, setExpandedPeriodeId] = useState<number | null>(null);
+    useEffect(() => {
+        setExpandedPeriodeId(selectedPromo?.periodes?.[0]?.id ?? null);
+    }, [selectedPromo]);
 
     return (
         <Box sx={{
@@ -59,16 +59,13 @@ export function EvalSidebar({ selectedMatiereId, onSelectMatiere }: Props) {
                     <FormControl size="small" fullWidth>
                         <InputLabel>Année</InputLabel>
                         <Select
-                            value={anneeId ?? ''}
+                            value={annee ?? ''}
                             label="Année"
-                            onChange={e => {
-                                const found = annees?.find(a => a.id === Number(e.target.value));
-                                if (found) handleAnneeChange(found);
-                            }}
+                            onChange={e => setSelectedAnnee(Number(e.target.value))}
                         >
                             {(annees ?? []).map(a => (
-                                <MenuItem key={a.id} value={a.id}>
-                                    {a.libelle}{a.active ? ' ●' : ''}
+                                <MenuItem key={a} value={a}>
+                                    {a}/{a + 1}
                                 </MenuItem>
                             ))}
                         </Select>
@@ -102,7 +99,8 @@ export function EvalSidebar({ selectedMatiereId, onSelectMatiere }: Props) {
                         key={periode.id}
                         disableGutters
                         elevation={0}
-                        defaultExpanded
+                        expanded={expandedPeriodeId === periode.id}
+                        onChange={(_, open) => setExpandedPeriodeId(open ? periode.id : null)}
                         sx={{
                             bgcolor: 'transparent',
                             '&:before': { display: 'none' },
@@ -124,12 +122,15 @@ export function EvalSidebar({ selectedMatiereId, onSelectMatiere }: Props) {
                                 return (
                                     <Box
                                         key={matiere.id}
-                                        onClick={() => onSelectMatiere({
-                                            id: matiere.id,
-                                            name: matiere.name,
-                                            periodeName: periode.name,
-                                            promotionName: selectedPromo!.name,
-                                        })}
+                                        onClick={() => {
+                                            setExpandedPeriodeId(periode.id);
+                                            onSelectMatiere({
+                                                id: matiere.id,
+                                                name: matiere.name,
+                                                periodeName: periode.name,
+                                                promotionName: selectedPromo!.name,
+                                            });
+                                        }}
                                         sx={{
                                             display: 'flex',
                                             alignItems: 'center',
