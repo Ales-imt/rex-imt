@@ -4,7 +4,7 @@
 # Nom du répertoire qui contiendra tous les fichiers (évite la pollution)
 DIR_NAME="mtls_certs"
 # Nom de domaine/CN pour le serveur (doit correspondre à ServerName dans la config TLS)
-SERVER_HOST="159.31.247.10"
+SERVER_HOST="${IP_SERVEUR_IA_PROD:-${IP_SERVEUR_IA_DEV}}"
 # Nom pour le client (CN)
 CLIENT_NAME="mtls-client"
 

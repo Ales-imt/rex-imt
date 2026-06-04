@@ -6,4 +6,4 @@ database:
   name: ${POSTGRES_DB}
 
 age:
-  publicKey:  ${AGE_PUBLIC_KEY}
+  publicKey: ${AGE_PUBLIC_KEY}

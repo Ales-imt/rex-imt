@@ -17,7 +17,7 @@ server:
   port: 3300
 
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET_ELEVE}
   accessTokenExpiresIn: 15m
   refreshTokenExpiresIn: 2160h
 
@@ -27,4 +27,4 @@ ldap:
   baseDN: dc=ema,dc=fr
 
 age:
-  publicKey: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
+  publicKey: ${AGE_PUBLIC_KEY}

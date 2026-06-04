@@ -3,7 +3,6 @@ package reponse
 import (
 	"back-rex-common/pkg/services"
 	"context"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -46,7 +45,6 @@ func GetChatHistory(w http.ResponseWriter, r *http.Request) {
 		WHERE f.pseudo = $1 AND r.cree_le >= $2
 		ORDER BY 4 ASC
 	`
-	fmt.Printf("Executing query with pseudo=%s (%x) and since=%s\n", pseudo, pseudo, since.Format(time.RFC3339))
 	pgCtx := services.GetPgCtx(r.Context())
 	rows, err := pgCtx.Db.Query(context.Background(), query, pgtype.Text{String: pseudo, Valid: true}, since)
 	if err != nil {

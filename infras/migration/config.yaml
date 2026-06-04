@@ -1,9 +1,0 @@
-database:
-  host: localhost
-  port: 5432
-  user: postgres
-  password: root
-  name: db_rex  
-
-age:
-  publicKey: age1czrjv6gfl8yky8efj2x5mc9rcnudvjdrnz49ah496a2shryyx3fqdnfz7s

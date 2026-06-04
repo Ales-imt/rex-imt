@@ -34,7 +34,7 @@ func loadConfig(path string) (*config, error) {
 		return nil, err
 	}
 	var cfg config
-	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+	if err := yaml.Unmarshal([]byte(os.ExpandEnv(string(raw))), &cfg); err != nil {
 		return nil, err
 	}
 	return &cfg, nil
@@ -42,7 +42,7 @@ func loadConfig(path string) (*config, error) {
 
 func main() {
 	var (
-		configPath = flag.String("config", "config.yaml", "chemin du fichier de configuration")
+		configPath = flag.String("config", "config-dev.yaml", "chemin du fichier de configuration")
 		batchSize  = flag.Int("batch", 500, "taille de lot")
 		dryRun     = flag.Bool("dry-run", false, "n'écrit rien en base")
 	)

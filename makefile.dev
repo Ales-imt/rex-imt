@@ -27,7 +27,7 @@ liquibase-dev:
 	cd $(INFRA_DIR)/liquibase && ./liquibase-dev.sh updateToTag pre-drop-user-id
 	@echo "--- 🚀 mise à jour des strongBox ---"
 	cd $(INFRA_DIR)/migration && go build
-	cd $(INFRA_DIR)/migration && ./migration
+	cd $(INFRA_DIR)/migration && set -a && . ../../$(SECRETS_FILE_DEV) && set +a && ./migration
 	@echo "--- 🗑️ suppression user_id + mise à jour trigger ---"
 	cd $(INFRA_DIR)/liquibase && ./liquibase-dev.sh update
 

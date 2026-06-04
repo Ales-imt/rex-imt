@@ -3,13 +3,14 @@ package service
 import (
 	"bytes"
 	"fmt"
+	"net/http"
 
 	"filippo.io/age"
 	"filippo.io/age/armor"
 )
 
 // encryptStrongbox chiffre l'IP et l'ID élève avec la clef publique age fournie.
-func EncryptStrongbox(publicKeyStr string, ip string, studentID int) (string, error) {
+func EncryptStrongbox(publicKeyStr string, r *http.Request, studentID int) (string, error) {
 	recipient, err := age.ParseX25519Recipient(publicKeyStr)
 	if err != nil {
 		return "", fmt.Errorf("clef publique age invalide : %w", err)
@@ -20,6 +21,11 @@ func EncryptStrongbox(publicKeyStr string, ip string, studentID int) (string, er
 	w, err := age.Encrypt(armorWriter, recipient)
 	if err != nil {
 		return "", fmt.Errorf("age encrypt : %w", err)
+	}
+
+	ip := r.Header.Get("X-Real-IP")
+	if ip == "" {
+		return "", fmt.Errorf("le message doit contenit une IP dans le header X-Real-IP")
 	}
 
 	payload := fmt.Sprintf("ip=%s student_id=%d", ip, studentID)

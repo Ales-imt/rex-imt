@@ -7,17 +7,25 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
 )
 
+var testServerURL = func() string {
+	if v := os.Getenv("IP_SERVEUR_IA_DEV"); v != "" {
+		return "https://" + v
+	}
+	log.Fatal("IP_SERVEUR_IA_DEV non définie")
+	return ""
+}()
+
 const (
-	testServerURL = "https://159.31.247.10"
-	testCACert    = "../x509/mtls_certs/ca.crt"
-	testModel     = "mistral-small:latest"
-	secretsEnv    = "../../.vscode/secrets.env"
+	testCACert = "../x509/mtls_certs/ca.crt"
+	testModel  = "mistral-small:latest"
+	secretsEnv = "../../.vscode/secrets.env"
 )
 
 func loadAPIKey(t *testing.T) string {
