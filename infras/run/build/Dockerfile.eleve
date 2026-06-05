@@ -1,0 +1,89 @@
+# Les stages qui ne sont pas ancêtres de la cible sont ignorés.  
+# Donc en --target prod, Docker ne construit pas backend-dev ni dlv-builder. 
+# En --target dev, il ne construit pas backend-prod.
+# definit en fin de fichier 
+
+# ── Stage Go sources (partagé) ───────────────────────────────────────────────
+FROM golang:1.25-alpine AS go-base
+
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+COPY backend/common ./common
+COPY backend/student ./student
+COPY .git ./.git
+
+WORKDIR /app/student
+
+# ── Stage Go backend prod ─────────────────────────────────────────────────────
+FROM go-base AS backend-prod
+
+ARG VERSION
+ARG BUILD_TIME
+RUN VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}" && \
+    BUILD_TIME="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" && \
+    go build -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" -o /rex-eleve-server ./cmd
+
+# ── Stage Go backend dev (symboles de debug) ──────────────────────────────────
+FROM go-base AS backend-dev
+
+RUN go build -gcflags="all=-N -l" -o /rex-eleve-server ./cmd
+
+# ── Stage Delve ───────────────────────────────────────────────────────────────
+FROM golang:1.25-alpine AS dlv-builder
+
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+
+# ── Stage Expo web ────────────────────────────────────────────────────────────
+FROM node:22-alpine AS frontend-builder
+
+WORKDIR /app
+
+COPY apps/mobile/package*.json ./
+RUN npm ci
+
+COPY apps/mobile/ ./
+
+ENV EXPO_PUBLIC_API_BASE=/api/v2
+
+RUN npx expo export --platform web --no-minify
+
+# ── Stage base commune ────────────────────────────────────────────────────────
+FROM alpine:3.21 AS base
+
+RUN apk add --no-cache nginx
+
+RUN addgroup -S rex && adduser -S rex -G rex
+
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
+COPY infras/run/build/nginx-eleve.conf /etc/nginx/nginx.conf
+
+RUN mkdir -p /opt/rex-eleve/conf
+
+RUN chown -R rex:rex /usr/share/nginx/html /var/log/nginx /var/lib/nginx /opt/rex-eleve && \
+    mkdir -p /tmp/client_body /tmp/proxy /tmp/fastcgi /tmp/uwsgi /tmp/scgi && \
+    chown -R rex:rex /tmp/client_body /tmp/proxy /tmp/fastcgi /tmp/uwsgi /tmp/scgi
+
+# ── Target prod ───────────────────────────────────────────────────────────────
+FROM base AS prod
+
+COPY --from=backend-prod /rex-eleve-server /usr/local/bin/rex-eleve-server
+COPY infras/run/build/start-eleve.sh /start.sh
+RUN chmod +x /start.sh
+
+USER rex
+EXPOSE 8080
+CMD ["/start.sh"]
+
+# ── Target dev (debug via Delve) ──────────────────────────────────────────────
+FROM base AS dev
+
+COPY --from=backend-dev /rex-eleve-server /usr/local/bin/rex-eleve-server
+COPY --from=dlv-builder /go/bin/dlv /usr/local/bin/dlv
+COPY infras/run/build/start-eleve-debug.sh /start.sh
+RUN chmod +x /start.sh
+
+USER rex
+EXPOSE 8080 2346
+CMD ["/start.sh"]

@@ -1,3 +1,5 @@
+.DEFAULT_GOAL := all
+
 # --- Variables communes ---
 SECRETS_FILE_DEV=.vscode/secrets-dev.env
 SECRETS_FILE_PROD=.vscode/secrets-prod.env
@@ -25,26 +27,12 @@ include makefile.prod
 
 .PHONY: all db-to-code clean
 
-all: infra-dev db-to-code
+all:
+	@echo ""
+	@echo "Usage : make dev   — déploiement local"
+	@echo "        make prod  — déploiement production"
+	@echo ""
 
-# ── Code ──────────────────────────────────────────────────────────────────────
-
-db-to-code:
-	@echo "--- 🐘 1. Extraction du schéma PostgreSQL ---"
-	pg_dump -s -x -O -d $(DB_URL) -T "databasechangelog*" > $(BACK_DIR)/$(SCHEMA_FILE_POSTGRES)
-
-	@echo "--- Extraction du schéma Mariadb ---"
-	docker exec mon-mysql mariadb-dump -u root -proot --no-data cyber_notes_v2 > $(BACK_DIR)/$(SCHEMA_FILE_MARIADB)
-
-	@echo "--- 🧹 2. Nettoyage du fichier SQL ---"
-	sed -i '/restrict/d' $(BACK_DIR)/$(SCHEMA_FILE_POSTGRES)
-	sed -i '/unrestrict/d' $(BACK_DIR)/$(SCHEMA_FILE_POSTGRES)
-	sed -i '/^--/d' $(BACK_DIR)/$(SCHEMA_FILE_POSTGRES)
-
-	@echo "--- 🏗️ 3. Lancement de sqlc generate ---"
-	cd $(BACK_DIR)/admin && sqlc generate
-	cd $(BACK_DIR)/common && sqlc generate
-	cd $(BACK_DIR)/student && sqlc generate
 
 # ── Nettoyage ─────────────────────────────────────────────────────────────────
 

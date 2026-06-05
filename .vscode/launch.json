@@ -28,6 +28,30 @@
       "cwd": "${workspaceFolder}/backend/student",
       "envFile": "${workspaceFolder}/.vscode/secrets-dev.env"
     },
+    {
+      "name": "Attach admin (container)",
+      "type": "go",
+      "request": "attach",
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": 2345,
+      "substitutePath": [
+        { "from": "${workspaceFolder}/backend/admin",  "to": "/app/admin"  },
+        { "from": "${workspaceFolder}/backend/common", "to": "/app/common" }
+      ]
+    },
+    {
+      "name": "Attach élève (container)",
+      "type": "go",
+      "request": "attach",
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": 2346,
+      "substitutePath": [
+        { "from": "${workspaceFolder}/backend/student", "to": "/app/student" },
+        { "from": "${workspaceFolder}/backend/common",  "to": "/app/common"  }
+      ]
+    },
 
   ]
 }
