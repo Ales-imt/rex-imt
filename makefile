@@ -4,14 +4,6 @@
 SECRETS_FILE_DEV=.vscode/secrets-dev.env
 SECRETS_FILE_PROD=.vscode/secrets-prod.env
 
-_get_dev=$(shell grep '^$(1)=' $(SECRETS_FILE_DEV) | cut -d= -f2)
-POSTGRES_USER=$(call _get_dev,POSTGRES_USER)
-POSTGRES_PASSWORD=$(call _get_dev,POSTGRES_PASSWORD)
-POSTGRES_HOST=$(call _get_dev,POSTGRES_HOST)
-POSTGRES_PORT=$(call _get_dev,POSTGRES_PORT)
-POSTGRES_DB=$(call _get_dev,POSTGRES_DB)
-DB_URL=postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)
-
 SCHEMA_FILE_POSTGRES=schema.sql
 SCHEMA_FILE_MARIADB=schema_maria_db.sql
 BACK_DIR=./backend

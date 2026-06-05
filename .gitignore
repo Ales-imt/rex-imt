@@ -1,28 +1,38 @@
+# ── Secrets & certificats ─────────────────────────────────────────────────────
 .vscode/secrets-*.env
+infras/ansible/vault-vars.yml
+infras/migration/config-runtime.yaml
+infras/migration/config-prod-runtime.yaml
+**/*.pem
+**/*.age*
+
+# ── Données BD ────────────────────────────────────────────────────────────────
+infras/bd_data/*
+feedback_classification.sql
+
+# ── Code généré (sqlc) ────────────────────────────────────────────────────────
+**/gen/*
+**/db.go
+**/models.go
+**/query.sql.go
+
+# ── Binaires compilés ─────────────────────────────────────────────────────────
+infras/migration/migration
+infras/serveur-ia/serveur-ia
+
+# ── Frontend ──────────────────────────────────────────────────────────────────
+apps/web-admin/node_modules
+apps/web-admin/.vite
+apps/web-admin/dist
+
+# ── Dépendances ───────────────────────────────────────────────────────────────
 infras/liquibase/liquibase_libs
+
+# ── Divers ────────────────────────────────────────────────────────────────────
 **/__debug*
-/back/**/gen/*
 **/*.log
 **/*.xlsx
 **/*.xlsx#
 **/*.docx
-apps/web-admin/node_modules
-apps/web-admin/.vite
-apps/web-admin/dist
-infras/bd_data/*
-feedback_classification.sql
-**/*.age*
-infras/migration/migration
-infras/serveur-ia/serveur-ia
-**/db.go
-**/models.go
-**/query.sql.go
-**/cmd
 **/testconfig.yaml
-**/*.pem
-infras/migration/config-runtime.yaml
-
-
-
-infras/migration/config-prod-runtime.yaml
-infras/ansible/vault-vars.yml
+**/cmd
