@@ -56,7 +56,7 @@ services:
       start_period: 10s
 
   openldap:
-    build: ./ldap
+    image: osixia/openldap:1.5.0
     container_name: openldap-rex
     restart: always
     ports:
@@ -68,6 +68,7 @@ services:
       LDAP_TLS: "false"
       LDAP_REMOVE_CONFIG_AFTER_SETUP: "false"
     volumes:
+      - ./ldap/bootstrap:/container/service/slapd/assets/config/bootstrap/ldif/custom
       - openldap-data:/var/lib/ldap
       - openldap-config:/etc/ldap/slapd.d
     healthcheck:
