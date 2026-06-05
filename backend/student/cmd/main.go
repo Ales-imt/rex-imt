@@ -83,8 +83,6 @@ func main() {
 		pg.Db,
 	)
 
-	//r.Use(services.FullLogRequest)
-
 	// version api0
 	r.Route("/api/v2", func(r chi.Router) {
 		r.Get("/health", health.MakeHealthHandler(
