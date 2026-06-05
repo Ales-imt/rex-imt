@@ -106,8 +106,6 @@ func main() {
 		}
 	}()
 
-	//r.Use(services.FullLogRequest)
-
 	// version api1
 	r.Route("/api/v2", func(r chi.Router) {
 		r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {

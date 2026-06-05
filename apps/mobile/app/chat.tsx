@@ -10,7 +10,6 @@ import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -178,7 +177,15 @@ export default function ChatScreen() {
   const [months, setMonths] = useState(1);
   const [monthsOpen, setMonthsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const errorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  function showError(msg: string) {
+    setError(msg);
+    if (errorTimer.current) clearTimeout(errorTimer.current);
+    errorTimer.current = setTimeout(() => setError(null), 15_000);
+  }
   const [input, setInput] = useState('');
   const listRef = useRef<any>(null);
   const { width, height } = useWindowDimensions();
@@ -226,7 +233,7 @@ export default function ChatScreen() {
             })));
           }
         } catch (e) {
-          Alert.alert('Erreur', 'Impossible de charger les messages.');
+          showError('Impossible de charger les messages.');
         } finally {
           if (!cancelled) setLoading(false);
         }
@@ -263,7 +270,7 @@ export default function ChatScreen() {
           : m
       ));
     } catch (e) {
-      Alert.alert('Erreur', 'Impossible de supprimer le message.');
+      showError('Impossible de supprimer le message.');
     }
   }
 
@@ -280,7 +287,7 @@ export default function ChatScreen() {
         { id: message_id, text, from: 'me', time: now() },
       ]);
     } catch (e) {
-      Alert.alert('Erreur', 'Impossible d\'envoyer le message.');
+      showError("Impossible d'envoyer le message.");
     }
   }
 
@@ -311,6 +318,12 @@ export default function ChatScreen() {
               <Text style={[styles.filterCaret, { color: colors.textSecondary }]}>▾</Text>
             </TouchableOpacity>
           </View>
+
+          {error && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>{error}</Text>
+            </View>
+          )}
 
           <DropdownModal
             visible={monthsOpen}
@@ -562,5 +575,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#dc2626',
     fontWeight: '600',
+  },
+  errorBanner: {
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginHorizontal: 12,
+    marginBottom: 4,
+    borderRadius: 8,
+  },
+  errorBannerText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });
