@@ -9,10 +9,9 @@ infras/liquibase/liquibase_libs
 apps/web-admin/node_modules
 apps/web-admin/.vite
 apps/web-admin/dist
-*.dump
+infras/bd_data/*
 feedback_classification.sql
 **/*.age*
-cle_privee.txt
 infras/migration/migration
 infras/serveur-ia/serveur-ia
 **/db.go
@@ -21,6 +20,7 @@ infras/serveur-ia/serveur-ia
 **/cmd
 **/testconfig.yaml
 **/*.pem
+infras/migration/config-runtime.yaml
 
 
 

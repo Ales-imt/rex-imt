@@ -1,22 +1,40 @@
 .PHONY: deploy-dev infra-dev migration-dev start-dev stop-dev start-admin stop-admin start-eleve stop-eleve
 
-dev: infra-dev migration-dev db-to-code-dev start-dev
+dev: infra-dev migration-dev cyber_note db-to-code-dev start-dev
 
 # ── Infra ─────────────────────────────────────────────────────────────────────
 
 infra-dev:
 	@echo "--- 🐳 Démarrage des conteneurs Docker ---"
-	cd $(DOCKER_DIR) && docker compose -f compose.yaml up -d
+	cd $(DOCKER_DIR) && docker compose -f compose.yaml --env-file ../../$(SECRETS_FILE_DEV) up -d
 
 	@echo "--- 🗑️ suppression de la bd db_rex ---"
+	docker exec -i postgres-16.10-alpine-rex psql -U postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'db_rex';"
 	docker exec -i postgres-16.10-alpine-rex psql -U postgres -c "DROP DATABASE IF EXISTS db_rex;"
 	@echo "--- 🆕 création de la bd db_rex ---"
 	docker exec -i postgres-16.10-alpine-rex psql -U postgres -c "CREATE DATABASE db_rex;"
+
+	@echo "--- 🗑️ suppression de la bd MariaDB ---"
+	docker exec -i mariadb-rex mariadb -u root -p$(call _get_dev,MARIADB_PASSWORD) \
+		-e "DROP DATABASE IF EXISTS $(call _get_dev,MARIADB_DB);"
+	@echo "--- 🆕 création de la bd MariaDB ---"
+	docker exec -i mariadb-rex mariadb -u root -p$(call _get_dev,MARIADB_PASSWORD) \
+		-e "CREATE DATABASE $(call _get_dev,MARIADB_DB);"
 
 # ── Migration ──────────────────────────────────────────────────────────────────────
 
 migration-dev:
 	$(INFRA_DIR)/migrate-v0-to-v1.sh $(SECRETS_FILE_DEV)
+
+# ── Import des notes ──────────────────────────────────────────────────────────────────────
+
+cyber_note:
+	@echo "--- 🐬 Import des notes CyberNotes dans MariaDB ---"
+	docker exec -i mariadb-rex mariadb \
+		-u $(call _get_dev,MARIADB_USER) \
+		-p$(call _get_dev,MARIADB_PASSWORD) \
+		--skip-ssl  \
+		$(call _get_dev,MARIADB_DB) < $(INFRA_DIR)/bd_data/dump_cyber_notes.sql
 
 # ── Code ──────────────────────────────────────────────────────────────────────
 

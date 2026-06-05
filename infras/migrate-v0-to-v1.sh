@@ -37,6 +37,22 @@ psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_D
 }
 echo "✅ BD $POSTGRES_DB accessible"
 
+TABLE_COUNT=$(psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
+    "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public';")
+
+if [[ "$TABLE_COUNT" -gt 0 ]]; then
+    echo ""
+    echo "⚠️  ATTENTION — $TABLE_COUNT table(s) existent dans le schéma public de '$POSTGRES_DB'."
+    echo "    La suppression est DÉFINITIVE et irréversible."
+    echo "    Toutes les données seront perdues."
+    echo ""
+    read -r -p "    Tapez 'SUPPRIMER' pour confirmer : " CONFIRMATION
+    if [[ "$CONFIRMATION" != "SUPPRIMER" ]]; then
+        echo "❌ Annulé."
+        exit 1
+    fi
+fi
+
 echo "--- 🗑️ Suppression des tables existantes de $POSTGRES_DB ---"
 psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
 DO $$ DECLARE
@@ -52,7 +68,7 @@ echo "✅ Tables supprimées"
 echo "--- 📥 Restauration du dump V0 dans $POSTGRES_DB ---"
 pg_restore -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
     --no-owner --no-privileges \
-    "$INFRA_DIR/devedb_backup.dump"
+    "$INFRA_DIR/bd_data/devedb_backup.dump"
 echo "✅ Dump restauré"
 
 LIQUIBASE_OPTS="--changelog-file=db.changelog-master.yaml --url=jdbc:postgresql://$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB --username=$POSTGRES_USER --password=$POSTGRES_PASSWORD --driver=org.postgresql.Driver"

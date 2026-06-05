@@ -29,7 +29,12 @@ Pour utiliser cybema en local:
 Pour expo,
    npx expo start
 
-dump de la bd:
+dump de la bd postgresql:
 ssh -L 5433:sql2.mines-ales.fr:5433 userde@vecu-etudiant.mines-ales.fr
 pg_dump -h localhost -p 5433  -U devedbuserext  -d devedb -F c -f db_rex_backup.dump
+
+
+dump de mysql
+
+source .vscode/secrets-prod.env && docker run --rm --network host mariadb:latest   mariadb-dump -h $MARIADB_HOST -P $MARIADB_PORT -u $MARIADB_USER -p$MARIADB_PASSWORD   --skip-ssl --skip-lock-tables  "$MARIADB_DB" > dump_cyber_notes_$(date +%Y%m%d).sql
 

@@ -38,5 +38,5 @@ all:
 
 clean:
 #-v pour tous supprimer.
-	cd $(DOCKER_DIR) && docker compose down
+	cd $(DOCKER_DIR) && docker compose --env-file ../../$(SECRETS_FILE_DEV) down
 	rm -rf $(INFRA_DIR)/liquibase/liquibase_libs
