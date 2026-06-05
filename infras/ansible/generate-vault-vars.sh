@@ -33,4 +33,3 @@ age_public_key: "$(get AGE_PUBLIC_KEY)"
 
 EOF
 
-echo "✅ vault-vars.yml généré — chiffre avec : ansible-vault encrypt vault-vars.yml"

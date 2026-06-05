@@ -1,0 +1,90 @@
+# Les stages qui ne sont pas ancêtres de la cible sont ignorés.  
+# Donc en --target prod, Docker ne construit pas backend-dev ni dlv-builder. 
+# En --target dev, il ne construit pas backend-prod.
+# definit en fin de fichier 
+
+# ── Stage Go sources (partagé) ───────────────────────────────────────────────
+FROM golang:1.25-alpine AS go-base
+
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+COPY backend/common ./common
+COPY backend/admin ./admin
+COPY .git ./.git
+
+WORKDIR /app/admin
+
+# ── Stage Go backend prod ─────────────────────────────────────────────────────
+FROM go-base AS backend-prod
+
+ARG VERSION
+ARG BUILD_TIME
+RUN VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}" && \
+    BUILD_TIME="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" && \
+    go build -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" -o /rex-admin-server ./cmd
+
+# ── Stage Go backend dev (symboles de debug) ──────────────────────────────────
+FROM go-base AS backend-dev
+
+RUN go build -gcflags="all=-N -l" -o /rex-admin-server ./cmd
+
+# ── Stage Delve ───────────────────────────────────────────────────────────────
+FROM golang:1.25-alpine AS dlv-builder
+
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+
+# ── Stage React frontend ──────────────────────────────────────────────────────
+FROM node:22-alpine AS frontend-builder
+
+WORKDIR /app
+
+COPY apps/web-admin/package*.json ./
+RUN npm ci
+
+COPY apps/web-admin/ ./
+RUN npm run build
+
+# ── Stage base commune ────────────────────────────────────────────────────────
+FROM alpine:3.21 AS base
+
+RUN apk add --no-cache nginx logrotate
+
+RUN addgroup -S rex && adduser -S rex -G rex
+
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
+COPY infras/run/build/nginx-admin.conf /etc/nginx/nginx.conf
+COPY infras/run/build/logrotate-nginx /etc/logrotate.d/nginx
+
+RUN mkdir -p /opt/rex-admin/conf /opt/rex-admin/certs
+COPY infras/x509/mtls_certs/ca.crt /opt/rex-admin/certs/ca.crt
+
+RUN chown -R rex:rex /usr/share/nginx/html /var/log/nginx /var/lib/nginx /opt/rex-admin && \
+    mkdir -p /tmp/client_body /tmp/proxy /tmp/fastcgi /tmp/uwsgi /tmp/scgi && \
+    chown -R rex:rex /tmp/client_body /tmp/proxy /tmp/fastcgi /tmp/uwsgi /tmp/scgi
+
+
+
+# ── Target prod ───────────────────────────────────────────────────────────────
+FROM base AS prod
+
+COPY --from=backend-prod /rex-admin-server /usr/local/bin/rex-admin-server
+COPY infras/run/build/start-admin.sh /start.sh
+RUN chmod +x /start.sh
+
+USER rex
+EXPOSE 8080
+CMD ["/start.sh"]
+
+# ── Target dev (debug via Delve) ──────────────────────────────────────────────
+FROM base AS dev
+
+COPY --from=backend-dev /rex-admin-server /usr/local/bin/rex-admin-server
+COPY --from=dlv-builder /go/bin/dlv /usr/local/bin/dlv
+COPY infras/run/build/start-admin-debug.sh /start.sh
+RUN chmod +x /start.sh
+
+USER rex
+EXPOSE 8080 2345
+CMD ["/start.sh"]

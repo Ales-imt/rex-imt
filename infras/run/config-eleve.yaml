@@ -17,7 +17,7 @@ server:
   port: 3300
 
 jwt:
-  secret: ${JWT_SECRET_ELEVE}
+  secret: ${JWT_SECRET}
   accessTokenExpiresIn: 15m
   refreshTokenExpiresIn: 2160h
 

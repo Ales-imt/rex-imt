@@ -4,8 +4,6 @@ set -e
 SECRETS_FILE=.vscode/secrets-prod.env
 GHCR_REGISTRY=ghcr.io
 GHCR_ORG=ales-imt
-VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 GITHUB_DOCKER_TOKEN=$(grep '^GITHUB_DOCKER_TOKEN=' "$SECRETS_FILE" | cut -d'=' -f2)
 
 echo "--- ⚙️  Génération sqlc ---"
@@ -13,17 +11,8 @@ echo "--- ⚙️  Génération sqlc ---"
 (cd backend/admin   && sqlc generate)
 (cd backend/student && sqlc generate)
 
-echo "--- 🐳 Build de l'image admin ---"
-docker build -f ./infras/run/Dockerfile.admin \
-    --build-arg VERSION="$VERSION" \
-    --build-arg BUILD_TIME="$BUILD_TIME" \
-    -t rex-admin .
-
-echo "--- 🐳 Build de l'image élève ---"
-docker build -f ./infras/run/Dockerfile.eleve \
-    --build-arg VERSION="$VERSION" \
-    --build-arg BUILD_TIME="$BUILD_TIME" \
-    -t rex-eleve .
+./infras/run/build-admin.sh
+./infras/run/build-eleve.sh
 
 echo "--- 🔑 Connexion à GHCR ---"
 echo "$GITHUB_DOCKER_TOKEN" | docker login "$GHCR_REGISTRY" -u "$GHCR_ORG" --password-stdin

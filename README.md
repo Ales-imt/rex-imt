@@ -2,7 +2,6 @@
 Ce projet est distribué sous licence [AGPL v3](LICENSE).
 
 
-
 Coffre fort numerique:
     sudo apt  install age
     age-keygen -o cle_privee.txt
@@ -24,7 +23,7 @@ Pour utiliser cybema en local:
     dans /etc/hosts
    127.0.0.1       webdfd.mines-ales.fr
    sudo systemctl stop apache2
-   sudo ssh -L 80:webdfd.mines-ales.fr:80 userdfx@vecu-etudiant-eleves-2.mines-ales.fr
+   ssh -L 5433:sql2.mines-ales.fr:5433 -L 3306:sql2.mines-ales.fr:3306 -L 80:webdfd.mines-ales.fr:80 userdfx@vecu-etudiant-eleves-2.mines-ales.fr
 
 
 Pour expo,
@@ -34,9 +33,3 @@ dump de la bd:
 ssh -L 5433:sql2.mines-ales.fr:5433 userde@vecu-etudiant.mines-ales.fr
 pg_dump -h localhost -p 5433  -U devedbuserext  -d devedb -F c -f db_rex_backup.dump
 
-
-utilisation d'ansible.
-    Renseigner les fichies secrets de .vscode
-    generate-vault-vars.sh
-    ansible-vault encrypt vault-vars.yml
-    ansible-playbook   -i inventory/prod  playbook-eleve.yml   --ask-vault-pass   --ask-pass   --ask-become-pass

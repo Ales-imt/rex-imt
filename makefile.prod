@@ -1,12 +1,42 @@
-.PHONY: infra-prod push deploy-prod
+.PHONY: prod migration-prod db-to-code-prod build-container-prod push deploy-prod
 
-# ── Infra ─────────────────────────────────────────────────────────────────────
+prod : migration-prod db-to-code-prod build-container-prod push deploy-prod
 
-infra-prod: push deploy-prod
+# ── MIGRATION ──────────────────────────────────────────────────────────────────────
+
+# ne se fait qu'un fois, A SUPPRIMER PAR LA SUITE DANGER DANGER !!!!
+
+migration-prod:
+	echo "A FAIRE UNE FOIS LORS DE LA MISE EN PLACE !!!", PUIS SUPPRIMER LA REGLE !!!!!!
+	sleep 10
+	$(INFRA_DIR)/migrate-v0-to-v1.sh $(SECRETS_FILE_PROD)
+
+# ── Code ──────────────────────────────────────────────────────────────────────
+
+db-to-code-prod:
+	$(INFRA_DIR)/db-to-code.sh $(SECRETS_FILE_PROD)
+
+# ── Build ──────────────────────────────────────────────────────────────────────
+
+build-container-prod:
+	$(RUN_DIR)/build-admin.sh prod
+	$(RUN_DIR)/build-eleve.sh prod
+
+
+# ── Push ──────────────────────────────────────────────────────────────────────
 
 push:
-	$(RUN_DIR)/push.sh
+	$(RUN_DIR)/push-container.sh
+
+# ── Configure VM et deploy ──────────────────────────────────────────────────────────────────────
 
 deploy-prod:
+	@echo "--- 🚀 Creation du vault pour ansible ---"
+	cd $(ANSIBLE_DIR) && ./generate-vault-vars.sh
+	
 	@echo "--- 🚀 Déploiement sur les VMs prod ---"
-	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod site.yml --extra-vars "@vault-vars.yml" --ask-vault-pass
+	@echo "--- 🚀 Déploiement Admin ---"
+	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod playbook-admin.yml --extra-vars "@vault-vars.yml"       --ask-become-pass
+
+	@echo "--- 🚀 Déploiement Eleve ---"
+	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod playbook-eleve.yml --extra-vars "@vault-vars.yml"       --ask-become-pass
