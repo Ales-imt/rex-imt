@@ -1,5 +1,7 @@
 .PHONY: deploy-dev infra-dev migration-dev start-dev stop-dev start-admin stop-admin start-eleve stop-eleve
 
+_get_dev=$(shell grep '^$(1)=' $(SECRETS_FILE_DEV) | cut -d= -f2)
+
 dev: infra-dev migration-dev cyber_note db-to-code-dev start-dev
 
 # ── Infra ─────────────────────────────────────────────────────────────────────

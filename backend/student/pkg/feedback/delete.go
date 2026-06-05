@@ -4,6 +4,7 @@ import (
 	"back-rex-common/pkg/services"
 	"context"
 	"net/http"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -12,6 +13,10 @@ func anonymizeFeedbackHandler(w http.ResponseWriter, r *http.Request) {
 	pseudo := services.GetPseudo(r)
 	if pseudo == "" {
 		services.InvalidRequestError(w, r, "pseudo requis", services.NO_INFORMATION, nil)
+		return
+	}
+	if utf8.RuneCountInString(pseudo) > maxPseudoLen {
+		services.InvalidRequestError(w, r, "pseudo trop long", services.NO_INFORMATION, nil)
 		return
 	}
 
