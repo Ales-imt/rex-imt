@@ -232,7 +232,7 @@ export default function ChatScreen() {
         }
       };
       fetchHistory(true);
-      const interval = setInterval(() => fetchHistory(false), 15_000);
+      const interval = setInterval(() => fetchHistory(false), 3 * 60_000);
       return () => { cancelled = true; clearInterval(interval); };
     }, [months])
   );

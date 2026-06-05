@@ -45,6 +45,8 @@ echo "--- 🧹 2. Nettoyage du fichier SQL ---"
 sed -i '/restrict/d' "$BACK_DIR/$SCHEMA_FILE_POSTGRES"
 sed -i '/unrestrict/d' "$BACK_DIR/$SCHEMA_FILE_POSTGRES"
 sed -i '/^--/d' "$BACK_DIR/$SCHEMA_FILE_POSTGRES"
+sed -i 's/utf8mb3_uca1400_ai_ci/utf8mb3_general_ci/g' "$BACK_DIR/$SCHEMA_FILE_MARIADB"
+sed -i 's/utf8mb4_uca1400_ai_ci/utf8mb4_general_ci/g' "$BACK_DIR/$SCHEMA_FILE_MARIADB"
 
 echo "--- 🏗️ 3. Lancement de sqlc generate ---"
 (cd "$BACK_DIR/admin"   && sqlc generate)
