@@ -42,7 +42,7 @@ func loadConfig(path string) (*config, error) {
 
 func main() {
 	var (
-		configPath = flag.String("config", "config-dev.yaml", "chemin du fichier de configuration")
+		configPath = flag.String("config", "config-local.yaml", "chemin du fichier de configuration")
 		batchSize  = flag.Int("batch", 500, "taille de lot")
 		dryRun     = flag.Bool("dry-run", false, "n'écrit rien en base")
 	)
