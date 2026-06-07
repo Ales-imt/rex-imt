@@ -24,13 +24,13 @@ rex-imt/
 │   ├── admin/              # Backend Go — serveur admin
 │   └── student/            # Backend Go — serveur élève
 ├── infras/
-│   ├── container/          # Docker Compose (environnement dev : PostgreSQL, LDAP, Ollama)
+│   ├── container/          # Docker Compose (environnement local : PostgreSQL, LDAP, Ollama)
 │   ├── run/                # Dockerfiles, scripts de build/lancement, configs nginx
 │   ├── liquibase/          # Migrations de base de données
 │   ├── migration/          # Outil Go de migration des données
 │   └── ansible/            # Déploiement sur les VMs prod
 ├── makefile                # Point d'entrée principal
-├── makefile.dev            # Cibles dev
+├── makefile.local          # Cibles local
 └── makefile.prod           # Cibles prod
 ```
 
@@ -48,31 +48,31 @@ rex-imt/
 
 ---
 
-## Workflow dev
+## Workflow local
 
 La commande principale pour lancer un environnement de développement complet est :
 
 ```bash
-make dev
+make local
 ```
 
 Elle enchaîne dans l'ordre :
-1. `infra-dev` — démarre les conteneurs Docker locaux (PostgreSQL, LDAP, Ollama)
-2. `migration-dev` — applique la migration v0 → v1 (script `migrate-v0-to-v1.sh`)
-3. `db-to-code-dev` — extrait le schéma et génère le code sqlc
-4. `start-dev` — build et lance les conteneurs admin et élève
+1. `infra-local` — démarre les conteneurs Docker locaux (PostgreSQL, LDAP, Ollama)
+2. `migration-local` — applique la migration v0 → v1 (script `migrate-v0-to-v1.sh`)
+3. `db-to-code-local` — extrait le schéma et génère le code sqlc
+4. `start-local` — build et lance les conteneurs admin et élève
 
 ### Gestion individuelle des conteneurs
 
 ```bash
-make start-admin    # build (target dev) + lance le container admin sur :8121 (debug :2345)
-make start-eleve    # build (target dev) + lance le container élève sur :8131 (debug :2346)
+make start-admin    # build (target local) + lance le container admin sur :8121 (debug :2345)
+make start-eleve    # build (target local) + lance le container élève sur :8131 (debug :2346)
 make stop-admin     # arrête le container admin
 make stop-eleve     # arrête le container élève
-make stop-dev       # arrête admin + élève
+make stop-local     # arrête admin + élève
 ```
 
-Les variables de connexion sont lues depuis `.vscode/secrets-dev.env`.
+Les variables de connexion sont lues depuis `.vscode/secrets-local.env`.
 
 ### Nettoyage
 
@@ -103,7 +103,7 @@ Au démarrage, le service `ollama-init` tire automatiquement le modèle `mistral
 Le script `infras/db-to-code.sh` extrait les schémas des deux bases de données et régénère le code `sqlc` :
 
 ```bash
-make db-to-code-dev     # utilise secrets-dev.env
+make db-to-code-local   # utilise secrets-local.env
 ```
 
 Étapes exécutées :
@@ -120,7 +120,7 @@ Les deux applications utilisent un build Docker **multi-stage** avec deux cibles
 | Cible | Usage |
 |---|---|
 | `prod` | Image de production (binaire strippé, sans symboles de debug) |
-| `dev` | Image de développement (symboles de debug + Delve pour le débogage à distance) |
+| `local` | Image de développement local (symboles de debug + Delve pour le débogage à distance) |
 
 ### Stages du build (exemple admin)
 
@@ -128,11 +128,11 @@ Les deux applications utilisent un build Docker **multi-stage** avec deux cibles
 |---|---|---|
 | `go-base` | `golang:1.25-alpine` | Sources Go partagées |
 | `backend-prod` | `go-base` | Compile le binaire Go optimisé |
-| `backend-dev` | `go-base` | Compile le binaire Go avec symboles de debug |
+| `backend-local` | `go-base` | Compile le binaire Go avec symboles de debug |
 | `dlv-builder` | `golang:1.25-alpine` | Compile le débogueur Delve |
 | `frontend-builder` | `node:22-alpine` | Build le frontend React (`npm run build`) |
 | `base` | `alpine:3.21` | Assemble binaire + fichiers statiques + nginx |
-| `prod` / `dev` | `base` | Image finale selon la cible |
+| `prod` / `local` | `base` | Image finale selon la cible |
 
 Le binaire est compilé avec les métadonnées de version injectées via ldflags :
 

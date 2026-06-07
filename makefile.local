@@ -1,14 +1,14 @@
-.PHONY: deploy-dev infra-dev migration-dev start-dev stop-dev start-admin stop-admin start-eleve stop-eleve
+.PHONY: deploy-local infra-local migration-local start-local stop-local start-admin stop-admin start-eleve stop-eleve
 
-_get_dev=$(shell grep '^$(1)=' $(SECRETS_FILE_DEV) | cut -d= -f2)
+_get_local=$(shell grep '^$(1)=' $(SECRETS_FILE_LOCAL) | cut -d= -f2)
 
-dev: infra-dev migration-dev cyber_note db-to-code-dev start-dev
+local: infra-local migration-local cyber_note db-to-code-local start-local
 
 # ── Infra ─────────────────────────────────────────────────────────────────────
 
-infra-dev:
+infra-local:
 	@echo "--- 🐳 Démarrage des conteneurs Docker ---"
-	cd $(DOCKER_DIR) && docker compose -f compose.yaml --env-file ../../$(SECRETS_FILE_DEV) up -d
+	cd $(DOCKER_DIR) && docker compose -f compose.yaml --env-file ../../$(SECRETS_FILE_LOCAL) up -d
 
 	@echo "--- 🗑️ suppression de la bd db_rex ---"
 	docker exec -i postgres-16.10-alpine-rex psql -U postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'db_rex';"
@@ -17,46 +17,46 @@ infra-dev:
 	docker exec -i postgres-16.10-alpine-rex psql -U postgres -c "CREATE DATABASE db_rex;"
 
 	@echo "--- 🗑️ suppression de la bd MariaDB ---"
-	docker exec -i mariadb-rex mariadb -u root -p$(call _get_dev,MARIADB_PASSWORD) \
-		-e "DROP DATABASE IF EXISTS $(call _get_dev,MARIADB_DB);"
+	docker exec -i mariadb-rex mariadb -u root -p$(call _get_local,MARIADB_PASSWORD) \
+		-e "DROP DATABASE IF EXISTS $(call _get_local,MARIADB_DB);"
 	@echo "--- 🆕 création de la bd MariaDB ---"
-	docker exec -i mariadb-rex mariadb -u root -p$(call _get_dev,MARIADB_PASSWORD) \
-		-e "CREATE DATABASE $(call _get_dev,MARIADB_DB);"
+	docker exec -i mariadb-rex mariadb -u root -p$(call _get_local,MARIADB_PASSWORD) \
+		-e "CREATE DATABASE $(call _get_local,MARIADB_DB);"
 
 # ── Migration ──────────────────────────────────────────────────────────────────────
 
-migration-dev:
-	$(INFRA_DIR)/migrate-v0-to-v1.sh $(SECRETS_FILE_DEV)
+migration-local:
+	$(INFRA_DIR)/migrate-v0-to-v1.sh $(SECRETS_FILE_LOCAL)
 
 # ── Import des notes ──────────────────────────────────────────────────────────────────────
 
 cyber_note:
 	@echo "--- 🐬 Import des notes CyberNotes dans MariaDB ---"
 	docker exec -i mariadb-rex mariadb \
-		-u $(call _get_dev,MARIADB_USER) \
-		-p$(call _get_dev,MARIADB_PASSWORD) \
+		-u $(call _get_local,MARIADB_USER) \
+		-p$(call _get_local,MARIADB_PASSWORD) \
 		--skip-ssl  \
-		$(call _get_dev,MARIADB_DB) < $(INFRA_DIR)/bd_data/dump_cyber_notes.sql
+		$(call _get_local,MARIADB_DB) < $(INFRA_DIR)/bd_data/dump_cyber_notes.sql
 
 # ── Code ──────────────────────────────────────────────────────────────────────
 
-db-to-code-dev:
+db-to-code-local:
 	@echo "--- 🆕 gen code sqlc ---"
-	$(INFRA_DIR)/db-to-code.sh $(SECRETS_FILE_DEV)
+	$(INFRA_DIR)/db-to-code.sh $(SECRETS_FILE_LOCAL)
 
 # ── Conteneurs locaux ─────────────────────────────────────────────────────────
 
-start-dev: start-admin start-eleve
+start-local: start-admin start-eleve
 
-stop-dev: stop-admin stop-eleve
+stop-local: stop-admin stop-eleve
 
 start-admin:
-	$(RUN_DIR)/build-admin.sh dev
-	$(RUN_DIR)/start-admin-dev.sh
+	$(RUN_DIR)/build-admin.sh local
+	$(RUN_DIR)/start-admin-local.sh
 
 start-eleve:
-	$(RUN_DIR)/build-eleve.sh dev
-	$(RUN_DIR)/start-eleve-dev.sh
+	$(RUN_DIR)/build-eleve.sh local
+	$(RUN_DIR)/start-eleve-local.sh
 
 stop-admin:
 	@echo "--- 🛑 Arrêt du container admin ---"
@@ -66,4 +66,4 @@ stop-eleve:
 	@echo "--- 🛑 Arrêt du container élève ---"
 	docker rm -f $(ELEVE_CONTAINER) 2>/dev/null || true
 
-	
+

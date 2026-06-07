@@ -1,6 +1,6 @@
 # Les stages qui ne sont pas ancêtres de la cible sont ignorés.  
-# Donc en --target prod, Docker ne construit pas backend-dev ni dlv-builder. 
-# En --target dev, il ne construit pas backend-prod.
+# Donc en --target prod, Docker ne construit pas backend-local ni dlv-builder.
+# En --target local, il ne construit pas backend-prod.
 # definit en fin de fichier 
 
 # ── Stage Go sources (partagé) ───────────────────────────────────────────────
@@ -25,8 +25,8 @@ RUN VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || ec
     BUILD_TIME="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" && \
     go build -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" -o /rex-admin-server ./cmd
 
-# ── Stage Go backend dev (symboles de debug) ──────────────────────────────────
-FROM go-base AS backend-dev
+# ── Stage Go backend local (symboles de debug) ────────────────────────────────
+FROM go-base AS backend-local
 
 RUN go build -gcflags="all=-N -l" -o /rex-admin-server ./cmd
 
@@ -77,10 +77,10 @@ USER rex
 EXPOSE 8080
 CMD ["/start.sh"]
 
-# ── Target dev (debug via Delve) ──────────────────────────────────────────────
-FROM base AS dev
+# ── Target local (debug via Delve) ────────────────────────────────────────────
+FROM base AS local
 
-COPY --from=backend-dev /rex-admin-server /usr/local/bin/rex-admin-server
+COPY --from=backend-local /rex-admin-server /usr/local/bin/rex-admin-server
 COPY --from=dlv-builder /go/bin/dlv /usr/local/bin/dlv
 COPY infras/run/build/start-admin-debug.sh /start.sh
 RUN chmod +x /start.sh

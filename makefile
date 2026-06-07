@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := all
 
 # --- Variables communes ---
-SECRETS_FILE_DEV=.vscode/secrets-dev.env
+SECRETS_FILE_LOCAL=.vscode/secrets-local.env
 SECRETS_FILE_PROD=.vscode/secrets-prod.env
 
 SCHEMA_FILE_POSTGRES=schema.sql
@@ -14,14 +14,14 @@ ANSIBLE_DIR=./infras/ansible
 ADMIN_CONTAINER=rex-admin
 ELEVE_CONTAINER=rex-eleve
 
-include makefile.dev
+include makefile.local
 include makefile.prod
 
 .PHONY: all db-to-code clean
 
 all:
 	@echo ""
-	@echo "Usage : make dev   — déploiement local"
+	@echo "Usage : make local — déploiement local"
 	@echo "        make prod  — déploiement production"
 	@echo ""
 
@@ -30,5 +30,5 @@ all:
 
 clean:
 #-v pour tous supprimer.
-	cd $(DOCKER_DIR) && docker compose --env-file ../../$(SECRETS_FILE_DEV) down
+	cd $(DOCKER_DIR) && docker compose --env-file ../../$(SECRETS_FILE_LOCAL) down
 	rm -rf $(INFRA_DIR)/liquibase/liquibase_libs

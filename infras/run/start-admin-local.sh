@@ -2,7 +2,7 @@
 set -e
 
 HOST_IP=$(ip route get 1 | awk '{print $7; exit}')
-SECRETS_FILE=.vscode/secrets-dev.env
+SECRETS_FILE=.vscode/secrets-local.env
 ADMIN_CONFIG=./infras/run/config-admin.yaml
 
 echo "--- 📋 Copie de la configuration admin ---"
