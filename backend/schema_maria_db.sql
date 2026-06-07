@@ -1,9 +1,9 @@
 /*M!999999\- enable the sandbox mode */ 
 -- MariaDB dump 10.19-12.3.2-MariaDB, for debian-linux-gnu (x86_64)
 --
--- Host: sql2.mines-ales.fr    Database: cybernotes
+-- Host: localhost    Database: cyber_notes
 -- ------------------------------------------------------
--- Server version	5.7.24
+-- Server version	12.3.2-MariaDB-ubu2404
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -30,12 +30,12 @@ CREATE TABLE `DetailEleve` (
   `tel` varchar(16) DEFAULT '',
   `fax` varchar(16) DEFAULT '',
   `origine` varchar(40) DEFAULT '',
-  `EVCLEUNIK` int(11) DEFAULT '0',
+  `EVCLEUNIK` int(11) DEFAULT 0,
   `lieu_n` varchar(50) DEFAULT '',
   `dep_n` varchar(50) DEFAULT '',
   `natio` varchar(50) DEFAULT '',
   `Bac` varchar(5) DEFAULT '',
-  `An_Bac` smallint(5) unsigned DEFAULT '0',
+  `An_Bac` smallint(5) unsigned DEFAULT 0,
   `M_Bac` varchar(20) DEFAULT '',
   `lycee_origine` varchar(70) DEFAULT '',
   `Ac_Bac` varchar(70) DEFAULT '',
@@ -57,13 +57,13 @@ CREATE TABLE `DetailEleve` (
   `Mail_M` varchar(50) DEFAULT '',
   `Coord_HPS` varchar(200) DEFAULT '',
   `Coord_Urg` varchar(200) DEFAULT '',
-  `photo` longblob,
+  `photo` longblob DEFAULT NULL,
   `Ville_lycee` varchar(50) DEFAULT '',
   `pays_n` varchar(50) DEFAULT '',
   `tous_prenoms` varchar(200) DEFAULT '',
   PRIMARY KEY (`IDDetail`),
   UNIQUE KEY `EVCLEUNIK` (`EVCLEUNIK`)
-) ENGINE=InnoDB AUTO_INCREMENT=8721 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=8721 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -77,18 +77,18 @@ CREATE TABLE `Exercice` (
   `CTCLEUNIK` int(11) NOT NULL AUTO_INCREMENT,
   `nom` varchar(150) DEFAULT '',
   `date` date DEFAULT NULL,
-  `base` smallint(6) DEFAULT '0',
-  `coefficient` float DEFAULT '0',
-  `P0CLEUNIK` int(11) DEFAULT '0',
-  `IDTypeExercice` int(11) DEFAULT '0',
-  `Supplement` tinyint(4) DEFAULT '0',
-  `DureeEx` int(11) DEFAULT '0',
-  `Commentaire` longtext,
+  `base` smallint(6) DEFAULT 0,
+  `coefficient` float DEFAULT 0,
+  `P0CLEUNIK` int(11) DEFAULT 0,
+  `IDTypeExercice` int(11) DEFAULT 0,
+  `Supplement` tinyint(4) DEFAULT 0,
+  `DureeEx` int(11) DEFAULT 0,
+  `Commentaire` longtext DEFAULT NULL,
   PRIMARY KEY (`CTCLEUNIK`),
   KEY `WDIDX16796532040` (`date`),
   KEY `WDIDX16796532041` (`P0CLEUNIK`),
   KEY `WDIDX16796532042` (`IDTypeExercice`)
-) ENGINE=InnoDB AUTO_INCREMENT=19362 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=19362 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -101,15 +101,15 @@ DROP TABLE IF EXISTS `Niveau`;
 CREATE TABLE `Niveau` (
   `IDNiveau` int(11) NOT NULL AUTO_INCREMENT,
   `nom` varchar(40) DEFAULT '',
-  `description` longtext,
-  `couleurFond` bigint(20) DEFAULT '0',
-  `couleurTexte` bigint(20) DEFAULT '0',
+  `description` longtext DEFAULT NULL,
+  `couleurFond` bigint(20) DEFAULT 0,
+  `couleurTexte` bigint(20) DEFAULT 0,
   `password` varchar(20) DEFAULT '',
-  `colori` smallint(5) unsigned DEFAULT '0',
-  `p0encours` int(11) DEFAULT '0',
+  `colori` smallint(5) unsigned DEFAULT 0,
+  `p0encours` int(11) DEFAULT 0,
   PRIMARY KEY (`IDNiveau`),
   KEY `WDIDX167965320510` (`nom`)
-) ENGINE=InnoDB AUTO_INCREMENT=48 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=48 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -120,13 +120,13 @@ DROP TABLE IF EXISTS `Promos_eleves`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Promos_eleves` (
-  `EVCLEUNIK` int(11) DEFAULT '0',
-  `P0CLEUNIK` int(11) DEFAULT '0',
-  `Etat` int(11) DEFAULT '0',
+  `EVCLEUNIK` int(11) DEFAULT 0,
+  `P0CLEUNIK` int(11) DEFAULT 0,
+  `Etat` int(11) DEFAULT 0,
   UNIQUE KEY `IDpromos_eleves` (`P0CLEUNIK`,`EVCLEUNIK`),
   KEY `WDIDX167965320511` (`EVCLEUNIK`),
   KEY `WDIDX167965320512` (`P0CLEUNIK`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -138,25 +138,25 @@ DROP TABLE IF EXISTS `Realisation`;
 /*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `Realisation` (
   `NOCLEUNIK` int(11) NOT NULL AUTO_INCREMENT,
-  `base` smallint(6) DEFAULT '0',
-  `coefficient` float DEFAULT '0',
+  `base` smallint(6) DEFAULT 0,
+  `coefficient` float DEFAULT 0,
   `date` date DEFAULT NULL,
-  `EVCLEUNIK` int(11) DEFAULT '0',
-  `CTCLEUNIK` int(11) DEFAULT '0',
-  `noteobtenue` float DEFAULT '-1',
+  `EVCLEUNIK` int(11) DEFAULT 0,
+  `CTCLEUNIK` int(11) DEFAULT 0,
+  `noteobtenue` float DEFAULT -1,
   `Nom_etablissement` varchar(50) DEFAULT '',
   `Adresse_etablissement` varchar(300) DEFAULT '',
   `Ville` varchar(50) DEFAULT '',
   `Pays` varchar(50) DEFAULT '',
   `Sujet` varchar(300) DEFAULT '',
   `Tuteur` varchar(50) DEFAULT '',
-  `Commentaire` longtext,
-  `cp` bigint(20) DEFAULT '0',
-  `duree` int(11) DEFAULT '0',
+  `Commentaire` longtext DEFAULT NULL,
+  `cp` bigint(20) DEFAULT 0,
+  `duree` int(11) DEFAULT 0,
   PRIMARY KEY (`NOCLEUNIK`),
   KEY `WDIDX16796532057` (`EVCLEUNIK`),
   KEY `WDIDX16796532058` (`CTCLEUNIK`)
-) ENGINE=InnoDB AUTO_INCREMENT=855681 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=855681 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -169,12 +169,12 @@ DROP TABLE IF EXISTS `TypeExercice`;
 CREATE TABLE `TypeExercice` (
   `IDTypeExercice` int(11) NOT NULL AUTO_INCREMENT,
   `nom` varchar(40) DEFAULT '',
-  `description` longtext,
-  `Supplement` tinyint(4) DEFAULT '0',
-  `Aff_haut` tinyint(3) unsigned DEFAULT '0',
-  `Aff_bas` tinyint(3) unsigned DEFAULT '0',
+  `description` longtext DEFAULT NULL,
+  `Supplement` tinyint(4) DEFAULT 0,
+  `Aff_haut` tinyint(3) unsigned DEFAULT 0,
+  `Aff_bas` tinyint(3) unsigned DEFAULT 0,
   PRIMARY KEY (`IDTypeExercice`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -199,7 +199,7 @@ CREATE TABLE `eleves` (
   KEY `WDIDX16796532054` (`mel`),
   KEY `WDIDX16796532055` (`password`),
   KEY `WDIDX16796532056` (`INE`)
-) ENGINE=InnoDB AUTO_INCREMENT=8730 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=8730 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -212,17 +212,17 @@ DROP TABLE IF EXISTS `promos`;
 CREATE TABLE `promos` (
   `P0CLEUNIK` int(11) NOT NULL AUTO_INCREMENT,
   `nom` varchar(40) DEFAULT '',
-  `afficher` tinyint(4) DEFAULT '0',
+  `afficher` tinyint(4) DEFAULT 0,
   `datedebut` date DEFAULT NULL,
   `datefin` date DEFAULT NULL,
-  `IDNiveau` int(11) DEFAULT '0',
+  `IDNiveau` int(11) DEFAULT 0,
   `dateImpressionDiffusee` date DEFAULT NULL,
-  `liensSupDiplome` longtext,
-  `texteSupDiplome` longtext,
+  `liensSupDiplome` longtext DEFAULT NULL,
+  `texteSupDiplome` longtext DEFAULT NULL,
   PRIMARY KEY (`P0CLEUNIK`),
   UNIQUE KEY `nom` (`nom`),
   KEY `WDIDX16796532059` (`IDNiveau`)
-) ENGINE=InnoDB AUTO_INCREMENT=1148 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=1148 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -234,4 +234,4 @@ CREATE TABLE `promos` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*M!100616 SET NOTE_VERBOSITY=@OLD_NOTE_VERBOSITY */;
 
--- Dump completed on 2026-06-05 15:54:33
+-- Dump completed on 2026-06-07 19:02:38
