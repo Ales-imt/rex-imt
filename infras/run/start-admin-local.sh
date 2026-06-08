@@ -20,4 +20,7 @@ docker run -d \
     -v "$(pwd)/$ADMIN_CONFIG":/opt/rex-admin/conf/config.yaml:ro \
     rex-admin
 
-echo "--- ✅ Container admin disponible sur http://localhost:8121 ---"
+echo " pour aller du telephone vers le PC socat TCP-LISTEN:8121,bind=10.208.113.46,fork TCP:10.20.1.11:8121"
+echo " puis http://10.208.113.46:8121"
+
+echo "--- ✅ Container admin disponible sur http://10.20.1.10:8121 ---"
