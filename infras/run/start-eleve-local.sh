@@ -8,8 +8,6 @@ ELEVE_CONFIG=./infras/run/config-eleve.yaml
 echo "--- 📋 Copie de la configuration élève ---"
 cp ./backend/student/cmd/config.yaml "$ELEVE_CONFIG"
 
-cat "$ELEVE_CONFIG"
-
 echo "--- 🚀 Lancement du container élève ---"
 docker rm -f rex-eleve 2>/dev/null || true
 docker run -d \
@@ -22,4 +20,7 @@ docker run -d \
     -v "$(pwd)/$ELEVE_CONFIG":/opt/rex-eleve/conf/config.yaml:ro \
     rex-eleve
 
-echo "--- ✅ Container élève disponible sur http://localhost:8131 ---"
+echo " pour aller du telephone vers le PC socat TCP-LISTEN:8131,bind=10.208.113.46,fork TCP:10.20.1.11:8131"
+echo " puis http://10.208.113.46:8131"
+
+echo "--- ✅ Container élève disponible sur http://10.20.1.11:8131 ---"
