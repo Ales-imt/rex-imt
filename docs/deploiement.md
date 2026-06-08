@@ -123,13 +123,23 @@ make clean    # arrête les conteneurs Docker Compose et supprime les libs Liqui
 
 ## Infra locale (Docker Compose)
 
-Le fichier `infras/container/compose.yaml` démarre trois services :
+Le fichier `infras/container/compose.yaml` démarre les services suivants, tous sur le réseau bridge interne `rex-net` (`10.20.1.0/24`) :
 
-| Service | Image | Port | Rôle |
+| Service | Image | IP | Port | Rôle |
+|---|---|---|---|---|
+| `db` | `postgres:16.10-alpine` | `10.20.1.4` | 5432 | Base de données PostgreSQL |
+| `openldap` | `osixia/openldap:1.5.0` | `10.20.1.5` | 389 | Annuaire LDAP (auth) |
+| `mariadb` | `mariadb:latest` | `10.20.1.6` | 3306 | Base de données MariaDB |
+| `ollama` | `ollama/ollama:latest` | `10.20.1.2` | 11434 | Serveur LLM local |
+
+Les containers admin et élève rejoignent ce même réseau au lancement :
+
+| Conteneur | IP | Port applicatif | Port debug (Delve) |
 |---|---|---|---|
-| `db` | `postgres:16.10-alpine` | 5432 | Base de données PostgreSQL |
-| `openldap` | `osixia/openldap:1.5.0` | 3890 | Annuaire LDAP (auth) |
-| `ollama` | `ollama/ollama:latest` | 11434 | Serveur LLM local |
+| `rex-admin` | `10.20.1.10` | 8121 | 2345 |
+| `rex-eleve` | `10.20.1.11` | 8131 | 2346 |
+
+Aucun port n'est mappé sur l'hôte — l'accès se fait directement via l'IP du bridge (ex. `http://10.20.1.10:8121`). Le réseau `10.20.1.0/24` est en dehors du pool d'allocation automatique de Docker (`172.17.0.0/12`), ce qui évite les conflits entre projets.
 
 Au démarrage, le service `ollama-init` tire automatiquement le modèle `mistral-nemo`.
 
@@ -183,10 +193,12 @@ go build -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TI
 
 ### Ports exposés par les conteneurs
 
-| Conteneur | Port applicatif | Port debug (Delve) |
+| Conteneur | Port applicatif (nginx) | Port debug (Delve) |
 |---|---|---|
-| `rex-admin` | 8121 → 8080 | 2345 |
-| `rex-eleve` | 8131 → 8080 | 2346 |
+| `rex-admin` | 8121 | 2345 |
+| `rex-eleve` | 8131 | 2346 |
+
+nginx écoute directement sur le port applicatif à l'intérieur du conteneur (pas de remapping).
 
 ---
 

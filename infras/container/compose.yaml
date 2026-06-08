@@ -6,9 +6,12 @@ services:
     container_name: ollama
     restart: always
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama-data:/root/.ollama
+    networks:
+      rex-net:
+        ipv4_address: 10.20.1.2
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s
@@ -36,6 +39,8 @@ services:
       "
     volumes:
       - ollama-data:/root/.ollama
+    networks:
+      - rex-net
     restart: "no"
 
   db:
@@ -46,8 +51,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - 5432:5432
+    networks:
+      rex-net:
+        ipv4_address: 10.20.1.4
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -59,8 +65,6 @@ services:
     image: osixia/openldap:1.5.0
     container_name: openldap-rex
     restart: always
-    ports:
-      - "3890:389"
     environment:
       LDAP_ORGANISATION: "IMT Mines Ales"
       LDAP_DOMAIN: "ema.fr"
@@ -71,6 +75,9 @@ services:
       - ./ldap/bootstrap:/container/service/slapd/assets/config/bootstrap/ldif/custom
       - openldap-data:/var/lib/ldap
       - openldap-config:/etc/ldap/slapd.d
+    networks:
+      rex-net:
+        ipv4_address: 10.20.1.5
     healthcheck:
       test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost:389", "-D", "cn=admin,dc=ema,dc=fr", "-w", "adminpassword", "-b", "dc=ema,dc=fr"]
       interval: 10s
@@ -87,10 +94,11 @@ services:
       MARIADB_DATABASE: ${MARIADB_DB}
       MARIADB_USER: ${MARIADB_USER}
       MARIADB_PASSWORD: ${MARIADB_PASSWORD}
-    ports:
-      - "3307:3306"
     volumes:
       - mariadb-data:/var/lib/mysql
+    networks:
+      rex-net:
+        ipv4_address: 10.20.1.6
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -103,3 +111,10 @@ volumes:
   openldap-data:
   openldap-config:
   mariadb-data:
+
+networks:
+  rex-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.20.1.0/24

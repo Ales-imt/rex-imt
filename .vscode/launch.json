@@ -33,7 +33,7 @@
       "type": "go",
       "request": "attach",
       "mode": "remote",
-      "host": "127.0.0.1",
+      "host": "10.20.1.10",
       "port": 2345,
       "substitutePath": [
         { "from": "${workspaceFolder}/backend/admin",  "to": "/app/admin"  },
@@ -45,7 +45,7 @@
       "type": "go",
       "request": "attach",
       "mode": "remote",
-      "host": "127.0.0.1",
+      "host": "10.20.1.11",
       "port": 2346,
       "substitutePath": [
         { "from": "${workspaceFolder}/backend/student", "to": "/app/student" },
