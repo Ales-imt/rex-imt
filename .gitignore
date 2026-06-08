@@ -27,6 +27,7 @@ apps/web-admin/dist
 
 # ── Dépendances ───────────────────────────────────────────────────────────────
 infras/liquibase/liquibase_libs
+**/package-lock.json
 
 # ── Divers ────────────────────────────────────────────────────────────────────
 **/__debug*
