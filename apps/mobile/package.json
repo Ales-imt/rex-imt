@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
-    "start:container": "EXPO_PUBLIC_API_BASE=http://10.24.182.46:8131/api/v2 expo start",
-    "start:debug": "EXPO_PUBLIC_API_BASE=http://10.24.182.46:3300/api/v2 expo start",
+    "start:container": "EXPO_PUBLIC_API_BASE=http://10.208.113.46:8131/api/v2 expo start",
+    "start:debug": "EXPO_PUBLIC_API_BASE=http://10.208.113.46:8081/api/v2 expo start ",
     "start:prod": "EXPO_PUBLIC_API_BASE=https://vecu-etudiant-eleves-2.mines-ales.fr/api/v2 expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
@@ -52,7 +52,8 @@
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "http-proxy-middleware": "^4.1.0"
   },
   "private": true
 }
