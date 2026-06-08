@@ -96,7 +96,7 @@ export function CrudList<D extends FieldValues>({ datasource }: Props<D>) {
           <Tooltip title="Voir">
             <span>
               <IconButton onClick={() => navigate(`${rootPath}/${datasource.getId(row.original)}`)}>
-                <VisibilityIcon />
+                <VisibilityIcon sx={{ color: '#0EA5E9' }} />
               </IconButton>
             </span>
           </Tooltip>
@@ -106,7 +106,7 @@ export function CrudList<D extends FieldValues>({ datasource }: Props<D>) {
           <Tooltip title="Editer">
             <span>
               <IconButton onClick={() => navigate(`${rootPath}/${datasource.getId(row.original)}/edit`)}>
-                <EditIcon />
+                <EditIcon sx={{ color: '#6366F1' }} />
               </IconButton>
             </span>
           </Tooltip>
@@ -130,7 +130,7 @@ export function CrudList<D extends FieldValues>({ datasource }: Props<D>) {
         {datasource.isAction && !datasource.isReadOnly && (
           <>
             <Tooltip title={isEditMode ? "Passer en consultation" : "Passer en édition"}>
-              <IconButton onClick={() => setIsEditMode(!isEditMode)}>
+              <IconButton color="primary" onClick={() => setIsEditMode(!isEditMode)}>
                 {isEditMode ? <VisibilityIcon /> : <EditIcon />}
               </IconButton>
             </Tooltip>
@@ -138,7 +138,11 @@ export function CrudList<D extends FieldValues>({ datasource }: Props<D>) {
               <>
                 <Tooltip title="Add">
                   <span>
-                    <IconButton onClick={() => navigate(`${rootPath}/new`)}>
+                    <IconButton
+                      color="success"
+                      onClick={() => navigate(`${rootPath}/new`)}
+                      sx={{ '&:hover': { backgroundColor: 'rgba(34,197,94,0.08)' } }}
+                    >
                       <AddBoxIcon />
                     </IconButton>
                   </span>
