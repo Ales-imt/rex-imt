@@ -5,7 +5,7 @@ After=network-online.target
 [Container]
 Image={{ container_image }}
 ContainerName={{ container_name }}
-PublishPort={{ container_port }}:8080
+PublishPort={{ container_port }}:{{ container_port }}
 AddHost=host.containers.internal:host-gateway
 Environment=HOST={{ ansible_default_ipv4.address }}
 EnvironmentFile={{ app_dir }}/secrets.env

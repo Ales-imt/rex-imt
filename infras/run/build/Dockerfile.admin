@@ -74,7 +74,7 @@ COPY infras/run/build/start-admin.sh /start.sh
 RUN chmod +x /start.sh
 
 USER rex
-EXPOSE 8080
+EXPOSE 8121
 CMD ["/start.sh"]
 
 # ── Target local (debug via Delve) ────────────────────────────────────────────
@@ -86,5 +86,5 @@ COPY infras/run/build/start-admin-debug.sh /start.sh
 RUN chmod +x /start.sh
 
 USER rex
-EXPOSE 8080 2345
+EXPOSE 8121 2345
 CMD ["/start.sh"]
