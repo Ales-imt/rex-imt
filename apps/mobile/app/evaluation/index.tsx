@@ -1,4 +1,5 @@
 
+import { ZenBackground } from '@/components/zen-background';
 import { useEvaluation } from '@/hooks/use-evaluation';
 import { useTheme } from '@/hooks/use-theme';
 import { apiInstance } from '@/services/api';
@@ -67,6 +68,8 @@ export default function CoursListScreen() {
   return (
     <>
       <View style={[styles.container, { backgroundColor: colors.pageBg }]}>
+        <ZenBackground />
+
         {loading ? (
           <ActivityIndicator color="#6366F1" style={styles.centered} size="large" />
         ) : error ? (
