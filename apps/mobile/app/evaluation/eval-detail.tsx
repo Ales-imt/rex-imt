@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Circle, G, Path, Svg } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/use-theme';
 import { apiInstance } from '@/services/api';
@@ -57,14 +58,84 @@ const HEURES_LABEL: Record<string, string> = {
   H_PLUS_5: '> 5h / semaine',
 };
 
-function stars(score: number, max = 5): string {
-  return '★'.repeat(score) + '☆'.repeat(Math.max(0, max - score));
-}
+const SECTION_COLORS: Record<string, string> = {
+  'Contexte':             '#0EA5E9',
+  'Pédagogie':            '#6366F1',
+  'Contenu':              '#0EA5E9',
+  'Charge de travail':    '#F97316',
+  'Supports':             '#8B5CF6',
+  'Ambiance':             '#22C55E',
+  'Recommandation (NPS)': '#6366F1',
+};
 
 function npsColor(nps: number): string {
   if (nps <= 6) return '#EF4444';
   if (nps <= 8) return '#F97316';
   return '#22C55E';
+}
+
+function StarRow({ score, max = 5 }: { score: number; max?: number }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 2 }}>
+      {Array.from({ length: max }, (_, i) => (
+        <Text key={i} style={{ fontSize: 16, color: i < score ? '#F59E0B' : '#D1D5DB' }}>
+          {i < score ? '★' : '☆'}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+function NpsGauge({ nps, colors }: { nps: number; colors: any }) {
+  const r = 50;
+  const cx = 60;
+  const cy = 60;
+  const startAngle = Math.PI;
+  const endAngle = 0;
+  const fillAngle = Math.PI - (nps / 10) * Math.PI;
+
+  function polarToCartesian(angle: number) {
+    return {
+      x: cx + r * Math.cos(angle),
+      y: cy - r * Math.sin(angle),
+    };
+  }
+
+  const bgStart = polarToCartesian(startAngle);
+  const bgEnd = polarToCartesian(endAngle);
+  const fgStart = polarToCartesian(startAngle);
+  const fgEnd = polarToCartesian(fillAngle);
+  const fillPct = nps / 10;
+
+  const color = npsColor(nps);
+
+  return (
+    <View style={{ alignItems: 'center', paddingVertical: 4 }}>
+      <Svg width={120} height={70} viewBox="0 0 120 70">
+        {/* Background arc */}
+        <Path
+          d={`M ${bgStart.x} ${bgStart.y} A ${r} ${r} 0 0 1 ${bgEnd.x} ${bgEnd.y}`}
+          stroke="#E2E8F0"
+          strokeWidth={10}
+          fill="none"
+          strokeLinecap="round"
+        />
+        {/* Fill arc */}
+        {nps > 0 && (
+          <Path
+            d={`M ${fgStart.x} ${fgStart.y} A ${r} ${r} 0 ${fillPct > 0.5 ? 0 : 0} 1 ${fgEnd.x} ${fgEnd.y}`}
+            stroke={color}
+            strokeWidth={10}
+            fill="none"
+            strokeLinecap="round"
+          />
+        )}
+      </Svg>
+      <Text style={{ fontSize: 28, fontWeight: '800', color, marginTop: -28 }}>
+        {nps}<Text style={{ fontSize: 14, fontWeight: '400', color: colors.textSecondary }}>/10</Text>
+      </Text>
+    </View>
+  );
 }
 
 export default function EvalDetailScreen() {
@@ -136,35 +207,30 @@ export default function EvalDetailScreen() {
               </Section>
 
               <Section title="Pédagogie" colors={colors}>
-                <Row label="Qualité globale" value={stars(session.score_peda_global)} colors={colors} />
-                <Row label="Clarté" value={stars(session.score_peda_clarte)} colors={colors} />
+                <StarRowItem label="Qualité globale" score={session.score_peda_global} colors={colors} />
+                <StarRowItem label="Clarté" score={session.score_peda_clarte} colors={colors} />
               </Section>
 
               <Section title="Contenu" colors={colors}>
-                <Row label="Adéquation" value={stars(session.score_contenu_adequation)} colors={colors} />
+                <StarRowItem label="Adéquation" score={session.score_contenu_adequation} colors={colors} />
               </Section>
 
               <Section title="Charge de travail" colors={colors}>
                 <Row label="Perception" value={CHARGE_LABEL[session.charge_perception] ?? session.charge_perception} colors={colors} />
                 <Row label="Heures / semaine" value={HEURES_LABEL[session.charge_heures_semaine] ?? session.charge_heures_semaine} colors={colors} />
-                <Row label="Difficulté" value={stars(session.score_difficulte)} colors={colors} />
+                <StarRowItem label="Difficulté" score={session.score_difficulte} colors={colors} />
               </Section>
 
               <Section title="Supports" colors={colors}>
-                <Row label="Note" value={stars(session.score_supports)} colors={colors} />
+                <StarRowItem label="Note" score={session.score_supports} colors={colors} />
               </Section>
 
               <Section title="Ambiance" colors={colors}>
-                <Row label="Note" value={stars(session.score_ambiance)} colors={colors} />
+                <StarRowItem label="Note" score={session.score_ambiance} colors={colors} />
               </Section>
 
               <Section title="Recommandation (NPS)" colors={colors}>
-                <View style={styles.npsContainer}>
-                  <Text style={[styles.npsScore, { color: npsColor(session.nps) }]}>
-                    {session.nps}
-                    <Text style={[styles.npsMax, { color: colors.textSecondary }]}>/10</Text>
-                  </Text>
-                </View>
+                <NpsGauge nps={session.nps} colors={colors} />
               </Section>
             </ScrollView>
 
@@ -190,8 +256,12 @@ export default function EvalDetailScreen() {
 }
 
 function Section({ title, children, colors }: { title: string; children: React.ReactNode; colors: any }) {
+  const accent = SECTION_COLORS[title] ?? '#6366F1';
   return (
-    <View style={[styles.section, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+    <View style={[
+      styles.section,
+      { backgroundColor: colors.cardBg, borderColor: colors.cardBorder, borderLeftColor: accent, borderLeftWidth: 3 },
+    ]}>
       <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{title.toUpperCase()}</Text>
       {children}
     </View>
@@ -207,6 +277,15 @@ function Row({ label, value, colors }: { label: string; value: string; colors: a
   );
 }
 
+function StarRowItem({ label, score, colors }: { label: string; score: number; colors: any }) {
+  return (
+    <View style={styles.row}>
+      <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <StarRow score={score} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { marginTop: 60 },
@@ -217,6 +296,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 14,
     gap: 10,
+    overflow: 'hidden',
   },
   sectionTitle: {
     fontSize: 11,
@@ -231,9 +311,6 @@ const styles = StyleSheet.create({
   },
   rowLabel: { fontSize: 14 },
   rowValue: { fontSize: 14, fontWeight: '600' },
-  npsContainer: { alignItems: 'center', paddingVertical: 4 },
-  npsScore: { fontSize: 36, fontWeight: '800' },
-  npsMax: { fontSize: 18, fontWeight: '400' },
   footer: {
     paddingHorizontal: 16,
     paddingTop: 12,

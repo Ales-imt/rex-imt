@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Controller } from 'react-hook-form';
 import { createRepository, type CrudProps, type Datasource, type RenderProps, type ViewConfig } from '../../services/crud/def';
-import { Checkbox, FormControl, FormControlLabel, FormGroup, FormHelperText, FormLabel, TextField } from "@mui/material";
+import { Box, Checkbox, Chip, FormControl, FormControlLabel, FormGroup, FormHelperText, FormLabel, TextField } from "@mui/material";
 import { useMemo } from "react";
 import { Crud } from "../../services/crud/Crud";
 import { AVAILABLE_ROLES, ENDPOINT_USER, USER } from './def';
@@ -115,7 +115,24 @@ export const userColumns: MRT_ColumnDef<User>[] = [
         header: 'Rôles',
         Cell: ({ cell }) => {
             const roles = cell.getValue<string[]>();
-            return Array.isArray(roles) ? roles.map(r => AVAILABLE_ROLES.find(ar => ar.id === r)?.label || r).join(', ') : '';
+            const roleColors: Record<string, 'error' | 'primary' | 'info' | 'default'> = {
+                ADMIN: 'error',
+                enseignant: 'primary',
+                ELEVE: 'info',
+            };
+            return (
+                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                    {Array.isArray(roles) && roles.map(r => (
+                        <Chip
+                            key={r}
+                            label={AVAILABLE_ROLES.find(ar => ar.id === r)?.label || r}
+                            color={roleColors[r] ?? 'default'}
+                            size="small"
+                            variant="filled"
+                        />
+                    ))}
+                </Box>
+            );
         }
     },
     { accessorKey: 'blame', header: 'Blamé' },

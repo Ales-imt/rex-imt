@@ -9,17 +9,32 @@ import { createTheme, ThemeProvider, useColorScheme, type Theme } from '@mui/mat
 import { NotificationsProvider } from '@toolpad/core/useNotifications';
 import { useEffect } from 'react';
 
-export const darkTheme = createTheme({
-  palette: {
-    mode: 'dark',
-  },
-});
-
 export const lightTheme = createTheme({
   palette: {
     mode: 'light',
+    primary: { main: '#6366F1', dark: '#4F46E5', light: '#818CF8' },
+    secondary: { main: '#22C55E' },
+    error: { main: '#EF4444' },
+    warning: { main: '#F97316' },
+    info: { main: '#0EA5E9' },
+    success: { main: '#22C55E' },
   },
-})
+  shape: { borderRadius: 10 },
+  typography: { fontFamily: 'system-ui, sans-serif' },
+});
+
+export const darkTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: { main: '#818CF8', dark: '#6366F1', light: '#A5B4FC' },
+    secondary: { main: '#4ADE80' },
+    error: { main: '#F87171' },
+    warning: { main: '#FB923C' },
+    info: { main: '#38BDF8' },
+    success: { main: '#4ADE80' },
+  },
+  shape: { borderRadius: 10 },
+});
 
 function CustomActions() {
   return (
