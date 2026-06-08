@@ -16,7 +16,7 @@
       "program": "${workspaceFolder}/backend/admin/cmd/main.go",
       "args": ["${workspaceFolder}/backend/admin/cmd/config.yaml"],
       "cwd": "${workspaceFolder}/backend/admin",
-      "envFile": "${workspaceFolder}/.vscode/secrets-dev.env"
+      "envFile": "${workspaceFolder}/.vscode/secrets-local.env"
     },
         {
       "name": "Debug rex-student",
@@ -26,7 +26,7 @@
       "program": "${workspaceFolder}/backend/student/cmd/main.go",
       "args": ["${workspaceFolder}/backend/student/cmd/config.yaml"],
       "cwd": "${workspaceFolder}/backend/student",
-      "envFile": "${workspaceFolder}/.vscode/secrets-dev.env"
+      "envFile": "${workspaceFolder}/.vscode/secrets-local.env"
     },
     {
       "name": "Attach admin (container)",

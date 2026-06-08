@@ -13,6 +13,9 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 
+
+
+
 CREATE FUNCTION public.notify_new_feedback() RETURNS trigger
     LANGUAGE plpgsql
     AS $$

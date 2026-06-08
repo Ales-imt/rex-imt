@@ -288,6 +288,23 @@ Le déploiement est géré par **Ansible** depuis le poste de développement.
 
 - Accès SSH aux VMs prod configuré (utilisateur `userdfx`)
 - Fichier `.vscode/secrets-prod.env` renseigné
+- Certificats TLS déposés dans `infras/ansible/files/` (voir ci-dessous)
+
+### Certificats TLS (`infras/ansible/files/`)
+
+Le rôle Ansible `nginx_vhost` copie le bundle de certificat depuis la machine locale vers chaque VM. Le répertoire `infras/ansible/files/` doit contenir **un sous-répertoire par site**, nommé exactement comme le nom d'hôte (`server_name`) :
+
+```
+infras/ansible/files/
+├── vecu-etudiant-admin-2.mines-ales.fr/
+│   └── Cert_bundle.pem
+└── vecu-etudiant-eleves-2.mines-ales.fr/
+    └── Cert_bundle.pem
+```
+
+Si un répertoire ou un `Cert_bundle.pem` est absent, la tâche *"Déployer le bundle de certificat"* échoue et le déploiement s'arrête.
+
+> Ces fichiers ne sont pas dans git (secrets). Les obtenir auprès de l'équipe ou les générer depuis l'autorité de certification du projet.
 
 ### VMs cibles
 
@@ -296,16 +313,15 @@ Le déploiement est géré par **Ansible** depuis le poste de développement.
 | Admin | `vecu-etudiant-admin-2.mines-ales.fr` | 8121 |
 | Élève | `vecu-etudiant-eleves-2.mines-ales.fr` | 8131 |
 
-### Commande de déploiement
+### Commandes de déploiement
 
 ```bash
-make deploy-prod
+make deploy-vm-prod          # déploie admin + élève
+make deploy-vm-admin-prod    # déploie uniquement l'admin
+make deploy-vm-eleve-prod    # déploie uniquement l'élève
 ```
 
-Cette commande :
-1. Génère automatiquement `vault-vars.yml` depuis `secrets-prod.env` (via `generate-vault-vars.sh`)
-2. Lance le playbook admin (`playbook-admin.yml`)
-3. Lance le playbook élève (`playbook-eleve.yml`)
+Chaque cible génère d'abord le `vault-vars.yml` depuis `secrets-prod.env`, puis lance le playbook Ansible correspondant.
 
 ```bash
 # Équivalent manuel :
@@ -362,23 +378,36 @@ age --decrypt -i cle_privee.txt fichier.age
 
 ## Workflow complet (prod)
 
+### Premier déploiement (migration incluse)
+
 ```bash
-make prod
+make first-deploy-prod
 ```
 
 Enchaîne dans l'ordre :
 1. `migration-prod` — migration v0 → v1 (**à ne lancer qu'une seule fois**)
-2. `db-to-code-prod` — extraction du schéma et génération sqlc
-3. `build-container-prod` — build des images Docker (target prod)
-4. `push` — génération sqlc + push vers GHCR
-5. `deploy-prod` — génération vault + déploiement Ansible
+2. `release-prod` — suite du workflow standard (voir ci-dessous)
+
+> **Attention** : `migration-prod` est à usage unique. Elle doit être supprimée du `makefile.prod` après la première utilisation.
+
+### Déploiements suivants
+
+```bash
+make release-prod
+```
+
+Enchaîne dans l'ordre :
+1. `db-to-code-prod` — extraction du schéma et génération sqlc
+2. `build-container-prod` — build des images Docker (target prod)
+3. `push` — génération sqlc + push vers GHCR
+4. `deploy-vm-prod` — génération vault + déploiement Ansible (admin + élève)
 
 Ou étape par étape :
 
 ```bash
-make build-container-prod   # Build uniquement les images
+make build-container-prod    # Build uniquement les images
 make push                    # Build + push vers GHCR
-make deploy-prod             # Déploiement Ansible uniquement
+make deploy-vm-prod          # Déploiement Ansible admin + élève
+make deploy-vm-admin-prod    # Déploiement Ansible admin uniquement
+make deploy-vm-eleve-prod    # Déploiement Ansible élève uniquement
 ```
-
-> **Attention** : la cible `migration-prod` est à usage unique (migration v0 → v1). Elle doit être supprimée du `makefile.prod` après la première utilisation.

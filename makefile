@@ -22,9 +22,9 @@ include makefile.prod
 all:
 	@echo ""
 	@echo "Usage : make local — déploiement local"
-	@echo "        make prod  — déploiement production"
+	@echo "        make first-deploy-prod  — déploiement production avec supression BD "
+	@echo "        make release-prod  — déploiement production"
 	@echo ""
-
 
 # ── Nettoyage ─────────────────────────────────────────────────────────────────
 
