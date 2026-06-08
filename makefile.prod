@@ -1,6 +1,8 @@
-.PHONY: prod migration-prod db-to-code-prod build-container-prod push deploy-prod
+.PHONY: first-deploy-prod release-prod migration-prod db-to-code-prod build-container-prod push deploy-vm-prod deploy-vm-admin-prod deploy-vm-eleve-prod
 
-prod : migration-prod db-to-code-prod build-container-prod push deploy-prod
+first-deploy-prod: migration-prod release-prod
+
+release-prod: db-to-code-prod build-container-prod push deploy-vm-prod
 
 # ── MIGRATION ──────────────────────────────────────────────────────────────────────
 
@@ -30,13 +32,16 @@ push:
 
 # ── Configure VM et deploy ──────────────────────────────────────────────────────────────────────
 
-deploy-prod:
+deploy-vm-prod: deploy-vm-admin-prod deploy-vm-eleve-prod
+
+deploy-vm-admin-prod:
 	@echo "--- 🚀 Creation du vault pour ansible ---"
 	cd $(ANSIBLE_DIR) && ./generate-vault-vars.sh
-	
-	@echo "--- 🚀 Déploiement sur les VMs prod ---"
 	@echo "--- 🚀 Déploiement Admin ---"
-	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod playbook-admin.yml --extra-vars "@vault-vars.yml"       --ask-become-pass
+	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod playbook-admin.yml --extra-vars "@vault-vars.yml" --ask-become-pass
 
+deploy-vm-eleve-prod:
+	@echo "--- 🚀 Creation du vault pour ansible ---"
+	cd $(ANSIBLE_DIR) && ./generate-vault-vars.sh
 	@echo "--- 🚀 Déploiement Eleve ---"
-	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod playbook-eleve.yml --extra-vars "@vault-vars.yml"       --ask-become-pass
+	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod playbook-eleve.yml --extra-vars "@vault-vars.yml" --ask-become-pass
