@@ -22,6 +22,8 @@ mariadb_database: "$(get MARIADB_DB)"
 mariadb_user: "$(get MARIADB_USER)"
 mariadb_password: "$(get MARIADB_PASSWORD)"
 
+ldap_host: "$(get LDAP_HOST)"
+
 jwt_secret_admin: "$(get JWT_SECRET_ADMIN)"
 jwt_secret_eleve: "$(get JWT_SECRET_ELEVE)"
 

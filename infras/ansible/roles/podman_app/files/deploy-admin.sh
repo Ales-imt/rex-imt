@@ -37,7 +37,7 @@ echo "🚀 Lancement du container $CONTAINER_NAME..."
 docker run -d \
     --name "$CONTAINER_NAME" \
     --restart unless-stopped \
-    -p "$PORT":8080 \
+    -p "$PORT":"$PORT" \
     --add-host=host.docker.internal:host-gateway \
     --env HOST="$HOST_IP" \
     -v "$(realpath "$CONFIG_FILE")":/opt/rex-admin/conf/config.yaml:ro,z \
