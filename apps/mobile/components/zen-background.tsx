@@ -4,7 +4,7 @@ import { StyleSheet, View } from 'react-native';
 export function ZenBackground() {
   const colors = useTheme();
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View style={[StyleSheet.absoluteFill, styles.container]} pointerEvents="none">
       <View style={[styles.base, { backgroundColor: colors.zenBase }]} />
       <View style={[styles.blob, styles.blob1, { backgroundColor: colors.zenBlob1 }]} />
       <View style={[styles.blob, styles.blob2, { backgroundColor: colors.zenBlob2 }]} />
@@ -16,6 +16,9 @@ export function ZenBackground() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    overflow: 'hidden',
+  },
   base: {
     ...StyleSheet.absoluteFillObject,
   },
