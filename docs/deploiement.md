@@ -48,6 +48,45 @@ rex-imt/
 
 ---
 
+## Initialisation des dépendances Node.js
+
+Avant de builder les conteneurs Docker ou de lancer les applications en développement, il faut que le fichier `package-lock.json` existe dans chaque application Node.js.
+
+### Pourquoi c'est obligatoire
+
+Les Dockerfiles utilisent `npm ci` pour installer les dépendances à l'intérieur du conteneur. `npm ci` exige la présence d'un `package-lock.json` — sans lui, le build échoue immédiatement.
+
+Le `package-lock.json` n'est **pas généré pendant le build Docker** : Docker copie le fichier depuis la machine locale (`COPY apps/.../package*.json ./`), puis `npm ci` l'utilise. Il doit donc exister localement avant de lancer `docker build`.
+
+### Conséquence pour les builds reproductibles
+
+Sans `package-lock.json` commité dans git, chaque développeur qui clone le dépôt et lance `docker build` obtiendra des versions de dépendances potentiellement différentes (selon ce que npm résout au moment du build). Cela peut provoquer des comportements différents entre les environnements.
+
+Avec `package-lock.json` commité, tous les développeurs installent exactement les mêmes versions — le build est déterministe.
+
+### Génération (à faire une seule fois par application)
+
+```bash
+# Frontend admin
+cd apps/web-admin
+npm install --package-lock-only   # génère package-lock.json sans installer node_modules
+
+# Application mobile
+cd apps/mobile
+npm install --package-lock-only
+```
+
+Commiter ensuite les fichiers générés :
+
+```bash
+git add apps/web-admin/package-lock.json apps/mobile/package-lock.json
+git commit -m "chore: add package-lock.json for reproducible builds"
+```
+
+> À refaire uniquement lors de l'ajout, la suppression ou la mise à jour d'une dépendance dans `package.json`.
+
+---
+
 ## Workflow local
 
 La commande principale pour lancer un environnement de développement complet est :
