@@ -1,4 +1,4 @@
-.PHONY: deploy-local infra-local migration-local start-local stop-local start-admin stop-admin start-eleve stop-eleve
+.PHONY: deploy-local infra-local stop-infra migration-local start-local stop-local start-admin stop-admin start-eleve stop-eleve
 
 _get_local=$(shell grep '^$(1)=' $(SECRETS_FILE_LOCAL) | cut -d= -f2)
 
@@ -22,6 +22,10 @@ infra-local:
 	@echo "--- 🆕 création de la bd MariaDB ---"
 	docker exec -i mariadb-rex mariadb -u root -p$(call _get_local,MARIADB_PASSWORD) \
 		-e "CREATE DATABASE $(call _get_local,MARIADB_DB);"
+
+stop-infra:
+	@echo "--- 🛑 Arrêt des conteneurs Docker ---"
+	cd $(DOCKER_DIR) && docker compose -f compose.yaml --env-file ../../$(SECRETS_FILE_LOCAL) down
 
 # ── Migration ──────────────────────────────────────────────────────────────────────
 
@@ -48,7 +52,7 @@ db-to-code-local:
 
 start-local: start-admin start-eleve
 
-stop-local: stop-admin stop-eleve
+stop-local: stop-admin stop-eleve stop-infra
 
 start-admin:
 	$(RUN_DIR)/build-admin.sh local
@@ -65,5 +69,3 @@ stop-admin:
 stop-eleve:
 	@echo "--- 🛑 Arrêt du container élève ---"
 	docker rm -f $(ELEVE_CONTAINER) 2>/dev/null || true
-
-
