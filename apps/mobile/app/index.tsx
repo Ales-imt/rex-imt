@@ -174,10 +174,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 32,
     paddingVertical: 36,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
     elevation: 4,
   },
   logoContainer: {
@@ -243,10 +240,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     marginTop: 4,
-    shadowColor: PRIMARY,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    boxShadow: '0 2px 4px rgba(25,118,210,0.3)',
     elevation: 3,
   },
   signInBtnText: {
