@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AgoraProvider } from '@/hooks/use-agora';
@@ -11,6 +12,29 @@ export function RootLayout() {
   const colorScheme = useColorScheme();
 
   useEffect(() => { setupAxiosInterceptors(); }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      document.head.appendChild(meta);
+    }
+    const color = colorScheme === 'dark' ? '#0d1117' : '#f0f4f8';
+    meta.content = color;
+
+    let schemeMeta = document.querySelector('meta[name="color-scheme"]') as HTMLMetaElement | null;
+    if (!schemeMeta) {
+      schemeMeta = document.createElement('meta');
+      schemeMeta.name = 'color-scheme';
+      document.head.appendChild(schemeMeta);
+    }
+    schemeMeta.content = colorScheme === 'dark' ? 'dark' : 'light';
+
+    document.documentElement.style.backgroundColor = color;
+    document.body.style.backgroundColor = color;
+  }, [colorScheme]);
 
   return (
     <AgoraProvider>

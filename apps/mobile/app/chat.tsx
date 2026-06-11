@@ -23,7 +23,7 @@ import {
   View,
 } from 'react-native';
 import { FlashList } from "@shopify/flash-list";
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, type EdgeRecord } from 'react-native-safe-area-context';
 
 type Message = {
   id: string;
@@ -193,7 +193,12 @@ export default function ChatScreen() {
   const orientation = useOrientation();
   const [keyboardOffset, setKeyboardOffset] = useState(56);
 
-  const safeEdges = useMemo((): ('bottom' | 'left' | 'right')[] => {
+  const safeEdges = useMemo((): ('bottom' | 'left' | 'right')[] | EdgeRecord => {
+    if (Platform.OS === 'web') {
+      if (orientation === 'landscape-left') return { top: 'off', bottom: 'off', left: 'additive', right: 'off' };
+      if (orientation === 'landscape-right') return { top: 'off', bottom: 'off', left: 'off', right: 'additive' };
+      return { top: 'off', bottom: 'off', left: 'off', right: 'off' };
+    }
     if (orientation === 'landscape-left') return ['bottom', 'left'];
     if (orientation === 'landscape-right') return ['bottom', 'right'];
     return ['bottom'];
