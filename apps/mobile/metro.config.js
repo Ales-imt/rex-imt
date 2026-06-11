@@ -3,8 +3,11 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const config = getDefaultConfig(__dirname);
 
-// pour que cela fontionne,  il faut appeller "http://10.208.113.46:8081" dans le navigateur web et android
-// Sinon, aura des erreur cors.
+
+
+console.log("\x1b[31mpour que cela fontionne,  il faut appeller \"http://10.208.113.46:8081\" dans le navigateur web et android Sinon, aura des erreur cors.\x1b[0m")
+
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
 
 config.server = {
   ...config.server,
