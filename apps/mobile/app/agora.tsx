@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
 
     // Dropdown
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' },
-    dropdown: { backgroundColor: '#fff', borderRadius: 12, paddingVertical: 8, minWidth: 180, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 8 },
+    dropdown: { backgroundColor: '#fff', borderRadius: 12, paddingVertical: 8, minWidth: 180, boxShadow: '0 4px 8px rgba(0,0,0,0.15)', elevation: 8 },
     dropdownTitle: { fontSize: 11, fontWeight: '700', color: '#999', textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 16, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', marginBottom: 4 },
     dropdownItem: { paddingHorizontal: 16, paddingVertical: 10 },
     dropdownItemActive: { backgroundColor: '#e8f0fe' },
@@ -344,13 +344,13 @@ const styles = StyleSheet.create({
     noteWrapper: { width: '47%' },
     note: {
         borderRadius: 2, padding: 12, paddingTop: 18, minHeight: 160,
-        shadowColor: '#000', shadowOffset: { width: 2, height: 4 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6,
+        boxShadow: '2px 4px 6px rgba(0,0,0,0.25)', elevation: 6,
     },
     pin: {
         position: 'absolute', top: -7, alignSelf: 'center',
         width: 14, height: 14, borderRadius: 7,
         backgroundColor: '#dc2626',
-        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 2, elevation: 4, zIndex: 10,
+        boxShadow: '0 2px 2px rgba(0,0,0,0.4)', elevation: 4, zIndex: 10,
     },
     noteAuteur: { fontSize: 9, fontWeight: '700', letterSpacing: 0.8, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase' },
     noteModere: { fontSize: 11, lineHeight: 15, color: '#374151', fontStyle: 'italic', marginBottom: 4 },
@@ -365,13 +365,13 @@ const styles = StyleSheet.create({
     // Detail modal
     detailBox: {
         width: '85%', maxHeight: '80%', borderRadius: 4, padding: 16, paddingTop: 22,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 12,
+        boxShadow: '0 8px 12px rgba(0,0,0,0.3)', elevation: 12,
     },
     detailPin: {
         position: 'absolute', top: -9, alignSelf: 'center',
         width: 18, height: 18, borderRadius: 9,
         backgroundColor: '#dc2626',
-        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 2, elevation: 4, zIndex: 10,
+        boxShadow: '0 2px 2px rgba(0,0,0,0.4)', elevation: 4, zIndex: 10,
     },
     detailAuteur: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: '#6b7280', textTransform: 'uppercase', marginBottom: 10 },
     detailSection: { marginBottom: 10 },
