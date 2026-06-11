@@ -2,7 +2,8 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -147,6 +148,8 @@ export default function EvalDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -163,19 +166,9 @@ export default function EvalDetailScreen() {
     return () => { active = false; };
   }, [matiereId]);
 
-  function confirmDelete() {
-    Alert.alert(
-      'Supprimer cette évaluation',
-      'Cette action est irréversible. Votre avis sera définitivement supprimé.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Supprimer', style: 'destructive', onPress: doDelete },
-      ]
-    );
-  }
-
   async function doDelete() {
     if (!session || deleting) return;
+    setConfirmVisible(false);
     setDeleting(true);
     try {
       const pseudo = await getOrCreatePseudo();
@@ -184,7 +177,7 @@ export default function EvalDetailScreen() {
       });
       router.replace('/evaluation');
     } catch {
-      Alert.alert('Erreur', "Impossible de supprimer l'évaluation.");
+      setDeleteError(true);
       setDeleting(false);
     }
   }
@@ -237,7 +230,7 @@ export default function EvalDetailScreen() {
             <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
               <TouchableOpacity
                 style={[styles.deleteBtn, deleting && styles.deleteBtnDisabled]}
-                onPress={confirmDelete}
+                onPress={() => setConfirmVisible(true)}
                 activeOpacity={0.8}
                 disabled={deleting}
               >
@@ -251,6 +244,35 @@ export default function EvalDetailScreen() {
           </>
         ) : null}
       </View>
+
+      <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => setConfirmVisible(false)}>
+        <Pressable style={styles.overlay} onPress={() => setConfirmVisible(false)}>
+          <Pressable style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Supprimer cette évaluation</Text>
+            <Text style={styles.modalBody}>Cette action est irréversible. Votre avis sera définitivement supprimé.</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setConfirmVisible(false)}>
+                <Text style={styles.modalBtnCancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBtnDelete} onPress={doDelete}>
+                <Text style={styles.modalBtnDeleteText}>Supprimer</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={deleteError} transparent animationType="fade" onRequestClose={() => setDeleteError(false)}>
+        <Pressable style={styles.overlay} onPress={() => setDeleteError(false)}>
+          <Pressable style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Erreur</Text>
+            <Text style={styles.modalBody}>Impossible de supprimer l'évaluation.</Text>
+            <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setDeleteError(false)}>
+              <Text style={styles.modalBtnCancelText}>OK</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </>
   );
 }
@@ -323,4 +345,13 @@ const styles = StyleSheet.create({
   },
   deleteBtnDisabled: { opacity: 0.6 },
   deleteBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+  modalBox: { backgroundColor: '#fff', borderRadius: 14, padding: 24, width: '80%', maxWidth: 340, gap: 12 },
+  modalTitle: { fontSize: 16, fontWeight: '700', color: '#111' },
+  modalBody: { fontSize: 14, color: '#555', lineHeight: 20 },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 4 },
+  modalBtnCancel: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: '#f0f0f0' },
+  modalBtnCancelText: { fontSize: 14, fontWeight: '600', color: '#333' },
+  modalBtnDelete: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: '#EF4444' },
+  modalBtnDeleteText: { fontSize: 14, fontWeight: '600', color: '#fff' },
 });

@@ -292,6 +292,7 @@ export default function ChatScreen() {
         { id: message_id, text, from: 'me', time: now() },
       ]);
     } catch (e) {
+      console.log(e)
       showError("Impossible d'envoyer le message.");
     }
   }
@@ -418,10 +419,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 8,
     minWidth: 180,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+    boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
     elevation: 8,
   },
   dropdownTitle: {
@@ -465,10 +463,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 8,
     paddingBottom: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
+    boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
     elevation: 1,
   },
   bubbleWrapper: {
@@ -538,10 +533,7 @@ const styles = StyleSheet.create({
     padding: 20,
     width: '80%',
     maxWidth: 320,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
     elevation: 8,
   },
   confirmTitle: {
