@@ -115,7 +115,7 @@ func main() {
 		r.Route("/auth", func(r chi.Router) {
 			auth.RoutesAuth(r, cfg, authentification.PostLdap)
 		})
-		role := []string{"ELEVE"}
+		role := []string{auth.RoleEleve}
 		r.With(auth.Security(cfg.JWT, &role)).Route("/feedback", feedback.MakeRouteFeedBack(cfg.Age.PublicKey))
 		r.With(auth.Security(cfg.JWT, &role)).Route("/reponse", reponse.MakeRouteReponse())
 		r.With(auth.Security(cfg.JWT, &role)).Route("/note", note.MakeRouteNote(noteConnector))

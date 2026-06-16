@@ -6,16 +6,16 @@ import PersonIcon from '@mui/icons-material/Person';
 import FeedbackIcon from '@mui/icons-material/Feedback';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import ForumIcon from '@mui/icons-material/Forum';
-import { USER_WORKFLOW } from './pages/user/def';
+import { Role, USER_WORKFLOW } from './pages/user/def';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import SessionContext, { type Session } from './SessionContext';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { ReactRouterAppProvider } from '@toolpad/core/react-router';
-import { Outlet} from 'react-router';
+import { Outlet } from 'react-router';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { getCredentialsProvider } from './pages/login/CredentialProvider';
 import { setupAxiosInterceptors } from './services/api';
-import {  FEEDBACK_WORKFLOW } from './pages/feedback/def';
+import { FEEDBACK_WORKFLOW } from './pages/feedback/def';
 import { ANALYSE } from './pages/analyse/def';
 import { DISCUSSION } from './pages/discussion/def';
 import { EVALUATION_WORKFLOW } from './pages/evaluation/def';
@@ -30,30 +30,32 @@ const NAVIGATION: NavigationItemWithRoles[] = [
   {
     segment: USER_WORKFLOW,
     title: 'Utilisateur',
-    icon: <PersonIcon />,
-    // requiredRoles: ['admin'],
+    icon: <PersonIcon/>,
+    requiredRoles: [Role.ADMIN],
   },
   {
     segment: FEEDBACK_WORKFLOW,
     title: 'Feedback',
     icon: <FeedbackIcon />,
-    // requiredRoles: ['admin'],
+    requiredRoles: [Role.ADMIN],
   },
   {
     segment: ANALYSE,
     title: 'Analyse',
     icon: <BarChartIcon />,
-    // requiredRoles: ['admin'],
+    requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
   },
   {
     segment: DISCUSSION,
     title: 'Discussion',
     icon: <ForumIcon />,
+    requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
   },
   {
     segment: EVALUATION_WORKFLOW,
     title: 'Évaluations',
     icon: <BarChartIcon />,
+    requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
   },
 ]
 

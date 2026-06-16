@@ -67,7 +67,15 @@ export function UrgencesTab({ data }: { data: Feedback[] }) {
         const base = activeCategory
             ? classified.filter(f => f.categorie === activeCategory)
             : classified;
-        return [...base].sort((a, b) => (b.urgence ?? 0) - (a.urgence ?? 0)).slice(0, 50);
+        return [...base]
+            .sort((a, b) => {
+                const urgenceDiff = (b.urgence ?? 0) - (a.urgence ?? 0);
+                if (urgenceDiff !== 0) return urgenceDiff;
+                const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+                const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+                return bTime - aTime;
+            })
+            .slice(0, 50);
     }, [classified, activeCategory]);
 
     return (

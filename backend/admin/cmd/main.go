@@ -144,25 +144,27 @@ func main() {
 		r.Route("/auth", func(r chi.Router) {
 			auth.RoutesAuth(r, cfg, authentification.PostLdap)
 		})
-		roles := []string{"ADMIN"}
 
-		r.With(auth.Security(cfg.JWT, &roles)).
+		adminOnly := []string{auth.RoleAdmin}
+		adminAndGestionnaire := []string{auth.RoleAdmin, auth.RoleGestionnaire}
+
+		r.With(auth.Security(cfg.JWT, &adminOnly)).
 			Route("/user", func(r chi.Router) {
 				user.RouteUtilisateur(r, cfg.LDAP)
 			})
-		r.With(auth.Security(cfg.JWT, &roles)).
+		r.With(auth.Security(cfg.JWT, &adminOnly)).
 			Route("/cohorte", func(r chi.Router) {
 				cohorte.RouteCohorte(r, cfg.LDAP)
 			})
-		r.With(auth.Security(cfg.JWT, &roles)).
+		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/feedback", feedback.RouteFeedback)
-		r.With(auth.Security(cfg.JWT, &roles)).
+		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/reports", reports.RouteReports)
-		r.With(auth.Security(cfg.JWT, &roles)).
+		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/reponse", reponse.RouteReponse)
-		r.With(auth.Security(cfg.JWT, &roles)).
+		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/postit", postit.RoutePostit)
-		r.With(auth.Security(cfg.JWT, &roles)).
+		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/evaluation", func(r chi.Router) {
 				evaluation.RouteEvaluation(r, iaConnector)
 			})
