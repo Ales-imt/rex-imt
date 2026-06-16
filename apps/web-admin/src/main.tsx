@@ -1,11 +1,11 @@
-import { StrictMode } from 'react'
+import { StrictMode, useContext } from 'react'
 import { createRoot } from 'react-dom/client'
-import { createBrowserRouter, RouterProvider } from 'react-router';
-
+import { createBrowserRouter, RouterProvider, Outlet } from 'react-router';
 
 import App from './App.tsx'
-import { USER_WORKFLOW } from './pages/user/def.tsx';
+import { Role, USER_WORKFLOW } from './pages/user/def.tsx';
 import Layout from './layouts/dashboard.tsx';
+import SessionContext from './SessionContext.ts';
 import { UserIndex } from './pages/user/UserLayout.tsx';
 import { createUserRoutes } from './pages/user/routes.tsx';
 import { LOGIN } from './pages/login/def.ts';
@@ -20,6 +20,23 @@ import { DISCUSSION } from './pages/discussion/def.ts';
 import { DiscussionPanel } from './pages/discussion/DiscussionPanel.tsx';
 import { Evaluation } from './pages/evaluation/Evaluation.tsx';
 
+const RoleGuard = ({ children, roles }: { children: React.ReactNode, roles: string[] }) => {
+  const { session } = useContext(SessionContext);
+
+  if (!session?.user) {
+    return null;
+  }
+
+  const userRoles = session.user.roles || [];
+  const hasRole = roles.some(r => userRoles.includes(r));
+
+  if (!hasRole) {
+    return <div>Accès non autorisé</div>;
+  }
+
+  return <>{children}</>;
+};
+
 const routes = [
   {
     Component: App,
@@ -30,7 +47,7 @@ const routes = [
         children: [
           {
             path: USER_WORKFLOW,
-            // element: <RoleGuard roles={[Role.ADMIN]}><UserLayout /></RoleGuard>,
+            element: <RoleGuard roles={[Role.ADMIN]}><Outlet /></RoleGuard>,
             children: [
               { index: true, Component: UserIndex },
               ...createUserRoutes()
@@ -38,6 +55,7 @@ const routes = [
           },
           {
             path: FEEDBACK_WORKFLOW,
+            element: <RoleGuard roles={[Role.ADMIN, Role.GESTIONNAIRE]}><Outlet /></RoleGuard>,
             children: [
               { index: true, Component: FeedbackIndex },
               ...createFeedbackRoutes()
@@ -45,15 +63,15 @@ const routes = [
           },
           {
             path: ANALYSE,
-            Component: FeedbackDashboard
+            element: <RoleGuard roles={[Role.ADMIN, Role.GESTIONNAIRE]}><FeedbackDashboard /></RoleGuard>,
           },
           {
             path: DISCUSSION,
-            Component: DiscussionPanel
+            element: <RoleGuard roles={[Role.ADMIN, Role.GESTIONNAIRE]}><DiscussionPanel /></RoleGuard>,
           },
           {
             path: EVALUATION_WORKFLOW,
-            Component: Evaluation
+            element: <RoleGuard roles={[Role.ADMIN, Role.GESTIONNAIRE]}><Evaluation /></RoleGuard>,
           }
         ]
       },
@@ -61,14 +79,12 @@ const routes = [
         path: LOGIN,
         Component: SignIn
       },
-
     ]
   }
 ]
 
 
 const router = createBrowserRouter(routes);
-
 
 
 createRoot(document.getElementById('root')!).render(

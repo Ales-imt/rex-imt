@@ -2,8 +2,10 @@
 
 _get_local=$(shell grep '^$(1)=' $(SECRETS_FILE_LOCAL) | cut -d= -f2)
 
-local: infra-local migration-local cyber_note db-to-code-local start-local
+local:  infra-local migration-local cyber_note db-to-code-local start-local
 
+
+#
 # ── Infra ─────────────────────────────────────────────────────────────────────
 
 infra-local:

@@ -1,12 +1,14 @@
 package feedback
 
 import (
+	"back-rex-common/pkg/auth"
 	"back-rex-common/pkg/services"
 	"context"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/render"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Classification struct {
@@ -31,6 +33,11 @@ func GetAllFeedback(w http.ResponseWriter, r *http.Request) {
 	if feedbacks == nil {
 		feedbacks = []ListFeedbacksWithClassificationRow{}
 	}
+	if !auth.HasRole(r.Context(), auth.RoleAdmin) {
+		for i := range feedbacks {
+			feedbacks[i].Strongbox = pgtype.Text{}
+		}
+	}
 	render.JSON(w, r, feedbacks)
 }
 
@@ -51,6 +58,11 @@ func GetRecentFeedback(w http.ResponseWriter, r *http.Request) {
 
 	if feedbacks == nil {
 		feedbacks = []ListRecentFeedbacksWithClassificationRow{}
+	}
+	if !auth.HasRole(r.Context(), auth.RoleAdmin) {
+		for i := range feedbacks {
+			feedbacks[i].Strongbox = pgtype.Text{}
+		}
 	}
 	render.JSON(w, r, feedbacks)
 }

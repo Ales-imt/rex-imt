@@ -4,7 +4,7 @@ import { createRepository, type CrudProps, type Datasource, type RenderProps, ty
 import { Box, Checkbox, Chip, FormControl, FormControlLabel, FormGroup, FormHelperText, FormLabel, TextField } from "@mui/material";
 import { useMemo } from "react";
 import { Crud } from "../../services/crud/Crud";
-import { AVAILABLE_ROLES, ENDPOINT_USER, USER } from './def';
+import { AVAILABLE_ROLES, ENDPOINT_USER, Role, USER } from './def';
 import type { MRT_ColumnDef } from 'material-react-table';
 import { useRootPath } from '../../services/crud/useRootPath';
 
@@ -115,10 +115,11 @@ export const userColumns: MRT_ColumnDef<User>[] = [
         header: 'Rôles',
         Cell: ({ cell }) => {
             const roles = cell.getValue<string[]>();
-            const roleColors: Record<string, 'error' | 'primary' | 'info' | 'default'> = {
-                ADMIN: 'error',
-                enseignant: 'primary',
-                ELEVE: 'info',
+            const roleColors: Record<string, 'error' | 'warning' | 'primary' | 'info' | 'default'> = {
+                [Role.ADMIN]: 'error',
+                [Role.GESTIONNAIRE]: 'warning',
+                [Role.PROF]: 'primary',
+                [Role.ELEVE]: 'info',
             };
             return (
                 <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>

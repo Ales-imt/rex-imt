@@ -65,7 +65,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 		return
 	}
 
-	etudiant := slices.Contains(input.Roles, "ELEVE")
+	etudiant := slices.Contains(input.Roles, auth.RoleEleve)
 	ldapIdentity := auth.GetLdapIdentity(sr.Entries[0])
 
 	id, err := usercommon.CreateUser(tx, ldapIdentity, ctx, input.Roles, etudiant)
@@ -81,9 +81,10 @@ func CreateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 }
 
 var allowedRoles = map[string]struct{}{
-	"ADMIN":        {},
-	"ELEVE":        {},
-	"GESTIONNAIRE": {},
+	auth.RoleAdmin:        {},
+	auth.RoleEleve:        {},
+	auth.RoleGestionnaire: {},
+	auth.RoleProf:         {},
 }
 
 func validateUser(user UserRequest, sr *ldap.SearchResult) []services.FormValidation {
@@ -189,7 +190,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 		return
 	}
 
-	etudiant := slices.Contains(input.Roles, "ELEVE")
+	etudiant := slices.Contains(input.Roles, auth.RoleEleve)
 
 	if etudiant {
 		queriesCommon := usercommon.New(tx)
