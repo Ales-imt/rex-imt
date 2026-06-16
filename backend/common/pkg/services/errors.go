@@ -1,7 +1,7 @@
 package services
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/render"
@@ -19,17 +19,41 @@ func (e *ErrorResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// Fonction générique pour toutes les erreurs
 func RenderError(w http.ResponseWriter, r *http.Request, httpStatus int, code ErrorCode, message string, detail any, logPrefix string) {
+	// Le message d'origine est toujours loggé côté serveur, jamais perdu.
+	level := slog.LevelError
+	if httpStatus < 500 {
+		level = slog.LevelDebug
+	}
+	slog.Log(r.Context(), level, "erreur",
+		"type", logPrefix, "status", httpStatus, "code", code,
+		"method", r.Method, "path", r.URL.Path, "detail_interne", message,
+	)
+
+	// 400 : on garde le message (validation d'entrée, rédigé par nous, non sensible).
+	// Tout le reste (401/403/409/500) : message générique pour ne rien divulguer.
+	clientMsg := message
+	if httpStatus != http.StatusBadRequest {
+		switch httpStatus {
+		case 401:
+			clientMsg = "Authentification requise"
+		case 403:
+			clientMsg = "Accès refusé"
+		case 409:
+			clientMsg = "Conflit lors de la modification"
+		default:
+			clientMsg = "Une erreur interne est survenue"
+		}
+	}
+
 	resp := &ErrorResponse{
 		HTTPStatusCode: httpStatus,
 		Code:           code,
-		Message:        message,
-		Details:        detail,
+		Message:        clientMsg,
+		Details:        detail, // toujours préservé (errors de validation)
 	}
-	log.Printf("%s: %v", logPrefix, resp)
 	if err := render.Render(w, r, resp); err != nil {
-		log.Printf(" %s: unable to render response: %v", logPrefix, err)
+		slog.Error("unable to render response", "logPrefix", logPrefix, "error", err)
 	}
 }
 

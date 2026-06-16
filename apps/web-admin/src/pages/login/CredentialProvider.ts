@@ -159,7 +159,6 @@ export class CredentialsProvider {
     public async updateToken(minValidity: number): Promise<boolean> {
         const nowInSeconds = Date.now() / 1000
 
-        console.log(this.tokenExpiry, nowInSeconds, this.tokenExpiry ? this.tokenExpiry - nowInSeconds : "undef", minValidity)
         if (this.tokenExpiry !== null && this.tokenExpiry - nowInSeconds > minValidity) {
             return false
         }

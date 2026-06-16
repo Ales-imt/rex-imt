@@ -193,7 +193,7 @@ func createEtudiants(tx pgx.Tx, queries *Queries, ctx context.Context, eleves []
 				Mail:      e.Mail,
 				Promotion: p.Name.String,
 			}
-			idLocal, err = userCommon.CreateUser(tx, &ident, ctx, []string{"ELEVE"}, true)
+			idLocal, err = userCommon.CreateUser(tx, &ident, ctx, []string{auth.RoleEleve}, true)
 			if err != nil {
 				return nil, err
 			}
