@@ -70,3 +70,15 @@ mail: Joel.Vlasak@mines-ales.fr
 ou: PROF
 userPassword: password
 
+dn: uid=claire.lecocq,ou=people,dc=ema,dc=fr
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+uid: claire.lecocq
+sn: Lecocq
+givenName: Claire
+cn: Claire Lecocq
+mail: claire.lecocq@mines-ales.fr
+ou: PROF
+userPassword: password
+
