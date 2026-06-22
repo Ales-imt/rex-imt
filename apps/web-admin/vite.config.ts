@@ -21,6 +21,11 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:3333',
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            proxyReq.setHeader('X-Real-IP', req.socket.remoteAddress ?? '127.0.0.1');
+          });
+        },
       },
     },
   }, build: {

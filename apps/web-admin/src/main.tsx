@@ -19,6 +19,8 @@ import { FeedbackDashboard } from './pages/analyse/FeedbackDashboard.tsx';
 import { DISCUSSION } from './pages/discussion/def.ts';
 import { DiscussionPanel } from './pages/discussion/DiscussionPanel.tsx';
 import { Evaluation } from './pages/evaluation/Evaluation.tsx';
+import { PRESENCE_WORKFLOW } from './pages/presence/def.ts';
+import { Presence } from './pages/presence/Presence.tsx';
 
 const RoleGuard = ({ children, roles }: { children: React.ReactNode, roles: string[] }) => {
   const { session } = useContext(SessionContext);
@@ -72,6 +74,10 @@ const routes = [
           {
             path: EVALUATION_WORKFLOW,
             element: <RoleGuard roles={[Role.ADMIN, Role.GESTIONNAIRE]}><Evaluation /></RoleGuard>,
+          },
+          {
+            path: PRESENCE_WORKFLOW,
+            element: <RoleGuard roles={[Role.ADMIN, Role.GESTIONNAIRE]}><Presence /></RoleGuard>,
           }
         ]
       },

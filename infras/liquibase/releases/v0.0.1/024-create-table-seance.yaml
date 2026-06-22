@@ -1,0 +1,100 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.2-024-create-table-seance
+      author: vjo
+      # L'ABSENCE ne crée PAS de ligne : un absent = élève de eleve_groupe
+      # sans ligne pointage pour la séance (calculé côté requête).
+      # Le QR encode un jeton signé à durée courte côté back ; seul "code"
+      # (repli manuel) est persistant ici.
+      changes:
+        - createTable:
+            tableName: seance
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigserial
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+              - column:
+                  name: matiere_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: groupe_id
+                  type: bigint
+                  constraints:
+                    nullable: true
+              - column:
+                  name: code
+                  type: varchar(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: opened_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: closed_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: true
+              - column:
+                  name: late_after_minutes
+                  type: integer
+                  defaultValueNumeric: 10
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: seance
+            schemaName: public
+            columnNames: code
+            constraintName: uq_seance_code
+        - addForeignKeyConstraint:
+            baseTableName: seance
+            baseTableSchemaName: public
+            baseColumnNames: matiere_id
+            referencedTableName: matiere
+            referencedTableSchemaName: public
+            referencedColumnNames: id
+            constraintName: seance_matiere_id_fkey
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: seance
+            baseTableSchemaName: public
+            baseColumnNames: groupe_id
+            referencedTableName: groupe
+            referencedTableSchemaName: public
+            referencedColumnNames: id
+            constraintName: seance_groupe_id_fkey
+            onDelete: SET NULL
+        - createIndex:
+            tableName: seance
+            indexName: idx_seance_matiere
+            columns:
+              - column:
+                  name: matiere_id
+        - createIndex:
+            tableName: seance
+            indexName: idx_seance_open
+            columns:
+              - column:
+                  name: closed_at
+      rollback:
+        - sql:
+            sql: ALTER TABLE seance DROP CONSTRAINT IF EXISTS seance_groupe_id_fkey
+        - sql:
+            sql: ALTER TABLE seance DROP CONSTRAINT IF EXISTS seance_matiere_id_fkey
+        - dropTable:
+            tableName: seance
+            schemaName: public

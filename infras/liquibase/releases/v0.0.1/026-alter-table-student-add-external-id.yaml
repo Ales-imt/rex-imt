@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.1-026-alter-table-student-add-external-id
+      author: vjo
+      changes:
+        - addColumn:
+            tableName: student
+            schemaName: public
+            columns:
+              - column:
+                  name: external_id
+                  type: INTEGER
+      rollback:
+        - dropColumn:
+            tableName: student
+            schemaName: public
+            columnName: external_id

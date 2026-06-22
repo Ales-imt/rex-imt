@@ -1,0 +1,71 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.2-025-create-table-pointage
+      author: vjo
+      # statut RETARD se déduit de pointe_at > opened_at + late_after_minutes ;
+      # la colonne permet aussi une saisie/override manuel (ex EXCUSE).
+      # Un absent = élève de eleve_groupe sans ligne pointage pour la séance.
+      changes:
+        - createTable:
+            tableName: pointage
+            schemaName: public
+            columns:
+              - column:
+                  name: seance_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: statut
+                  type: text
+                  defaultValue: PRESENT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: pointe_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: pointage
+            schemaName: public
+            columnNames: seance_id, user_id
+            constraintName: pk_pointage
+        - addForeignKeyConstraint:
+            baseTableName: pointage
+            baseTableSchemaName: public
+            baseColumnNames: seance_id
+            referencedTableName: seance
+            referencedTableSchemaName: public
+            referencedColumnNames: id
+            constraintName: pointage_seance_id_fkey
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: pointage
+            baseTableSchemaName: public
+            baseColumnNames: user_id
+            referencedTableName: user
+            referencedTableSchemaName: public
+            referencedColumnNames: id
+            constraintName: pointage_user_id_fkey
+            onDelete: CASCADE
+        - createIndex:
+            tableName: pointage
+            indexName: idx_pointage_user
+            columns:
+              - column:
+                  name: user_id
+      rollback:
+        - sql:
+            sql: ALTER TABLE pointage DROP CONSTRAINT IF EXISTS pointage_user_id_fkey
+        - sql:
+            sql: ALTER TABLE pointage DROP CONSTRAINT IF EXISTS pointage_seance_id_fkey
+        - dropTable:
+            tableName: pointage
+            schemaName: public

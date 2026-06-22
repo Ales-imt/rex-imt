@@ -10,6 +10,7 @@ import (
 	"back-rex-admin/pkg/ia/rack"
 	"back-rex-admin/pkg/ia/ragarenn"
 	"back-rex-admin/pkg/postit"
+	"back-rex-admin/pkg/presence"
 	"back-rex-admin/pkg/reponse"
 	"back-rex-admin/pkg/reports"
 	"back-rex-admin/pkg/rgpd"
@@ -167,6 +168,10 @@ func main() {
 		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/evaluation", func(r chi.Router) {
 				evaluation.RouteEvaluation(r, iaConnector)
+			})
+		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
+			Route("/presence", func(r chi.Router) {
+				presence.RoutePresence(r, cfg.Presence.TokenSecret, cfg.Presence.PlanningURL)
 			})
 	})
 

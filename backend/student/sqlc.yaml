@@ -74,3 +74,14 @@ sql:
         sql_package: "pgx/v5"
         omit_unused_structs: true
         emit_json_tags: true
+
+  - engine: "postgresql"
+    queries: "pkg/pointage/query.sql"
+    schema: "../schema.sql"
+    gen:
+      go:
+        package: "gen"
+        out: "pkg/pointage/gen"
+        sql_package: "pgx/v5"
+        omit_unused_structs: true
+        emit_json_tags: true

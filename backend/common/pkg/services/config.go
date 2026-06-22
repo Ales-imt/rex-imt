@@ -18,6 +18,12 @@ type Config struct {
 	RAGaRenn      RAGaRennConfig `yaml:"ragarenn"`
 	Age           AgeConfig      `yaml:"age"`
 	Rack          RackConfig     `yaml:"rack"`
+	Presence      PresenceConfig `yaml:"presence"`
+}
+
+type PresenceConfig struct {
+	TokenSecret string `yaml:"tokenSecret"`
+	PlanningURL string `yaml:"planningURL"`
 }
 
 type AgeConfig struct {

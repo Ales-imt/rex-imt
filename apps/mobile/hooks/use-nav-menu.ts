@@ -2,12 +2,13 @@ import { useRouter } from 'expo-router';
 import { MenuItem } from '@/components/header-menu';
 import { logout } from '@/services/auth';
 
-type Route = 'agora' | 'chat' | 'programme' | 'notes' | 'evaluation' | 'apropos';
+type Route = 'agora' | 'chat' | 'programme' | 'presence' | 'notes' | 'evaluation' | 'apropos';
 
 const NAV_ITEMS: { route: Route; icon: string; label: string }[] = [
   { route: 'agora',      icon: '📋', label: 'Agora' },
   { route: 'chat',       icon: '💬', label: 'Chat' },
   { route: 'programme',  icon: '📅', label: 'Programme' },
+  { route: 'presence',   icon: '✅', label: 'Présence' },
   { route: 'notes',      icon: '📝', label: 'Notes' },
   { route: 'evaluation', icon: '⭐', label: 'Évaluations' },
   { route: 'apropos',    icon: 'ℹ️',  label: 'À propos' },

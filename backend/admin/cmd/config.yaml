@@ -43,3 +43,7 @@ rack:
   model: mistral-small:latest
   apiKey: ${RACK_API_KEY}
   caCertPath: ./x509/mtls_certs/ca.crt
+
+presence:
+  tokenSecret: ${PRESENCE_TOKEN_SECRET}
+  planningURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe

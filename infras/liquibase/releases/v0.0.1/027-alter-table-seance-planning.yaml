@@ -1,0 +1,81 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.2-027-alter-table-seance-planning
+      author: vjo
+      changes:
+        - dropForeignKeyConstraint:
+            baseTableSchemaName: public
+            baseTableName: seance
+            constraintName: seance_groupe_id_fkey
+        - dropColumn:
+            tableName: seance
+            schemaName: public
+            columnName: groupe_id
+        - addColumn:
+            tableName: seance
+            schemaName: public
+            columns:
+              - column:
+                  name: starts_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: true
+              - column:
+                  name: ends_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: true
+              - column:
+                  name: salle
+                  type: varchar(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: prof
+                  type: varchar(255)
+                  constraints:
+                    nullable: true
+        - addUniqueConstraint:
+            tableName: seance
+            schemaName: public
+            columnNames: matiere_id, starts_at
+            constraintName: uq_seance_matiere_starts_at
+      rollback:
+        - dropUniqueConstraint:
+            tableName: seance
+            schemaName: public
+            constraintName: uq_seance_matiere_starts_at
+        - dropColumn:
+            tableName: seance
+            schemaName: public
+            columnName: starts_at
+        - dropColumn:
+            tableName: seance
+            schemaName: public
+            columnName: ends_at
+        - dropColumn:
+            tableName: seance
+            schemaName: public
+            columnName: salle
+        - dropColumn:
+            tableName: seance
+            schemaName: public
+            columnName: prof
+        - addColumn:
+            tableName: seance
+            schemaName: public
+            columns:
+              - column:
+                  name: groupe_id
+                  type: bigint
+                  constraints:
+                    nullable: true
+        - addForeignKeyConstraint:
+            baseTableName: seance
+            baseTableSchemaName: public
+            baseColumnNames: groupe_id
+            referencedTableName: groupe
+            referencedTableSchemaName: public
+            referencedColumnNames: id
+            constraintName: seance_groupe_id_fkey
+            onDelete: SET NULL

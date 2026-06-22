@@ -14,6 +14,7 @@ import (
 	webdfdprog "back-rex-eleve/pkg/programme/webdfd"
 	"back-rex-eleve/pkg/reponse"
 	studentservice "back-rex-eleve/pkg/service"
+	"back-rex-eleve/pkg/pointage"
 	"back-rex-eleve/pkg/user"
 	"context"
 	"database/sql"
@@ -123,6 +124,8 @@ func main() {
 		r.With(auth.Security(cfg.JWT, &role)).Route("/evaluation", evaluation.MakeRouteEvaluation(progConnector, cfg.Age.PublicKey))
 		r.With(auth.Security(cfg.JWT, &role)).Route("/postit", postit.MakeRoutePostit())
 		r.With(auth.Security(cfg.JWT, &role)).Route("/me", user.MakeRouteUser())
+		pointage.SetTokenSecret(cfg.Presence.TokenSecret)
+		r.With(auth.Security(cfg.JWT, &role)).Route("/pointage", pointage.MakeRoutePointage())
 
 	})
 
