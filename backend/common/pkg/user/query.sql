@@ -1,6 +1,6 @@
 -- name: CreateStudent :exec
-INSERT INTO student (user_id, promotion)
-	VALUES (@user_id, @promotion);
+INSERT INTO student (user_id)
+	VALUES (@user_id);
 
 -- name: IsStudentExist :one
 SELECT EXISTS (SELECT 1 FROM student WHERE user_id = @user_id);

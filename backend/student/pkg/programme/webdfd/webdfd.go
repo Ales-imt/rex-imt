@@ -2,24 +2,20 @@ package webdfd
 
 import (
 	"back-rex-eleve/pkg/programme"
-	service_webfd "back-rex-eleve/pkg/service/webfd"
 	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Connector récupère le planning depuis le serveur Cybema (webdfd.mines-ales.fr).
+// La résolution email→EV se fait via migration.user_map (plus de cache mémoire).
 type Connector struct {
-	ElevesURL   string
 	PlanningURL string
-	Eleves      service_webfd.ElevesCache
-}
-
-// Start initialise le cache des élèves en arrière-plan.
-func (c *Connector) Start(ctx context.Context) {
-	c.Eleves.Start(ctx, c.ElevesURL)
+	DB          *pgxpool.Pool
 }
 
 func formatHeure(h string) string {
@@ -45,8 +41,24 @@ func parseKV(line string) map[string]string {
 	return m
 }
 
-func (c *Connector) GetProgramme(_ context.Context, email, start, end string) ([]programme.Cours, error) {
-	valcle, err := c.Eleves.Lookup(email)
+// lookupWebdfdID retrouve l'identifiant webdfd (EV/evcleunik) d'un utilisateur
+// via migration.user_map en joignant sur son email.
+func (c *Connector) lookupWebdfdID(ctx context.Context, email string) (string, error) {
+	var extID string
+	err := c.DB.QueryRow(ctx,
+		`SELECT um.external_id
+		 FROM migration.user_map um
+		 JOIN public."user" u ON u.id = um.internal_id
+		 WHERE u.email = $1 AND um.source = 'webdfd'`,
+		email).Scan(&extID)
+	if err != nil {
+		return "", fmt.Errorf("webdfd: étudiant non trouvé pour %s: %w", email, err)
+	}
+	return extID, nil
+}
+
+func (c *Connector) GetProgramme(ctx context.Context, email, start, end string) ([]programme.Cours, error) {
+	valcle, err := c.lookupWebdfdID(ctx, email)
 	if err != nil {
 		return nil, err
 	}

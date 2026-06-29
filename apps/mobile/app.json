@@ -10,7 +10,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.monapp"
+      "bundleIdentifier": "com.anonymous.monapp",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Pour scanner le code de présence affiché en cours"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +23,10 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.monapp"
+      "package": "com.anonymous.monapp",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "output": "static",
@@ -45,6 +51,12 @@
         "expo-screen-orientation",
         {
           "initialOrientation": "DEFAULT"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Pour scanner le code de présence affiché en cours"
         }
       ]
     ],

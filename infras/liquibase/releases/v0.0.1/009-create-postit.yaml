@@ -1,0 +1,63 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.1-009-create-table-postit
+      author: vjo
+      # auteur_id → user ON DELETE CASCADE : cohérent avec la politique de
+      # désactivation logique (les postits disparaissent si le user est supprimé).
+      changes:
+        - createTable:
+            tableName: postit
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: SERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: message_id
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: message_modere
+                  type: text
+              - column:
+                  name: reponse
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: auteur_id
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: cree_le
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: postit
+            baseTableSchemaName: public
+            baseColumnNames: message_id
+            referencedTableSchemaName: public
+            referencedTableName: feedback
+            referencedColumnNames: message_id
+            constraintName: fk_postit_feedback
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: postit
+            baseTableSchemaName: public
+            baseColumnNames: auteur_id
+            referencedTableSchemaName: public
+            referencedTableName: user
+            referencedColumnNames: id
+            constraintName: fk_postit_user
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: postit
+            schemaName: public

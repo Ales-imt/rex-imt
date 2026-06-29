@@ -1,22 +1,3 @@
-export interface MatiereStatus {
-    id: number;
-    name: string;
-    nb_repondants: number;
-    dot_status: 'OK' | 'WARN' | 'NONE';
-}
-
-export interface PeriodeTree {
-    id: number;
-    name: string;
-    matieres: MatiereStatus[];
-}
-
-export interface PromotionTree {
-    id: number;
-    name: string;
-    periodes: PeriodeTree[];
-}
-
 export interface NpsDistribution {
     pct_detracteurs: number;
     pct_passifs: number;
@@ -85,6 +66,7 @@ export interface SelectedMatiere {
     name: string;
     periodeName: string;
     promotionName: string;
+    annee: number;
 }
 
 export { EvaluationsPage as Evaluation } from './EvaluationsPage';

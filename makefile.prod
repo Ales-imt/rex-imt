@@ -1,8 +1,12 @@
-.PHONY: first-deploy-prod release-prod migration-prod db-to-code-prod build-container-prod push deploy-vm-prod deploy-vm-admin-prod deploy-vm-eleve-prod
+.PHONY: first-deploy-prod release-prod release-prod-admin release-prod-eleve migration-prod db-to-code-prod build-container-admin-prod build-container-eleve-prod push deploy-vm-prod deploy-vm-admin-prod deploy-vm-eleve-prod
 
 first-deploy-prod: migration-prod release-prod
 
-release-prod: db-to-code-prod build-container-prod push deploy-vm-prod
+release-prod: release-prod-admin release-prod-eleve
+
+release-prod-admin: db-to-code-prod build-container-admin-prod push deploy-vm-admin-prod
+
+release-prod-eleve: db-to-code-prod build-container-eleve-prod push deploy-vm-eleve-prod
 
 # ── MIGRATION ──────────────────────────────────────────────────────────────────────
 
@@ -20,8 +24,10 @@ db-to-code-prod:
 
 # ── Build ──────────────────────────────────────────────────────────────────────
 
-build-container-prod:
+build-container-admin-prod:
 	$(RUN_DIR)/build-admin.sh prod
+
+build-container-eleve-prod:
 	$(RUN_DIR)/build-eleve.sh prod
 
 

@@ -28,3 +28,6 @@ ldap:
 
 age:
   publicKey: ${AGE_PUBLIC_KEY}
+
+presence:
+  tokenSecret: ${PRESENCE_TOKEN_SECRET}

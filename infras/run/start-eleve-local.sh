@@ -15,8 +15,9 @@ docker run -d \
     --network imt-rex_rex-net \
     --ip 10.20.1.11 \
     --add-host=host.docker.internal:host-gateway \
-    --add-host=webdfd.mines-ales.fr:host-gateway \
     --env-file "$SECRETS_FILE" \
+    -e HTTP_PROXY=socks5h://host.docker.internal:1080 \
+    -e NO_PROXY=10.20.1.4,10.20.1.5,10.20.1.6,localhost,127.0.0.1 \
     -v "$(pwd)/$ELEVE_CONFIG":/opt/rex-eleve/conf/config.yaml:ro \
     rex-eleve
 

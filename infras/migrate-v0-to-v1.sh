@@ -55,6 +55,8 @@ fi
 
 echo "--- 🗑️ Suppression des tables existantes de $POSTGRES_DB ---"
 psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+DROP SCHEMA IF EXISTS migration CASCADE;
+DROP TABLE IF EXISTS databasechangelog, databasechangeloglock CASCADE;
 DO $$ DECLARE
     r RECORD;
 BEGIN

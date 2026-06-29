@@ -1,29 +1,32 @@
 database:
-  host: {{ postgres_host }}
-  port: {{ postgres_port }}
-  user: {{ postgres_user }}
-  password: {{ postgres_password }}
-  name: {{ postgres_db }}
+  host: ${POSTGRES_HOST}
+  port: ${POSTGRES_PORT}
+  user: ${POSTGRES_USER}
+  password: ${POSTGRES_PASSWORD}
+  name: ${POSTGRES_DB}
 
 mariaDB:
-  host: {{ mariadb_host }}
-  port: {{ mariadb_port }}
-  user: {{ mariadb_user }}
-  password: {{ mariadb_password }}
-  database: {{ mariadb_database }}
+  host:     ${MARIADB_HOST}
+  port:     ${MARIADB_PORT}
+  user:     ${MARIADB_USER}
+  password: ${MARIADB_PASSWORD}
+  database: ${MARIADB_DB}
 
 server:
   host: localhost
   port: 3300
 
 jwt:
-  secret: {{ jwt_secret }}
+  secret: ${JWT_SECRET_ELEVE}
   accessTokenExpiresIn: 15m
   refreshTokenExpiresIn: 2160h
 
 ldap:
-  url: ldap://{{ ldap_host }}:389
+  url: ldap://${LDAP_HOST}:389
   baseDN: dc=ema,dc=fr
 
 age:
-  publicKey: {{ age_public_key }}
+  publicKey: ${AGE_PUBLIC_KEY}
+
+presence:
+  tokenSecret: ${PRESENCE_TOKEN_SECRET}

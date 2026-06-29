@@ -2,14 +2,16 @@ package main
 
 import (
 	"back-rex-admin/pkg/authentification"
-	"back-rex-admin/pkg/cohorte"
+	"back-rex-admin/pkg/curriculum"
 	"back-rex-admin/pkg/evaluation"
 	"back-rex-admin/pkg/feedback"
 	ia "back-rex-admin/pkg/ia"
 	"back-rex-admin/pkg/ia/ollama"
 	"back-rex-admin/pkg/ia/rack"
 	"back-rex-admin/pkg/ia/ragarenn"
+	"back-rex-admin/pkg/migration"
 	"back-rex-admin/pkg/postit"
+	"back-rex-admin/pkg/presence"
 	"back-rex-admin/pkg/reponse"
 	"back-rex-admin/pkg/reports"
 	"back-rex-admin/pkg/rgpd"
@@ -93,6 +95,15 @@ func main() {
 
 	}
 
+	migration.StartSync(context.Background(), migration.Config{
+		PromosURL:      cfg.Webdfd.BaseURL + "?TYPE=promos_txt",
+		CoursURL:       cfg.Webdfd.BaseURL + "?TYPE=cours_txt",
+		PlanningURL:    cfg.Webdfd.BaseURL,
+		ElevesURL:      cfg.Webdfd.BaseURL + "?TYPE=eleves_txt",
+		ProfsURL:       cfg.Webdfd.BaseURL + "?TYPE=profs_txt",
+		ListeGroupeURL: cfg.Webdfd.ListeGroupeURL,
+	}, pg.Db)
+
 	go feedback.ListenForNewFeedbacks(&cfg.Database, iaConnector)
 	rgpd.StartPurge(&cfg.Database, &cfg.MariaDBConfig)
 
@@ -148,13 +159,10 @@ func main() {
 		adminOnly := []string{auth.RoleAdmin}
 		adminAndGestionnaire := []string{auth.RoleAdmin, auth.RoleGestionnaire}
 
+		r.Route("/curriculum", curriculum.RouteCurriculum)
 		r.With(auth.Security(cfg.JWT, &adminOnly)).
 			Route("/user", func(r chi.Router) {
 				user.RouteUtilisateur(r, cfg.LDAP)
-			})
-		r.With(auth.Security(cfg.JWT, &adminOnly)).
-			Route("/cohorte", func(r chi.Router) {
-				cohorte.RouteCohorte(r, cfg.LDAP)
 			})
 		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/feedback", feedback.RouteFeedback)
@@ -167,6 +175,10 @@ func main() {
 		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/evaluation", func(r chi.Router) {
 				evaluation.RouteEvaluation(r, iaConnector)
+			})
+		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
+			Route("/presence", func(r chi.Router) {
+				presence.RoutePresence(r, cfg.Presence.TokenSecret)
 			})
 	})
 

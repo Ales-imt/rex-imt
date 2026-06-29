@@ -1,0 +1,117 @@
+databaseChangeLog:
+
+  # ---- public.annee -------------------------------------------------------
+  - changeSet:
+      id: v0.0.1-004a-create-table-annee
+      author: vjo
+      changes:
+        - createTable:
+            tableName: annee
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: debut
+                  type: date
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fin
+                  type: date
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropTable:
+            tableName: annee
+            schemaName: public
+
+  # ---- public.promotion ---------------------------------------------------
+  - changeSet:
+      id: v0.0.1-004b-create-table-promotion
+      author: vjo
+      changes:
+        - createTable:
+            tableName: promotion
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+              - column:
+                  name: annee_id
+                  type: bigint
+        - addForeignKeyConstraint:
+            baseTableName: promotion
+            baseTableSchemaName: public
+            baseColumnNames: annee_id
+            referencedTableSchemaName: public
+            referencedTableName: annee
+            referencedColumnNames: id
+            constraintName: fk_promotion_annee_id
+            onDelete: SET NULL
+      rollback:
+        - dropTable:
+            tableName: promotion
+            schemaName: public
+
+  # ---- public.groupe ------------------------------------------------------
+  - changeSet:
+      id: v0.0.1-004c-create-table-groupe
+      author: vjo
+      changes:
+        - createTable:
+            tableName: groupe
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+              - column:
+                  name: taille
+                  type: integer
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: promo_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: groupe
+            baseTableSchemaName: public
+            baseColumnNames: promo_id
+            referencedTableSchemaName: public
+            referencedTableName: promotion
+            referencedColumnNames: id
+            constraintName: groupe_promo_id_fkey
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: groupe
+            schemaName: public

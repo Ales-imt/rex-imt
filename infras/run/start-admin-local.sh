@@ -17,6 +17,8 @@ docker run -d \
     --ip 10.20.1.10 \
     --add-host=host.docker.internal:host-gateway \
     --env-file "$SECRETS_FILE" \
+    -e HTTP_PROXY=socks5h://host.docker.internal:1080 \
+    -e NO_PROXY=10.20.1.4,10.20.1.5,10.20.1.6,localhost,127.0.0.1 \
     -v "$(pwd)/$ADMIN_CONFIG":/opt/rex-admin/conf/config.yaml:ro \
     rex-admin
 

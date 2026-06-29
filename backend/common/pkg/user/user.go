@@ -2,7 +2,6 @@ package user
 
 import (
 	"back-rex-common/pkg/auth"
-	"back-rex-common/pkg/services"
 	"context"
 
 	"github.com/jackc/pgx/v5"
@@ -21,10 +20,7 @@ func CreateUser(tx pgx.Tx, ldapIdentity *auth.LdapIdentity, ctx context.Context,
 	}
 
 	if student {
-		err = queries.CreateStudent(ctx, CreateStudentParams{
-			UserID:    newId,
-			Promotion: services.ToPgText(ldapIdentity.Promotion),
-		})
+		err = queries.CreateStudent(ctx, newId)
 		if err != nil {
 			return -1, err
 		}

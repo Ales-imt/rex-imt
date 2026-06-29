@@ -1,0 +1,100 @@
+databaseChangeLog:
+
+  # ---- 1a. Retrait de ldapid, ajout de blame ----------------------------
+  - changeSet:
+      id: v0.0.1-001a-alter-user-ldapid-blame
+      author: vjo
+      changes:
+        - dropUniqueConstraint:
+            tableName: user
+            schemaName: public
+            constraintName: user_ldapid_key
+        - dropColumn:
+            tableName: user
+            schemaName: public
+            columnName: ldapid
+        - addColumn:
+            tableName: user
+            schemaName: public
+            columns:
+              - column:
+                  name: blame
+                  type: boolean
+                  defaultValueBoolean: false
+      rollback:
+        - dropColumn:
+            tableName: user
+            schemaName: public
+            columnName: blame
+        - addColumn:
+            tableName: user
+            schemaName: public
+            columns:
+              - column:
+                  name: ldapid
+                  type: integer
+                  constraints:
+                    nullable: false
+                    defaultValueNumeric: 0
+        - addUniqueConstraint:
+            tableName: user
+            schemaName: public
+            columnNames: ldapid
+            constraintName: user_ldapid_key
+
+  # ---- 1b. Conversion roles VARCHAR → TEXT[] ----------------------------
+  - changeSet:
+      id: v0.0.1-001b-alter-user-roles-array
+      author: vjo
+      changes:
+        - sql:
+            sql: ALTER TABLE public."user" ALTER COLUMN roles DROP DEFAULT;
+        - sql:
+            sql: >
+              ALTER TABLE public."user" ALTER COLUMN roles TYPE TEXT[]
+              USING array_replace(array_replace(array_replace(
+                string_to_array(coalesce(roles, 'ELEVE'), ','),
+                'etudiant', 'ELEVE'), 'admin', 'ADMIN'), 'gestionnaire', 'GESTIONNAIRE');
+        - sql:
+            sql: ALTER TABLE public."user" ALTER COLUMN roles SET NOT NULL;
+        - sql:
+            sql: "ALTER TABLE public.\"user\" ALTER COLUMN roles SET DEFAULT ARRAY['ELEVE']::text[];"
+      rollback:
+        - sql:
+            sql: ALTER TABLE public."user" ALTER COLUMN roles DROP DEFAULT;
+        - sql:
+            sql: ALTER TABLE public."user" ALTER COLUMN roles DROP NOT NULL;
+        - sql:
+            sql: >
+              ALTER TABLE public."user" ALTER COLUMN roles TYPE VARCHAR(255)
+              USING array_to_string(array_replace(array_replace(array_replace(
+                roles, 'ELEVE', 'etudiant'), 'ADMIN', 'admin'), 'GESTIONNAIRE', 'gestionnaire'), ',');
+        - sql:
+            sql: "ALTER TABLE public.\"user\" ALTER COLUMN roles SET DEFAULT 'etudiant'::character varying;"
+
+  # ---- 1c. Colonnes complémentaires + email en minuscules ---------------
+  - changeSet:
+      id: v0.0.1-001c-alter-user-extra
+      author: vjo
+      changes:
+        - addColumn:
+            tableName: user
+            schemaName: public
+            columns:
+              - column:
+                  name: informed_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: disabled_at
+                  type: TIMESTAMPTZ
+        - sql:
+            sql: UPDATE public."user" SET email = LOWER(email);
+      rollback:
+        - dropColumn:
+            tableName: user
+            schemaName: public
+            columnName: disabled_at
+        - dropColumn:
+            tableName: user
+            schemaName: public
+            columnName: informed_at

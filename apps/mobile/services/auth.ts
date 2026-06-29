@@ -30,12 +30,17 @@ export async function logout(): Promise<void> {
   // Import dynamique pour éviter la dépendance circulaire auth ↔ api
   const { apiInstance } = await import('./api');
   const { clearTokens } = await import('./tokens');
-  const FileSystem = await import('expo-file-system/legacy');
+  const { File, Paths } = await import('expo-file-system');
   try {
     await apiInstance.get('/auth/logout');
   } finally {
     await clearTokens();
-    const chatFile = `${FileSystem.documentDirectory}chat_messages.json`;
-    await FileSystem.deleteAsync(chatFile, { idempotent: true });
+    // Cast nécessaire : le .d.ts de expo-file-system@19 ne reporte pas les membres
+    // hérités (exists/delete) de File, bien qu'ils existent au runtime.
+    const chatFile = new File(Paths.document, 'chat_messages.json') as InstanceType<typeof File> & {
+      exists: boolean;
+      delete(): void;
+    };
+    if (chatFile.exists) chatFile.delete();
   }
 }

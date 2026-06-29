@@ -39,7 +39,15 @@ ragarenn:
   model: RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic # ilaas/gemma-4-31b  RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic
 
 rack:
-  baseURL: https://${IP_SERVEUR_IA_DEV}
+  baseURL: https://${IP_SERVEUR_IA}
   model: mistral-small:latest
   apiKey: ${RACK_API_KEY}
   caCertPath: /opt/rex-admin/certs/ca.crt
+
+presence:
+  tokenSecret: ${PRESENCE_TOKEN_SECRET}
+  planningURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe
+
+webdfd:
+  baseURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe
+  listeGroupeURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgihtml.exe

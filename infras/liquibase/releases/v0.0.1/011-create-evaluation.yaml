@@ -1,0 +1,421 @@
+databaseChangeLog:
+
+  # ---- eval_session -------------------------------------------------------
+  - changeSet:
+      id: v0.0.1-011a-create-eval-session
+      author: vjo
+      changes:
+        - createTable:
+            tableName: eval_session
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: pseudo
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: matiere_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: format_suivi
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tendance_semestre
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: assiduite
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: submitted_at
+                  type: TIMESTAMPTZ
+        - addUniqueConstraint:
+            tableName: eval_session
+            schemaName: public
+            columnNames: pseudo, matiere_id
+            constraintName: uq_eval_session_pseudo_matiere
+        - createIndex:
+            tableName: eval_session
+            schemaName: public
+            indexName: idx_eval_session_matiere
+            columns:
+              - column:
+                  name: matiere_id
+        - addForeignKeyConstraint:
+            baseTableName: eval_session
+            baseTableSchemaName: public
+            baseColumnNames: matiere_id
+            referencedTableSchemaName: public
+            referencedTableName: matiere
+            referencedColumnNames: id
+            constraintName: eval_session_matiere_id_fkey
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: eval_session
+            schemaName: public
+
+  # ---- eval_scores --------------------------------------------------------
+  - changeSet:
+      id: v0.0.1-011b-create-eval-scores
+      author: vjo
+      changes:
+        - createTable:
+            tableName: eval_scores
+            schemaName: public
+            columns:
+              - column:
+                  name: session_id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: score_peda_global
+                  type: SMALLINT
+              - column:
+                  name: score_peda_clarte
+                  type: SMALLINT
+              - column:
+                  name: score_contenu_adequation
+                  type: SMALLINT
+              - column:
+                  name: charge_perception
+                  type: varchar(10)
+              - column:
+                  name: charge_heures_semaine
+                  type: text
+              - column:
+                  name: score_difficulte
+                  type: SMALLINT
+              - column:
+                  name: score_supports
+                  type: SMALLINT
+              - column:
+                  name: score_ambiance
+                  type: SMALLINT
+              - column:
+                  name: nps
+                  type: SMALLINT
+        - addForeignKeyConstraint:
+            baseTableName: eval_scores
+            baseTableSchemaName: public
+            baseColumnNames: session_id
+            referencedTableSchemaName: public
+            referencedTableName: eval_session
+            referencedColumnNames: id
+            constraintName: fk_scores_session
+            onDelete: CASCADE
+        - sql:
+            sql: >
+              ALTER TABLE public.eval_scores
+                ADD CONSTRAINT chk_score_peda_global    CHECK (score_peda_global    BETWEEN 1 AND 5),
+                ADD CONSTRAINT chk_score_peda_clarte    CHECK (score_peda_clarte    BETWEEN 1 AND 5),
+                ADD CONSTRAINT chk_score_contenu        CHECK (score_contenu_adequation BETWEEN 1 AND 5),
+                ADD CONSTRAINT chk_score_difficulte     CHECK (score_difficulte     BETWEEN 1 AND 5),
+                ADD CONSTRAINT chk_score_supports       CHECK (score_supports       BETWEEN 1 AND 5),
+                ADD CONSTRAINT chk_score_ambiance       CHECK (score_ambiance       BETWEEN 1 AND 5),
+                ADD CONSTRAINT chk_nps                  CHECK (nps BETWEEN 0 AND 10),
+                ADD CONSTRAINT chk_charge_perception    CHECK (charge_perception    IN ('LEGERE','ADAPTEE','LOURDE')),
+                ADD CONSTRAINT chk_charge_heures        CHECK (charge_heures_semaine IN ('H_MOINS_1','H_1_3','H_3_5','H_PLUS_5'));
+      rollback:
+        - dropTable:
+            tableName: eval_scores
+            schemaName: public
+
+  # ---- eval_chip_ref ------------------------------------------------------
+  - changeSet:
+      id: v0.0.1-011c-create-eval-chip-ref
+      author: vjo
+      changes:
+        - createTable:
+            tableName: eval_chip_ref
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: text
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: dimension
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: polarite
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: libelle
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: display_order
+                  type: SMALLINT
+                  defaultValueNumeric: 0
+              - column:
+                  name: actif
+                  type: boolean
+                  defaultValueBoolean: true
+      rollback:
+        - dropTable:
+            tableName: eval_chip_ref
+            schemaName: public
+
+  # ---- eval_chip_reponse --------------------------------------------------
+  - changeSet:
+      id: v0.0.1-011d-create-eval-chip-reponse
+      author: vjo
+      changes:
+        - createTable:
+            tableName: eval_chip_reponse
+            schemaName: public
+            columns:
+              - column:
+                  name: session_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: chip_id
+                  type: text
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: eval_chip_reponse
+            schemaName: public
+            columnNames: session_id, chip_id
+            constraintName: pk_eval_chip_reponse
+        - createIndex:
+            tableName: eval_chip_reponse
+            schemaName: public
+            indexName: idx_chip_reponse_chip_id
+            columns:
+              - column:
+                  name: chip_id
+        - addForeignKeyConstraint:
+            baseTableName: eval_chip_reponse
+            baseTableSchemaName: public
+            baseColumnNames: session_id
+            referencedTableSchemaName: public
+            referencedTableName: eval_session
+            referencedColumnNames: id
+            constraintName: fk_chip_reponse_session
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: eval_chip_reponse
+            baseTableSchemaName: public
+            baseColumnNames: chip_id
+            referencedTableSchemaName: public
+            referencedTableName: eval_chip_ref
+            referencedColumnNames: id
+            constraintName: fk_chip_reponse_ref
+      rollback:
+        - dropTable:
+            tableName: eval_chip_reponse
+            schemaName: public
+
+  # ---- eval_verbatim ------------------------------------------------------
+  - changeSet:
+      id: v0.0.1-011e-create-eval-verbatim
+      author: vjo
+      changes:
+        - createTable:
+            tableName: eval_verbatim
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: session_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: dimension
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: texte
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: strongbox
+                  type: text
+        - createIndex:
+            tableName: eval_verbatim
+            schemaName: public
+            indexName: idx_verbatim_session
+            columns:
+              - column:
+                  name: session_id
+        - addForeignKeyConstraint:
+            baseTableName: eval_verbatim
+            baseTableSchemaName: public
+            baseColumnNames: session_id
+            referencedTableSchemaName: public
+            referencedTableName: eval_session
+            referencedColumnNames: id
+            constraintName: fk_verbatim_session
+            onDelete: CASCADE
+        - sql:
+            sql: >
+              ALTER TABLE public.eval_verbatim
+                ADD CONSTRAINT chk_verbatim_dimension
+                  CHECK (dimension IN ('SUPPORTS','AMBIANCE','NPS'));
+      rollback:
+        - dropTable:
+            tableName: eval_verbatim
+            schemaName: public
+
+  # ---- eval_synthese_ia ---------------------------------------------------
+  - changeSet:
+      id: v0.0.1-011f-create-eval-synthese-ia
+      author: vjo
+      changes:
+        - createTable:
+            tableName: eval_synthese_ia
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: matiere_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: semestre
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: nb_repondants
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: donnees_snapshot
+                  type: text
+              - column:
+                  name: synthese_texte
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: statut
+                  type: text
+                  defaultValue: GENEREE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: generated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: validated_by
+                  type: text
+              - column:
+                  name: validated_at
+                  type: TIMESTAMPTZ
+        - addUniqueConstraint:
+            tableName: eval_synthese_ia
+            schemaName: public
+            columnNames: matiere_id, semestre, generated_at
+            constraintName: uq_synthese_matiere_semestre_date
+        - createIndex:
+            tableName: eval_synthese_ia
+            schemaName: public
+            indexName: idx_synthese_matiere_semestre
+            columns:
+              - column:
+                  name: matiere_id
+              - column:
+                  name: semestre
+        - addForeignKeyConstraint:
+            baseTableName: eval_synthese_ia
+            baseTableSchemaName: public
+            baseColumnNames: matiere_id
+            referencedTableSchemaName: public
+            referencedTableName: matiere
+            referencedColumnNames: id
+            constraintName: eval_synthese_ia_matiere_id_fkey
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: eval_synthese_ia
+            schemaName: public
+
+  # ---- Données de référence eval_chip_ref ---------------------------------
+  - changeSet:
+      id: v0.0.1-011g-seed-eval-chip-ref
+      author: vjo
+      changes:
+        - sql:
+            sql: >
+              INSERT INTO public.eval_chip_ref (id, dimension, polarite, libelle, display_order) VALUES
+                ('EXEMPLES_CONCRETS', 'CONTENU',  'POSITIF', 'Exemples concrets', 1),
+                ('THEORIE_SOLIDE',    'CONTENU',  'POSITIF', 'Théorie solide',    2),
+                ('ACTUALITE',         'CONTENU',  'POSITIF', 'Actualité',         3),
+                ('CAS_PRATIQUES',     'CONTENU',  'POSITIF', 'Cas pratiques',     4),
+                ('TROP_THEORIQUE',    'CONTENU',  'NEGATIF', 'Trop théorique',    1),
+                ('HORS_PROGRAMME',    'CONTENU',  'NEGATIF', 'Hors programme',    2),
+                ('TROP_DENSE',        'CONTENU',  'NEGATIF', 'Trop dense',        3),
+                ('PAS_A_JOUR',        'CONTENU',  'NEGATIF', 'Pas à jour',        4),
+                ('PEU_EXEMPLES',      'SUPPORTS', 'NEGATIF', 'Peu d''exemples',   1),
+                ('SLIDES_ILLISIBLES', 'SUPPORTS', 'NEGATIF', 'Slides illisibles', 2),
+                ('PAS_A_JOUR_SUP',    'SUPPORTS', 'NEGATIF', 'Pas à jour',        3),
+                ('INCOMPLET',         'SUPPORTS', 'NEGATIF', 'Incomplet',         4),
+                ('PAS_DE_SUPPORT',    'SUPPORTS', 'NEGATIF', 'Pas de support',    5),
+                ('DISPONIBLE',        'AMBIANCE', 'POSITIF', 'Disponible',        1),
+                ('A_ECOUTE',          'AMBIANCE', 'POSITIF', 'À l''écoute',       2),
+                ('DYNAMIQUE',         'AMBIANCE', 'POSITIF', 'Dynamique',         3),
+                ('BIENVEILLANT',      'AMBIANCE', 'POSITIF', 'Bienveillant',      4),
+                ('PEU_DISPONIBLE',    'AMBIANCE', 'NEGATIF', 'Peu disponible',    1),
+                ('RYTHME_IMPOSE',     'AMBIANCE', 'NEGATIF', 'Rythme imposé',     2),
+                ('PEU_ECOUTE',        'AMBIANCE', 'NEGATIF', 'Peu à l''écoute',   3);
+      rollback:
+        - sql:
+            sql: DELETE FROM public.eval_chip_ref;

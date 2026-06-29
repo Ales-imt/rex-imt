@@ -1,0 +1,118 @@
+databaseChangeLog:
+
+  # ---- 6a. Ajout des nouvelles colonnes feedback -------------------------
+  - changeSet:
+      id: v0.0.1-006a-feedback-add-columns
+      author: vjo
+      changes:
+        - addColumn:
+            tableName: feedback
+            schemaName: public
+            columns:
+              - column:
+                  name: strongbox
+                  type: text
+              - column:
+                  name: pseudo
+                  type: text
+              - column:
+                  name: message_id
+                  type: text
+              - column:
+                  name: promotion
+                  type: text
+              - column:
+                  name: groupe
+                  type: text
+        - addUniqueConstraint:
+            tableName: feedback
+            schemaName: public
+            columnNames: message_id
+            constraintName: uq_feedback_message_id
+      rollback:
+        - dropUniqueConstraint:
+            tableName: feedback
+            schemaName: public
+            constraintName: uq_feedback_message_id
+        - dropColumn:
+            tableName: feedback
+            schemaName: public
+            columnName: groupe
+        - dropColumn:
+            tableName: feedback
+            schemaName: public
+            columnName: promotion
+        - dropColumn:
+            tableName: feedback
+            schemaName: public
+            columnName: message_id
+        - dropColumn:
+            tableName: feedback
+            schemaName: public
+            columnName: pseudo
+        - dropColumn:
+            tableName: feedback
+            schemaName: public
+            columnName: strongbox
+
+  # ---- 6b. Remplissage pseudo (hash one-way, salt éphémère) -------------
+  - changeSet:
+      id: v0.0.1-006b-feedback-fill-pseudo
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              DO $$
+              DECLARE v_salt TEXT := gen_random_uuid()::text;
+              BEGIN
+                UPDATE public.feedback
+                SET pseudo = md5(user_id::text || v_salt)
+                WHERE pseudo IS NULL;
+              END $$;
+      rollback:
+        - sql:
+            sql: UPDATE public.feedback SET pseudo = NULL;
+
+  # ---- 6c. Remplissage message_id ----------------------------------------
+  - changeSet:
+      id: v0.0.1-006c-feedback-fill-message-id
+      author: vjo
+      changes:
+        - sql:
+            sql: >
+              UPDATE public.feedback
+              SET message_id = gen_random_uuid()::text
+              WHERE message_id IS NULL;
+      rollback:
+        - sql:
+            sql: UPDATE public.feedback SET message_id = NULL;
+
+  # ---- 6d. Remplissage promotion/groupe depuis student et eleve_groupe ---
+  # eleve_groupe est vide à ce stade en install fraîche ; en upgrade depuis
+  # une base peuplée, les données student.promotion sont récupérées ici.
+  - changeSet:
+      id: v0.0.1-006d-feedback-fill-promo-groupe
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              UPDATE public.feedback f
+              SET
+                promotion = (
+                  SELECT s.promotion
+                  FROM public.student s
+                  WHERE s.user_id = f.user_id
+                ),
+                groupe = (
+                  SELECT string_agg(g.name, ', ')
+                  FROM public.eleve_groupe eg
+                  JOIN public.groupe g ON g.id = eg.id_groupe
+                  WHERE eg.num_etudiant = f.user_id
+                )
+              WHERE f.promotion IS NULL;
+      rollback:
+        - sql:
+            sql: UPDATE public.feedback SET promotion = NULL, groupe = NULL;
+

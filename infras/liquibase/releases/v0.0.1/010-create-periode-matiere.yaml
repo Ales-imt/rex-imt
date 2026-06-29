@@ -1,0 +1,96 @@
+databaseChangeLog:
+
+  # ---- public.periode -----------------------------------------------------
+  - changeSet:
+      id: v0.0.1-010a-create-table-periode
+      author: vjo
+      changes:
+        - createTable:
+            tableName: periode
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: promotion_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: annee
+                  type: integer
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: periode
+            schemaName: public
+            columnNames: name, promotion_id, annee
+            constraintName: uq_periode_name_promotion_annee
+        - addForeignKeyConstraint:
+            baseTableName: periode
+            baseTableSchemaName: public
+            baseColumnNames: promotion_id
+            referencedTableSchemaName: public
+            referencedTableName: promotion
+            referencedColumnNames: id
+            constraintName: periode_promotion_id_fkey
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: periode
+            schemaName: public
+
+  # ---- public.matiere -----------------------------------------------------
+  # Pas de colonne external_id : la correspondance externe vit dans
+  # migration.matiere_map (créée en changeset 013).
+  - changeSet:
+      id: v0.0.1-010b-create-table-matiere
+      author: vjo
+      changes:
+        - createTable:
+            tableName: matiere
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: periode_id
+                  type: bigint
+              - column:
+                  name: annee
+                  type: integer
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: matiere
+            baseTableSchemaName: public
+            baseColumnNames: periode_id
+            referencedTableSchemaName: public
+            referencedTableName: periode
+            referencedColumnNames: id
+            constraintName: matiere_periode_id_fkey
+            onDelete: SET NULL
+      rollback:
+        - dropTable:
+            tableName: matiere
+            schemaName: public

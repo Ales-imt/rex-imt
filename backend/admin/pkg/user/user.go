@@ -200,24 +200,11 @@ func UpdateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 			return
 		}
 		if !exist {
-			// essai de recuperer la promotion dans ldap
-			sr, err := getLdapUser(user.Email, cfg)
+			err = queriesCommon.CreateStudent(ctx, user.ID)
 			if err != nil {
 				services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 				return
 			}
-
-			ldapIdentity := auth.GetLdapIdentity(sr.Entries[0])
-
-			err = queriesCommon.CreateStudent(ctx, usercommon.CreateStudentParams{
-				UserID:    user.ID,
-				Promotion: services.ToPgText(ldapIdentity.Promotion),
-			})
-			if err != nil {
-				services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-				return
-			}
-
 		}
 
 	}

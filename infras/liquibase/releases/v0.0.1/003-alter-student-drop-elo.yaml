@@ -1,0 +1,166 @@
+databaseChangeLog:
+
+  # ---- 3a. student : FK cascade + external_id ---------------------------
+  # student.promotion est gardée ici ; supprimée en 006 après remplissage
+  # de feedback.promotion.
+  - changeSet:
+      id: v0.0.1-003a-student-fk-cascade-external-id
+      author: vjo
+      changes:
+        - dropForeignKeyConstraint:
+            baseTableName: student
+            baseTableSchemaName: public
+            constraintName: elo_student_user_id_fkey
+        - addForeignKeyConstraint:
+            baseTableName: student
+            baseTableSchemaName: public
+            baseColumnNames: user_id
+            referencedTableSchemaName: public
+            referencedTableName: user
+            referencedColumnNames: id
+            constraintName: elo_student_user_id_fkey
+            onDelete: CASCADE
+        - addColumn:
+            tableName: student
+            schemaName: public
+            columns:
+              - column:
+                  name: external_id
+                  type: INTEGER
+      rollback:
+        - dropColumn:
+            tableName: student
+            schemaName: public
+            columnName: external_id
+        - dropForeignKeyConstraint:
+            baseTableName: student
+            baseTableSchemaName: public
+            constraintName: elo_student_user_id_fkey
+        - addForeignKeyConstraint:
+            baseTableName: student
+            baseTableSchemaName: public
+            baseColumnNames: user_id
+            referencedTableSchemaName: public
+            referencedTableName: user
+            referencedColumnNames: id
+            constraintName: elo_student_user_id_fkey
+
+  # ---- 3b. Suppression des tables elo/saison ----------------------------
+  # Ordre : elo_history d'abord (FK sur season), puis FK feedback→season,
+  # puis colonne season_id sur feedback, puis season.
+  - changeSet:
+      id: v0.0.1-003b-drop-elo-season
+      author: vjo
+      changes:
+        - dropTable:
+            tableName: elo_history
+            schemaName: public
+        - dropForeignKeyConstraint:
+            baseTableName: feedback
+            baseTableSchemaName: public
+            constraintName: feedback_season_id_fkey
+        - dropColumn:
+            tableName: feedback
+            schemaName: public
+            columnName: season_id
+        - dropTable:
+            tableName: season
+            schemaName: public
+        - dropColumn:
+            tableName: student
+            schemaName: public
+            columnName: elo
+        - dropColumn:
+            tableName: student
+            schemaName: public
+            columnName: last_elo_gain
+      rollback:
+        - addColumn:
+            tableName: student
+            schemaName: public
+            columns:
+              - column:
+                  name: elo
+                  type: INTEGER
+                  defaultValueNumeric: 1000
+              - column:
+                  name: last_elo_gain
+                  type: INTEGER
+                  defaultValueNumeric: 0
+        - createTable:
+            tableName: season
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: start_date
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: end_date
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+        - addColumn:
+            tableName: feedback
+            schemaName: public
+            columns:
+              - column:
+                  name: season_id
+                  type: INTEGER
+        - addForeignKeyConstraint:
+            baseTableName: feedback
+            baseTableSchemaName: public
+            baseColumnNames: season_id
+            referencedTableSchemaName: public
+            referencedTableName: season
+            referencedColumnNames: id
+            constraintName: feedback_season_id_fkey
+        - createTable:
+            tableName: elo_history
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: INTEGER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: INTEGER
+              - column:
+                  name: season_id
+                  type: INTEGER
+              - column:
+                  name: final_elo
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rank
+                  type: INTEGER
+        - addForeignKeyConstraint:
+            baseTableName: elo_history
+            baseTableSchemaName: public
+            baseColumnNames: season_id
+            referencedTableSchemaName: public
+            referencedTableName: season
+            referencedColumnNames: id
+            constraintName: elo_history_season_id_fkey
+        - addForeignKeyConstraint:
+            baseTableName: elo_history
+            baseTableSchemaName: public
+            baseColumnNames: user_id
+            referencedTableSchemaName: public
+            referencedTableName: user
+            referencedColumnNames: id
+            constraintName: elo_history_student_id_fkey

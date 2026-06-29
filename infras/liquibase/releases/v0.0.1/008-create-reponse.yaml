@@ -1,0 +1,54 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.1-008-create-table-reponse
+      author: vjo
+      changes:
+        - createTable:
+            tableName: reponse
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: SERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: message_id
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: contenu
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: auteur
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: cree_le
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: lu
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: reponse
+            baseTableSchemaName: public
+            baseColumnNames: message_id
+            referencedTableSchemaName: public
+            referencedTableName: feedback
+            referencedColumnNames: message_id
+            constraintName: fk_reponse_feedback
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: reponse
+            schemaName: public

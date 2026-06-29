@@ -1,0 +1,126 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.1-013-create-schema-migration
+      author: vjo
+      # Couche d'intégration (anti-corruption layer).
+      # Chaque table de map porte :
+      #   - internal_id : FK vers la table public correspondante (ON DELETE CASCADE)
+      #   - source      : CHECK IN ('webdfd','cyber_notes','aurega')
+      #   - external_id : TEXT (webdfd donne des entiers, aurega/cyber_notes peuvent donner des codes)
+      #   - last_seen_at : mis à jour à chaque run de synchro ; permet de détecter les
+      #                   entités disparues d'une source (last_seen_at < début_du_run).
+      # promotion/groupe/matiere_map portent en plus annee (entier, ex. 2026) car webdfd
+      # peut recycler un identifiant externe d'une année sur l'autre.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE SCHEMA IF NOT EXISTS migration;
+
+              -- user_map : pas d'annee, l'identité d'une personne n'est pas annualisée.
+              CREATE TABLE migration.user_map (
+                internal_id  INTEGER     NOT NULL,
+                source       TEXT        NOT NULL,
+                external_id  TEXT        NOT NULL,
+                last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT pk_migration_user_map
+                    PRIMARY KEY (internal_id, source),
+                CONSTRAINT uq_migration_user_map_source_ext
+                    UNIQUE (source, external_id),
+                CONSTRAINT chk_migration_user_map_source
+                    CHECK (source IN ('webdfd', 'cyber_notes', 'aurega')),
+                CONSTRAINT fk_migration_user_map_user
+                    FOREIGN KEY (internal_id) REFERENCES public."user"(id) ON DELETE CASCADE
+              );
+              CREATE INDEX idx_migration_user_map_internal ON migration.user_map(internal_id);
+
+              -- promotion_map
+              CREATE TABLE migration.promotion_map (
+                internal_id  BIGINT      NOT NULL,
+                source       TEXT        NOT NULL,
+                external_id  TEXT        NOT NULL,
+                annee        INTEGER     NOT NULL,
+                last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT pk_migration_promotion_map
+                    PRIMARY KEY (internal_id, source),
+                CONSTRAINT uq_migration_promotion_map_source_ext_annee
+                    UNIQUE (source, external_id, annee),
+                CONSTRAINT chk_migration_promotion_map_source
+                    CHECK (source IN ('webdfd', 'cyber_notes', 'aurega')),
+                CONSTRAINT fk_migration_promotion_map_promotion
+                    FOREIGN KEY (internal_id) REFERENCES public.promotion(id) ON DELETE CASCADE
+              );
+              CREATE INDEX idx_migration_promotion_map_internal ON migration.promotion_map(internal_id);
+
+              -- groupe_map
+              CREATE TABLE migration.groupe_map (
+                internal_id  BIGINT      NOT NULL,
+                source       TEXT        NOT NULL,
+                external_id  TEXT        NOT NULL,
+                annee        INTEGER     NOT NULL,
+                last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT pk_migration_groupe_map
+                    PRIMARY KEY (internal_id, source),
+                CONSTRAINT uq_migration_groupe_map_source_ext_annee
+                    UNIQUE (source, external_id, annee),
+                CONSTRAINT chk_migration_groupe_map_source
+                    CHECK (source IN ('webdfd', 'cyber_notes', 'aurega')),
+                CONSTRAINT fk_migration_groupe_map_groupe
+                    FOREIGN KEY (internal_id) REFERENCES public.groupe(id) ON DELETE CASCADE
+              );
+              CREATE INDEX idx_migration_groupe_map_internal ON migration.groupe_map(internal_id);
+
+              -- matiere_map
+              CREATE TABLE migration.matiere_map (
+                internal_id  BIGINT      NOT NULL,
+                source       TEXT        NOT NULL,
+                external_id  TEXT        NOT NULL,
+                annee        INTEGER     NOT NULL,
+                last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT pk_migration_matiere_map
+                    PRIMARY KEY (internal_id, source),
+                CONSTRAINT uq_migration_matiere_map_source_ext_annee
+                    UNIQUE (source, external_id, annee),
+                CONSTRAINT chk_migration_matiere_map_source
+                    CHECK (source IN ('webdfd', 'cyber_notes', 'aurega')),
+                CONSTRAINT fk_migration_matiere_map_matiere
+                    FOREIGN KEY (internal_id) REFERENCES public.matiere(id) ON DELETE CASCADE
+              );
+              CREATE INDEX idx_migration_matiere_map_internal ON migration.matiere_map(internal_id);
+
+              -- prof_map : pas d'annee (même logique que user_map).
+              CREATE TABLE migration.prof_map (
+                internal_id  INTEGER     NOT NULL,
+                source       TEXT        NOT NULL,
+                external_id  TEXT        NOT NULL,
+                last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT pk_migration_prof_map
+                    PRIMARY KEY (internal_id, source),
+                CONSTRAINT uq_migration_prof_map_source_ext
+                    UNIQUE (source, external_id),
+                CONSTRAINT chk_migration_prof_map_source
+                    CHECK (source IN ('webdfd', 'cyber_notes', 'aurega')),
+                CONSTRAINT fk_migration_prof_map_user
+                    FOREIGN KEY (internal_id) REFERENCES public."user"(id) ON DELETE CASCADE
+              );
+              CREATE INDEX idx_migration_prof_map_internal ON migration.prof_map(internal_id);
+
+              -- seance_map : pas d'annee (la séance porte sa propre date).
+              CREATE TABLE migration.seance_map (
+                internal_id  BIGINT      NOT NULL,
+                source       TEXT        NOT NULL,
+                external_id  TEXT        NOT NULL,
+                last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT pk_migration_seance_map
+                    PRIMARY KEY (internal_id, source),
+                CONSTRAINT uq_migration_seance_map_source_ext
+                    UNIQUE (source, external_id),
+                CONSTRAINT chk_migration_seance_map_source
+                    CHECK (source IN ('webdfd', 'cyber_notes', 'aurega')),
+                CONSTRAINT fk_migration_seance_map_seance
+                    FOREIGN KEY (internal_id) REFERENCES public.seance(id) ON DELETE CASCADE
+              );
+              CREATE INDEX idx_migration_seance_map_internal ON migration.seance_map(internal_id);
+      rollback:
+        - sql:
+            sql: DROP SCHEMA IF EXISTS migration CASCADE;
