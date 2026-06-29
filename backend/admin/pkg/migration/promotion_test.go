@@ -1,0 +1,161 @@
+package migration
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+const testDSN = "host=10.20.1.4 port=5432 user=postgres password=root dbname=db_rex sslmode=disable"
+
+func TestSyncPromotions(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "P0;94;NOM;1A BAT 2026-27;COLORI;1;CFOND;10987431;CTEXTE;0\n")
+		fmt.Fprint(w, "P0;95;NOM;2A BAT 2025-26;COLORI;2;CFOND;10987432;CTEXTE;1\n")
+		fmt.Fprint(w, "\n")
+		fmt.Fprint(w, "EOT\n")
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	db, err := pgxpool.New(ctx, testDSN)
+	if err != nil {
+		t.Skipf("DB indisponible: %v", err)
+	}
+	if err = db.Ping(ctx); err != nil {
+		t.Skipf("DB indisponible: %v", err)
+	}
+	defer db.Close()
+
+	// Nettoyage : la FK ON DELETE CASCADE propage sur migration.promotion_map.
+	db.Exec(ctx, "DELETE FROM public.promotion WHERE name = ANY($1)",
+		[]string{"1A BAT 2026-27", "2A BAT 2025-26"})
+
+	if err = SyncPromotions(ctx, srv.URL, db); err != nil {
+		t.Fatalf("SyncPromotions: %v", err)
+	}
+
+	// Récupère les IDs internes créés.
+	type promoInfo struct {
+		id   int64
+		name string
+	}
+	var promos []promoInfo
+	{
+		rows, err := db.Query(ctx,
+			"SELECT id, name FROM public.promotion WHERE name = ANY($1) ORDER BY id",
+			[]string{"1A BAT 2026-27", "2A BAT 2025-26"})
+		if err != nil {
+			t.Fatalf("fetch promo ids: %v", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var p promoInfo
+			if err = rows.Scan(&p.id, &p.name); err != nil {
+				t.Fatalf("scan promo: %v", err)
+			}
+			promos = append(promos, p)
+		}
+		if len(promos) != 2 {
+			t.Fatalf("promotions créées: got %d, want 2", len(promos))
+		}
+	}
+
+	t.Run("promotion.name", func(t *testing.T) {
+		want := map[int64]string{}
+		for _, p := range promos {
+			want[p.id] = p.name
+		}
+		rows, err := db.Query(ctx,
+			"SELECT id, name FROM public.promotion WHERE id = ANY($1) ORDER BY id",
+			[]int64{promos[0].id, promos[1].id})
+		if err != nil {
+			t.Fatalf("query: %v", err)
+		}
+		defer rows.Close()
+		got := map[int64]string{}
+		for rows.Next() {
+			var id int64
+			var name string
+			if err = rows.Scan(&id, &name); err != nil {
+				t.Fatalf("scan: %v", err)
+			}
+			got[id] = name
+		}
+		for id, name := range want {
+			if got[id] != name {
+				t.Errorf("promotion id=%d: got %q, want %q", id, got[id], name)
+			}
+		}
+	})
+
+	t.Run("promotion_map.webdfd", func(t *testing.T) {
+		rows, err := db.Query(ctx,
+			`SELECT internal_id, external_id FROM migration.promotion_map
+			 WHERE source = 'webdfd' AND internal_id = ANY($1) ORDER BY external_id::integer`,
+			[]int64{promos[0].id, promos[1].id})
+		if err != nil {
+			t.Fatalf("query: %v", err)
+		}
+		defer rows.Close()
+
+		type entry struct {
+			internalID int64
+			externalID string
+		}
+		var got []entry
+		for rows.Next() {
+			var e entry
+			if err = rows.Scan(&e.internalID, &e.externalID); err != nil {
+				t.Fatalf("scan: %v", err)
+			}
+			got = append(got, e)
+		}
+		if len(got) != 2 {
+			t.Fatalf("promotion_map: got %d entrées, want 2", len(got))
+		}
+		if got[0].externalID != "94" || got[1].externalID != "95" {
+			t.Errorf("promotion_map: external_ids = [%s %s], want [94 95]",
+				got[0].externalID, got[1].externalID)
+		}
+	})
+}
+
+func TestParseKV(t *testing.T) {
+	cases := []struct {
+		line string
+		want map[string]string
+	}{
+		{
+			line: "P0;94;NOM;1A BAT 2026-27;COLORI;1;CFOND;10987431;CTEXTE;0",
+			want: map[string]string{
+				"P0": "94", "NOM": "1A BAT 2026-27",
+				"COLORI": "1", "CFOND": "10987431", "CTEXTE": "0",
+			},
+		},
+		{
+			line: "P0;1;NOM;TEST ",
+			want: map[string]string{"P0": "1", "NOM": "TEST"},
+		},
+		{
+			line: "cle_seule",
+			want: map[string]string{},
+		},
+	}
+
+	for _, tc := range cases {
+		got := parseKV(tc.line)
+		for k, v := range tc.want {
+			if got[k] != v {
+				t.Errorf("parseKV(%q)[%q] = %q, want %q", tc.line, k, got[k], v)
+			}
+		}
+		if len(got) != len(tc.want) {
+			t.Errorf("parseKV(%q): got %d clefs, want %d", tc.line, len(got), len(tc.want))
+		}
+	}
+}

@@ -72,7 +72,7 @@ export function EvalDetail({ selected }: Props) {
             {/* Section 1 — En-tête */}
             <Box>
                 <Typography variant="caption" sx={{ color: '#94a3b8' }}>
-                    {selected.promotionName} › {selected.periodeName}
+                    {selected.annee}/{selected.annee + 1} › {selected.promotionName} › {selected.periodeName}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 0.5, flexWrap: 'wrap' }}>
                     <Typography variant="h5" fontWeight={700} sx={{ color: 'text.primary' }}>

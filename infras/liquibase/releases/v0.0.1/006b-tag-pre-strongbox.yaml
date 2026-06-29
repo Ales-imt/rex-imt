@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.1-pre-strongbox-tag
+      author: vjo
+      changes:
+        - tagDatabase:
+            tag: pre-drop-user-id

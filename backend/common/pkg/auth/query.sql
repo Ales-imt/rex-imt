@@ -26,13 +26,13 @@ DELETE FROM refresh_tokens WHERE expires_at < NOW();
 -- name: GetUserById :one
 SELECT id, version, name, surname, email, roles, blame
 FROM public.user
-WHERE id = @id;
+WHERE id = @id AND disabled_at IS NULL;
 
 --  Ici pour eviter un import circulaire avec le package utilisateur.
 -- name: GetUserByMail :one
 SELECT id,  version, name, surname, email, roles, blame
 FROM public.user
-WHERE email = @email;
+WHERE email = @email AND disabled_at IS NULL;
 
 
 

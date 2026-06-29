@@ -1,3 +1,14 @@
+-- name: GetStudentPromoAndGroupes :one
+SELECT
+    p.name                                     AS promotion,
+    string_agg(g.name, ', ' ORDER BY g.name)::text  AS groupes
+FROM eleve_groupe eg
+JOIN groupe    g ON eg.id_groupe   = g.id
+JOIN promotion p ON g.promo_id     = p.id
+WHERE eg.num_etudiant = $1
+GROUP BY p.name
+LIMIT 1;
+
 -- name: InsertFeedbacks :one
 
 INSERT INTO feedback (content, created_at, strongbox, pseudo, message_id, promotion, groupe)

@@ -1,0 +1,78 @@
+databaseChangeLog:
+
+  # ---- 6e. Suppression feedback.user_id et student.promotion ------------
+  # Ce changeset s'exécute APRÈS la migration strongbox (tag v0.0.1-pre-strongbox).
+  - changeSet:
+      id: v0.0.1-006e-feedback-drop-user-id
+      author: vjo
+      changes:
+        - dropForeignKeyConstraint:
+            baseTableName: feedback
+            baseTableSchemaName: public
+            constraintName: feedback_student_id_fkey
+        - dropColumn:
+            tableName: feedback
+            schemaName: public
+            columnName: user_id
+        - dropColumn:
+            tableName: student
+            schemaName: public
+            columnName: promotion
+      rollback:
+        - addColumn:
+            tableName: student
+            schemaName: public
+            columns:
+              - column:
+                  name: promotion
+                  type: varchar(255)
+        - addColumn:
+            tableName: feedback
+            schemaName: public
+            columns:
+              - column:
+                  name: user_id
+                  type: integer
+        - addForeignKeyConstraint:
+            baseTableName: feedback
+            baseTableSchemaName: public
+            baseColumnNames: user_id
+            referencedTableSchemaName: public
+            referencedTableName: user
+            referencedColumnNames: id
+            constraintName: feedback_student_id_fkey
+
+  # ---- 6f. Trigger de notification (version finale) ----------------------
+  - changeSet:
+      id: v0.0.1-006f-feedback-trigger
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE OR REPLACE FUNCTION public.notify_new_feedback() RETURNS trigger
+                  LANGUAGE plpgsql AS $$
+              BEGIN
+                PERFORM pg_notify(
+                  'new_feedback',
+                  json_build_object(
+                    'id',        NEW.id,
+                    'content',   NEW.content,
+                    'promotion', NEW.promotion,
+                    'groupe',    NEW.groupe
+                  )::text
+                );
+                RETURN NEW;
+              END;
+              $$;
+
+              DROP TRIGGER IF EXISTS feedback_notify ON public.feedback;
+              CREATE TRIGGER feedback_notify
+                AFTER INSERT ON public.feedback
+                FOR EACH ROW EXECUTE FUNCTION public.notify_new_feedback();
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: |
+              DROP TRIGGER IF EXISTS feedback_notify ON public.feedback;
+              DROP FUNCTION IF EXISTS public.notify_new_feedback();

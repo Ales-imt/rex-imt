@@ -7,6 +7,7 @@
       "request": "launch",
       "mode": "auto",
       "program": "${file}",
+      "envFile": "${workspaceFolder}/.vscode/secrets-local.env"
     },
     {
       "name": "Debug rex-admin",

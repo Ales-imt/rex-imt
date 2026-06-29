@@ -1,0 +1,64 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.1-007-create-table-feedback-classification
+      author: vjo
+      changes:
+        - createTable:
+            tableName: feedback_classification
+            schemaName: public
+            columns:
+              - column:
+                  name: feedback_id
+                  type: integer
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: categorie
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sous_categorie
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sentiment
+                  type: varchar(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: urgence
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: resume
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: promotion
+                  type: text
+              - column:
+                  name: groupe
+                  type: text
+              - column:
+                  name: classified_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: feedback_classification
+            baseTableSchemaName: public
+            baseColumnNames: feedback_id
+            referencedTableSchemaName: public
+            referencedTableName: feedback
+            referencedColumnNames: id
+            constraintName: fk_classification_feedback
+      rollback:
+        - dropTable:
+            tableName: feedback_classification
+            schemaName: public

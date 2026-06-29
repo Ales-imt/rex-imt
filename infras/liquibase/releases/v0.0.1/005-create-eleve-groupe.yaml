@@ -1,0 +1,47 @@
+databaseChangeLog:
+  - changeSet:
+      id: v0.0.1-005-create-table-eleve-groupe
+      author: vjo
+      # FK num_etudiant → user ON DELETE CASCADE : si un user est désactivé/supprimé,
+      # ses appartenances aux groupes disparaissent automatiquement.
+      changes:
+        - createTable:
+            tableName: eleve_groupe
+            schemaName: public
+            columns:
+              - column:
+                  name: num_etudiant
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: id_groupe
+                  type: integer
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: eleve_groupe
+            schemaName: public
+            columnNames: num_etudiant, id_groupe
+            constraintName: pk_eleve_groupe
+        - addForeignKeyConstraint:
+            baseTableName: eleve_groupe
+            baseTableSchemaName: public
+            baseColumnNames: num_etudiant
+            referencedTableSchemaName: public
+            referencedTableName: user
+            referencedColumnNames: id
+            constraintName: fk_eleve_groupe_eleve
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: eleve_groupe
+            baseTableSchemaName: public
+            baseColumnNames: id_groupe
+            referencedTableSchemaName: public
+            referencedTableName: groupe
+            referencedColumnNames: id
+            constraintName: fk_eleve_groupe_groupe
+      rollback:
+        - dropTable:
+            tableName: eleve_groupe
+            schemaName: public

@@ -26,9 +26,28 @@ func CallbackFeedBack(notif FeedbackNotification, connector ia.IAConnector, pool
 		log.Printf("[IA] feedback #%d traité en %s", notif.ID, time.Since(start))
 	}()
 
+	toText := func(s *string) pgtype.Text {
+		if s == nil {
+			return pgtype.Text{Valid: false}
+		}
+		return pgtype.Text{String: *s, Valid: true}
+	}
+
 	cleanedFeedback, valid := CleanSingleFeedback(notif.Content)
 	if !valid {
 		log.Printf("[IA] feedback #%d rejeté (spam/invalide)", notif.ID)
+		if err := New(pool).InsertClassification(context.Background(), InsertClassificationParams{
+			FeedbackID:    notif.ID,
+			Categorie:     "autre",
+			SousCategorie: "spam",
+			Sentiment:     "neutre",
+			Urgence:       1,
+			Resume:        "spam",
+			Promotion:     toText(notif.Promotion),
+			Groupe:        toText(notif.Groupe),
+		}); err != nil {
+			log.Printf("[IA] feedback #%d erreur persistance spam: %v", notif.ID, err)
+		}
 		return
 	}
 
@@ -49,13 +68,6 @@ func CallbackFeedBack(notif FeedbackNotification, connector ia.IAConnector, pool
 	if err := json.Unmarshal([]byte(cleaned), &result); err != nil {
 		log.Printf("[IA] feedback #%d erreur parsing JSON: %v\nRéponse brute: %s", notif.ID, err, cleaned)
 		return
-	}
-
-	toText := func(s *string) pgtype.Text {
-		if s == nil {
-			return pgtype.Text{Valid: false}
-		}
-		return pgtype.Text{String: *s, Valid: true}
 	}
 
 	if err := New(pool).InsertClassification(context.Background(), InsertClassificationParams{

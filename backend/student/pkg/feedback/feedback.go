@@ -5,27 +5,26 @@ import (
 	"back-rex-common/pkg/services"
 	"back-rex-eleve/pkg/service"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 	"unicode/utf8"
 
 	"github.com/go-chi/render"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const (
-	maxContentLen   = 2000
-	maxPseudoLen    = 100
-	maxPromotionLen = 100
-	maxGroupeLen    = 100
+	maxContentLen = 2000
+	maxPseudoLen  = 100
 )
 
 type FeedbackRequest struct {
 	Content   string `json:"content"`
 	Pseudo    string `json:"pseudo"`
 	MessageID string `json:"message_id"`
-	Promotion string `json:"promotion"`
-	Groupe    string `json:"groupe"`
 }
 
 func (f FeedbackRequest) validate() error {
@@ -34,12 +33,6 @@ func (f FeedbackRequest) validate() error {
 	}
 	if utf8.RuneCountInString(f.Pseudo) > maxPseudoLen {
 		return fmt.Errorf("pseudo dépasse %d caractères", maxPseudoLen)
-	}
-	if utf8.RuneCountInString(f.Promotion) > maxPromotionLen {
-		return fmt.Errorf("promotion dépasse %d caractères", maxPromotionLen)
-	}
-	if utf8.RuneCountInString(f.Groupe) > maxGroupeLen {
-		return fmt.Errorf("groupe dépasse %d caractères", maxGroupeLen)
 	}
 	return nil
 }
@@ -81,6 +74,16 @@ func InsertFeedbacks(r *http.Request, inputs []FeedbackRequest, agePublicKey str
 		return fmt.Errorf("échec chiffrement strongbox : %w", err)
 	}
 
+	var promotion, groupe pgtype.Text
+	promoGroupe, err := queries.GetStudentPromoAndGroupes(context.Background(), int32(studentID))
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("échec récupération promotion/groupe : %w", err)
+	}
+	if err == nil {
+		promotion = promoGroupe.Promotion
+		groupe = services.ToPgText(promoGroupe.Groupes)
+	}
+
 	for _, input := range inputs {
 		_, err := queries.InsertFeedbacks(context.Background(), InsertFeedbacksParams{
 			Content:   input.Content,
@@ -88,8 +91,8 @@ func InsertFeedbacks(r *http.Request, inputs []FeedbackRequest, agePublicKey str
 			Strongbox: services.ToPgText(strongbox),
 			Pseudo:    services.ToPgText(input.Pseudo),
 			MessageID: services.ToPgText(input.MessageID),
-			Promotion: services.ToPgText(input.Promotion),
-			Groupe:    services.ToPgText(input.Groupe),
+			Promotion: promotion,
+			Groupe:    groupe,
 		})
 		if err != nil {
 			return fmt.Errorf("échec insertion feedback : %w", err)

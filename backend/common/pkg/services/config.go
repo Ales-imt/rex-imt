@@ -18,6 +18,18 @@ type Config struct {
 	RAGaRenn      RAGaRennConfig `yaml:"ragarenn"`
 	Age           AgeConfig      `yaml:"age"`
 	Rack          RackConfig     `yaml:"rack"`
+	Presence      PresenceConfig `yaml:"presence"`
+	Webdfd        WebdfdConfig   `yaml:"webdfd"`
+}
+
+type WebdfdConfig struct {
+	BaseURL        string `yaml:"baseURL"`        // cgiempt.exe (promos, cours, eleves, planning)
+	ListeGroupeURL string `yaml:"listeGroupeURL"` // cgihtml.exe (listegroupe MODE=10)
+}
+
+type PresenceConfig struct {
+	TokenSecret string `yaml:"tokenSecret"`
+	PlanningURL string `yaml:"planningURL"`
 }
 
 type AgeConfig struct {

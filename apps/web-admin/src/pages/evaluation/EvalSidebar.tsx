@@ -1,17 +1,14 @@
 import { useState, useEffect } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import Select from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
 import Accordion from '@mui/material/Accordion';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CircularProgress from '@mui/material/CircularProgress';
 import { useTheme } from '@mui/material/styles';
-import { useAnnees, usePromotionTree } from './useEvaluations';
+import { useAnneePromo } from '../../hooks/useCurriculum';
+import { AnneePromoSelect } from '../../components/AnneePromoSelect';
 import type { SelectedMatiere } from './Evaluation';
 
 const DOT_COLOR: Record<string, string> = {
@@ -28,16 +25,10 @@ interface Props {
 export function EvalSidebar({ selectedMatiereId, onSelectMatiere }: Props) {
     const theme = useTheme();
 
-    const { data: annees, loading: anneesLoading } = useAnnees();
-    const [selectedAnnee, setSelectedAnnee] = useState<number | null>(null);
-    const annee = selectedAnnee ?? (annees?.[0] ?? null);
-
-    const { data: tree, loading: treeLoading } = usePromotionTree(annee);
-
-    const [selectedPromoId, setSelectedPromoId] = useState<number | null>(null);
-    useEffect(() => { setSelectedPromoId(tree?.[0]?.id ?? null); }, [tree]);
-
-    const selectedPromo = tree?.find(p => p.id === selectedPromoId) ?? null;
+    const {
+        annees, anneesLoading, annee, setSelectedAnnee,
+        tree, treeLoading, selectedPromoId, setSelectedPromoId, selectedPromo,
+    } = useAnneePromo();
 
     const [expandedPeriodeId, setExpandedPeriodeId] = useState<number | null>(null);
     useEffect(() => {
@@ -53,38 +44,17 @@ export function EvalSidebar({ selectedMatiereId, onSelectMatiere }: Props) {
         }}>
             {/* En-tête */}
             <Box sx={{ p: 2, borderBottom: '0.5px solid', borderColor: theme.palette.divider, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                {anneesLoading ? (
-                    <CircularProgress size={18} />
-                ) : (
-                    <FormControl size="small" fullWidth>
-                        <InputLabel>Année</InputLabel>
-                        <Select
-                            value={annee ?? ''}
-                            label="Année"
-                            onChange={e => setSelectedAnnee(Number(e.target.value))}
-                        >
-                            {(annees ?? []).map(a => (
-                                <MenuItem key={a} value={a}>
-                                    {a}/{a + 1}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                )}
-                {!treeLoading && (tree ?? []).length > 0 && (
-                    <FormControl size="small" fullWidth>
-                        <InputLabel>Promotion</InputLabel>
-                        <Select
-                            value={selectedPromoId ?? ''}
-                            label="Promotion"
-                            onChange={e => setSelectedPromoId(Number(e.target.value))}
-                        >
-                            {(tree ?? []).map(p => (
-                                <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                )}
+                <AnneePromoSelect
+                    annees={annees}
+                    anneesLoading={anneesLoading}
+                    annee={annee}
+                    onAnneeChange={setSelectedAnnee}
+                    tree={tree}
+                    treeLoading={treeLoading}
+                    promoId={selectedPromoId}
+                    onPromoChange={setSelectedPromoId}
+                    fullWidth
+                />
             </Box>
 
             {/* Arbre */}
@@ -129,6 +99,7 @@ export function EvalSidebar({ selectedMatiereId, onSelectMatiere }: Props) {
                                                 name: matiere.name,
                                                 periodeName: periode.name,
                                                 promotionName: selectedPromo!.name,
+                                                annee: annee!,
                                             });
                                         }}
                                         sx={{

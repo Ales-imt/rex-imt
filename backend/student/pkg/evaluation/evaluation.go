@@ -154,7 +154,7 @@ func getMatiere(connector programme.ProgrammeConnector) http.HandlerFunc {
 			submittedIDs, err := queries.GetSubmittedMatiereIDs(ctx, pseudo)
 			if err == nil {
 				for _, id := range submittedIDs {
-					if m, ok := eligible[strconv.FormatInt(id, 10)]; ok {
+					if m, ok := eligible[id]; ok {
 						m.Fait = true
 					}
 				}
@@ -198,9 +198,9 @@ func SubmitEvaluation(agePublicKey string) http.HandlerFunc {
 		ctx := context.Background()
 
 		// Résoudre l'external_id (CO webdfd) en surrogate matiere.id pour l'année courante
-		matiereID, err := queries.GetMatiereIDByExternalAndAnnee(ctx, gen.GetMatiereIDByExternalAndAnneeParams{
-			ExternalID: req.MatiereID,
-			Annee:      service.AcademicYear(time.Now()),
+		matiereID, err := queries.GetMatiereIDByWebdfdAndAnnee(ctx, gen.GetMatiereIDByWebdfdAndAnneeParams{
+			WebdfdID: strconv.FormatInt(req.MatiereID, 10),
+			Annee:    service.AcademicYear(time.Now()),
 		})
 		if err != nil {
 			services.InvalidRequestError(w, r, "matière introuvable pour l'année en cours", services.NO_INFORMATION, nil)
@@ -434,9 +434,9 @@ func getSessionDetail() http.HandlerFunc {
 		queries := gen.New(pgCtx.Db)
 		ctx := context.Background()
 
-		matiereID, err := queries.GetMatiereIDByExternalAndAnnee(ctx, gen.GetMatiereIDByExternalAndAnneeParams{
-			ExternalID: externalID,
-			Annee:      service.AcademicYear(time.Now()),
+		matiereID, err := queries.GetMatiereIDByWebdfdAndAnnee(ctx, gen.GetMatiereIDByWebdfdAndAnneeParams{
+			WebdfdID: strconv.FormatInt(externalID, 10),
+			Annee:    service.AcademicYear(time.Now()),
 		})
 		if err != nil {
 			http.Error(w, "matière introuvable", http.StatusNotFound)

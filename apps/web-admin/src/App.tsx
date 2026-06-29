@@ -19,6 +19,8 @@ import { FEEDBACK_WORKFLOW } from './pages/feedback/def';
 import { ANALYSE } from './pages/analyse/def';
 import { DISCUSSION } from './pages/discussion/def';
 import { EVALUATION_WORKFLOW } from './pages/evaluation/def';
+import { PRESENCE_WORKFLOW } from './pages/presence/def';
+import HowToRegIcon from '@mui/icons-material/HowToReg';
 
 
 type NavigationItemWithRoles = NavigationItem & {
@@ -55,6 +57,12 @@ const NAVIGATION: NavigationItemWithRoles[] = [
     segment: EVALUATION_WORKFLOW,
     title: 'Évaluations',
     icon: <BarChartIcon />,
+    requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+  },
+  {
+    segment: PRESENCE_WORKFLOW,
+    title: 'Présence',
+    icon: <HowToRegIcon />,
     requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
   },
 ]

@@ -45,6 +45,7 @@ export function RootLayout() {
         <Stack.Screen name="agora" options={{ title: 'Agora', headerBackVisible: false, headerLeft: () => null }} />
         <Stack.Screen name="notes" options={{ title: 'Notes', headerBackVisible: false, headerLeft: () => null }} />
         <Stack.Screen name="programme" options={{ title: 'Programme', headerBackVisible: false, headerLeft: () => null }} />
+        <Stack.Screen name="presence" options={{ title: 'Présence', headerBackVisible: false, headerLeft: () => null }} />
         <Stack.Screen name="apropos" options={{ title: 'A propos' }} />
         <Stack.Screen name="apropos-first-login" options={{ title: 'À propos', headerBackVisible: false, headerLeft: () => null }} />
         <Stack.Screen name="pseudo-setup" options={{ headerShown: false }} />

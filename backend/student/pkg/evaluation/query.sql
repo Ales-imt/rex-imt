@@ -80,9 +80,9 @@ WHERE id = @session_id;
 
 
 -- name: GetSubmittedMatiereIDs :many
-SELECT m.external_id
+SELECT mm.external_id
 FROM eval_session es
-JOIN matiere m ON m.id = es.matiere_id
+JOIN migration.matiere_map mm ON mm.internal_id = es.matiere_id AND mm.source = 'webdfd'
 WHERE es.pseudo = @pseudo
   AND es.submitted_at IS NOT NULL;
 
@@ -118,8 +118,10 @@ WHERE es.pseudo = @pseudo
   AND es.submitted_at IS NOT NULL;
 
 
--- name: GetMatiereIDByExternalAndAnnee :one
-SELECT id FROM matiere WHERE external_id = @external_id AND annee = @annee;
+-- name: GetMatiereIDByWebdfdAndAnnee :one
+SELECT m.id FROM matiere m
+JOIN migration.matiere_map mm ON mm.internal_id = m.id
+WHERE mm.source = 'webdfd' AND mm.external_id = @webdfd_id AND m.annee = @annee;
 
 -- name: DeleteEvalSession :exec
 DELETE FROM eval_session WHERE id = @session_id AND pseudo = @pseudo;

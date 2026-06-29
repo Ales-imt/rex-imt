@@ -40,6 +40,7 @@ docker run -d \
     -p "$PORT":"$PORT" \
     --add-host=host.docker.internal:host-gateway \
     --env HOST="$HOST_IP" \
+    --env-file "$SECRETS_FILE" \
     -v "$(realpath "$CONFIG_FILE")":/opt/rex-admin/conf/config.yaml:ro,z \
     "$GHCR_IMAGE"
 

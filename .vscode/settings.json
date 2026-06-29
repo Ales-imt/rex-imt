@@ -1,4 +1,4 @@
 {
     "java.compile.nullAnalysis.mode": "automatic",
-    "go.testEnvFile": "${workspaceFolder}/.vscode/secrets-dev.env"
+    "go.testEnvFile": "${workspaceFolder}/.vscode/secrets-local.env"
 }

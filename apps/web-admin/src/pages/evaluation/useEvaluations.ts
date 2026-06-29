@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { apiInstance } from '../../services/api';
-import type { EvalStats, PromotionTree, SyntheseIA, VerbatimsPage } from './Evaluation';
+import type { EvalStats, SyntheseIA, VerbatimsPage } from './Evaluation';
 import { ENDPOINT_EVALUATION } from './def';
 
 interface AsyncState<T> {
@@ -21,7 +21,6 @@ function useAsync<T>(fetchFn: () => Promise<T>, deps: unknown[]) {
         depsKey,
     });
 
-    // If deps changed since last completed fetch, signal loading during this render
     const effective = state.depsKey !== depsKey
         ? { data: state.data, loading: true, error: null }
         : state;
@@ -42,22 +41,6 @@ function useAsync<T>(fetchFn: () => Promise<T>, deps: unknown[]) {
     }, deps);
 
     return effective;
-}
-
-export function useAnnees() {
-    return useAsync<number[]>(
-        () => apiInstance.get<number[]>(`${ENDPOINT_EVALUATION}/annees`).then(r => r.data),
-        [],
-    );
-}
-
-export function usePromotionTree(annee: number | null) {
-    return useAsync<PromotionTree[]>(
-        () => annee != null
-            ? apiInstance.get<PromotionTree[]>(`${ENDPOINT_EVALUATION}/promotions?annee=${annee}`).then(r => r.data)
-            : Promise.resolve([]),
-        [annee],
-    );
 }
 
 export function useMatiereStats(matiereId: number | null) {
