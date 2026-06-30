@@ -1,0 +1,170 @@
+databaseChangeLog:
+
+  # ---- public.presence_ledger ------------------------------------------------
+  # Registre append-only des présences certifiées.
+  # Chaque maillon dépend du précédent via prev_hash (SHA-256 du maillon N-1),
+  # formant une chaîne cryptographique : toute modification ou suppression
+  # a posteriori est détectable par VerifyChain.
+  #
+  # Choix onDelete RESTRICT sur les FK seance_id et user_id :
+  #   • Le registre doit survivre aux données opérationnelles — c'est son rôle.
+  #   • La suppression d'une séance ou d'un utilisateur est bloquée tant que des
+  #     maillons existent, forçant une procédure explicite (voir docs/securite.md).
+  #   • RGPD : le droit à l'effacement ne s'applique pas ici car la tenue du
+  #     registre d'assiduité relève d'une obligation légale (art. L123-1 Code Éd.).
+  - changeSet:
+      id: v0.0.1-014a-create-table-presence-ledger
+      author: vjo
+      changes:
+        - createTable:
+            tableName: presence_ledger
+            schemaName: public
+            columns:
+              - column:
+                  name: seq
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: seance_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: statut
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: event_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: recorded_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: prev_hash
+                  type: char(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: hash
+                  type: char(64)
+                  constraints:
+                    nullable: false
+                    unique: true
+        - createIndex:
+            tableName: presence_ledger
+            schemaName: public
+            indexName: idx_presence_ledger_seance
+            columns:
+              - column:
+                  name: seance_id
+        - createIndex:
+            tableName: presence_ledger
+            schemaName: public
+            indexName: idx_presence_ledger_user
+            columns:
+              - column:
+                  name: user_id
+        - addForeignKeyConstraint:
+            baseTableName: presence_ledger
+            baseTableSchemaName: public
+            baseColumnNames: seance_id
+            referencedTableSchemaName: public
+            referencedTableName: seance
+            referencedColumnNames: id
+            constraintName: fk_presence_ledger_seance
+            onDelete: RESTRICT
+        - addForeignKeyConstraint:
+            baseTableName: presence_ledger
+            baseTableSchemaName: public
+            baseColumnNames: user_id
+            referencedTableSchemaName: public
+            referencedTableName: user
+            referencedColumnNames: id
+            constraintName: fk_presence_ledger_user
+            onDelete: RESTRICT
+      rollback:
+        - dropTable:
+            tableName: presence_ledger
+            schemaName: public
+
+  # ---- public.presence_anchor ------------------------------------------------
+  # Points d'ancrage externes RFC 3161.
+  # Chaque ancre scelle le dernier hash du registre auprès d'une TSA,
+  # protégeant l'extrémité de la chaîne (le dernier maillon n'a pas de successeur).
+  # Plusieurs ancres peuvent couvrir le même ledger_seq si plusieurs TSA sont configurées.
+  - changeSet:
+      id: v0.0.1-014b-create-table-presence-anchor
+      author: vjo
+      changes:
+        - createTable:
+            tableName: presence_anchor
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: ledger_seq
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: anchored_hash
+                  type: char(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tsa_url
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: hash_algorithm
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: token
+                  type: bytea
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tsa_cert
+                  type: bytea
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: presence_anchor
+            baseTableSchemaName: public
+            baseColumnNames: ledger_seq
+            referencedTableSchemaName: public
+            referencedTableName: presence_ledger
+            referencedColumnNames: seq
+            constraintName: fk_presence_anchor_ledger
+            onDelete: RESTRICT
+      rollback:
+        - dropTable:
+            tableName: presence_anchor
+            schemaName: public

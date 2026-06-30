@@ -14,7 +14,7 @@ release-prod-eleve: db-to-code-prod build-container-eleve-prod push deploy-vm-el
 
 migration-prod:
 	echo "A FAIRE UNE FOIS LORS DE LA MISE EN PLACE !!!", PUIS SUPPRIMER LA REGLE !!!!!!
-	sleep 10
+	sleep 3
 	$(INFRA_DIR)/migrate-v0-to-v1.sh $(SECRETS_FILE_PROD)
 
 # ── Code ──────────────────────────────────────────────────────────────────────

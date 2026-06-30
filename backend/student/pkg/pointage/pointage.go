@@ -16,7 +16,7 @@ import (
 
 	"github.com/go-chi/render"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgtype" // pour pgtype.Text dans resolveSeance
 )
 
 var tokenSecret string
@@ -46,10 +46,11 @@ func PostPointage() http.HandlerFunc {
 		}
 
 		userID := auth.GetSecurityUserId(r.Context())
-		pgCtx := services.GetPgCtx(r.Context())
-		q := gen.New(pgCtx.Db)
+		pool := services.GetPgCtx(r.Context()).Db
 		ctx := context.Background()
 
+		// Lecture de la séance sans transaction (read-only).
+		q := gen.New(pool)
 		seance, err := resolveSeance(ctx, q, req.Code)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -79,18 +80,46 @@ func PostPointage() http.HandlerFunc {
 		}
 
 		uid := int32(*userID)
-		_, err = q.UpsertPointage(ctx, gen.UpsertPointageParams{
+
+		// Transaction : pointage + maillon ledger sont atomiques.
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+		defer tx.Rollback(ctx) //nolint:errcheck
+
+		qtx := gen.New(tx)
+		pointageRow, insertErr := qtx.UpsertPointage(ctx, gen.UpsertPointageParams{
 			SeanceID: seance.ID,
 			UserID:   uid,
 			Statut:   statut,
 		})
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		dejaPointe := errors.Is(insertErr, pgx.ErrNoRows)
+		if insertErr != nil && !dejaPointe {
+			services.InternalServerError(w, r, insertErr.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+
+		if !dejaPointe {
+			if _, _, err := AppendLedger(ctx, tx, seance.ID, uid, statut, pointageRow.PointeAt.Time); err != nil {
+				services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+				return
+			}
+		}
+
+		if err := tx.Commit(ctx); err != nil {
 			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 			return
 		}
 
-		dejaPointe := errors.Is(err, pgx.ErrNoRows)
-		var pointeAt pgtype.Timestamptz
+		resp := postPointageResponse{
+			Matiere:    seance.MatiereName,
+			SeanceID:   seance.ID,
+			Statut:     statut,
+			DejaPointe: dejaPointe,
+		}
+
 		if dejaPointe {
 			existing, err2 := q.GetExistingPointage(ctx, gen.GetExistingPointageParams{
 				SeanceID: seance.ID,
@@ -100,20 +129,10 @@ func PostPointage() http.HandlerFunc {
 				services.InternalServerError(w, r, err2.Error(), services.NO_INFORMATION, nil)
 				return
 			}
-			statut = existing.Statut
-			pointeAt = existing.PointeAt
-		}
-
-		resp := postPointageResponse{
-			Matiere:    seance.MatiereName,
-			SeanceID:   seance.ID,
-			Statut:     statut,
-			DejaPointe: dejaPointe,
-		}
-		if pointeAt.Valid {
-			resp.PointeAt = pointeAt.Time.Format(time.RFC3339)
+			resp.Statut = existing.Statut
+			resp.PointeAt = existing.PointeAt.Time.Format(time.RFC3339)
 		} else {
-			resp.PointeAt = time.Now().UTC().Format(time.RFC3339)
+			resp.PointeAt = pointageRow.PointeAt.Time.Format(time.RFC3339)
 		}
 
 		render.JSON(w, r, resp)

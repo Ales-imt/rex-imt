@@ -88,6 +88,7 @@ export function AproposContent({ colors, children }: AproposContentProps) {
             { cat: 'Identité', detail: 'Nom, prénom, adresse e-mail institutionnelle — utilisés pour l\'authentification via le LDAP de l\'école.' },
             { cat: 'Feedbacks', detail: 'Contenu textuel, pseudo choisi, promotion et groupe — collectés pour améliorer la qualité des enseignements.' },
             { cat: 'Évaluations', detail: 'Scores par dimension pédagogique et verbatims optionnels — collectés de façon anonyme (aucun lien avec votre identité côté serveur).' },
+            { cat: 'Présences', detail: 'Identifiant de séance, statut (présent / retard) et heure de pointage — collectés par scan de QR code lors des séances. Un registre cryptographique d\'intégrité garantit l\'inaltérabilité de ces données. Base légale : obligation légale d\'assiduité (Art. L123-1 Code de l\'éducation).' },
             { cat: 'Données techniques', detail: 'Adresse IP et identifiant technique chiffrés — conservés pour répondre aux obligations légales (voir ci-dessous).' },
           ].map(item => (
             <View key={item.cat} style={[styles.dataItem, { borderLeftColor: colors.tint + '66' }]}>
@@ -98,7 +99,7 @@ export function AproposContent({ colors, children }: AproposContentProps) {
         </View>
 
         <Text style={[styles.legalBase, { color: colors.textSecondary }]}>
-          Base légale : mission de service public d'enseignement supérieur (Art. 6.1.e du RGPD — Règlement UE 2016/679).
+          Base légale principale : mission de service public d'enseignement supérieur (Art. 6.1.e RGPD). Pour les données de présence : obligation légale d'assiduité (Art. 6.1.c RGPD — Art. L123-1 Code de l'éducation).
         </Text>
       </Section>
 
@@ -108,7 +109,8 @@ export function AproposContent({ colors, children }: AproposContentProps) {
         <Row label="Contenu de vos feedbacks" value="3 ans à compter de la publication" colors={colors} />
         <Row label="Données d'identification (IP chiffrée)" value="1 an à compter de la publication" colors={colors} />
         <Row label="Évaluations anonymes" value="Conservées à des fins statistiques" colors={colors} />
-        <Row label="Tokens de session" value="3 mois  puis suppression automatique" colors={colors} />
+        <Row label="Données de présence" value="Durée de la scolarité + 5 ans (obligation légale)" colors={colors} />
+        <Row label="Tokens de session" value="3 mois puis suppression automatique" colors={colors} />
       </Section>
 
       {/* ── 4. Obligation LCEN ─────────────────────────────────────────── */}
@@ -122,6 +124,21 @@ export function AproposContent({ colors, children }: AproposContentProps) {
           </Text>
           <Text style={[styles.infoText, { color: colors.textPrimary, marginTop: 8 }]}>
             Si vous demandez la suppression d'un feedback, son contenu sera immédiatement effacé de l'affichage. Les données techniques resteront conservées jusqu'à l'expiration du délai légal d'un an, puis seront automatiquement détruites.
+          </Text>
+        </InfoBox>
+      </Section>
+
+      {/* ── 4b. Registre d'intégrité des présences ─────────────────────── */}
+      <Section title="Registre de présences et intégrité" colors={colors}>
+        <InfoBox colors={colors}>
+          <Text style={[styles.infoTitle, { color: colors.tint }]}>
+            ℹ️  Pourquoi vos présences ne peuvent pas être supprimées
+          </Text>
+          <Text style={[styles.infoText, { color: colors.textPrimary }]}>
+            Chaque pointage est enregistré dans un registre cryptographique dont les entrées sont chaînées par empreinte SHA-256. Toute modification ou suppression rompt la chaîne et est immédiatement détectable. Ce mécanisme garantit l'authenticité des relevés d'assiduité conformément à l'obligation légale (Art. L123-1 Code de l'éducation).
+          </Text>
+          <Text style={[styles.infoText, { color: colors.textPrimary, marginTop: 8 }]}>
+            En application de l'Art. 17.3.b du RGPD, le droit à l'effacement ne s'applique pas à ces données pendant la durée de l'obligation légale. À l'issue de cette période, vos données nominatives sont anonymisées dans notre base ; les empreintes cryptographiques du registre sont conservées sans lien avec votre identité.
           </Text>
         </InfoBox>
       </Section>
@@ -155,7 +172,7 @@ export function AproposContent({ colors, children }: AproposContentProps) {
         {[
           { droit: 'Droit d\'accès (Art. 15)', desc: 'Obtenir une copie des données vous concernant.' },
           { droit: 'Droit de rectification (Art. 16)', desc: 'Faire corriger des données inexactes.' },
-          { droit: 'Droit à l\'effacement (Art. 17)', desc: 'Demander la suppression de vos données, sous réserve des obligations légales de conservation (LCEN).' },
+          { droit: 'Droit à l\'effacement (Art. 17)', desc: 'Demander la suppression de vos données. Exception : les données de présence et les données techniques (LCEN) sont soumises à des obligations légales de conservation ; elles ne peuvent être effacées pendant la durée applicable (Art. 17.3.b RGPD).' },
           { droit: 'Droit à la portabilité (Art. 20)', desc: 'Recevoir vos données dans un format structuré et lisible.' },
           { droit: 'Droit d\'opposition (Art. 21)', desc: 'Vous opposer à certains traitements de vos données.' },
         ].map(item => (
@@ -186,7 +203,7 @@ export function AproposContent({ colors, children }: AproposContentProps) {
       {/* ── Pied de page ───────────────────────────────────────────────── */}
       <View style={[styles.footer, { borderTopColor: colors.dividerLine }]}>
         <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-          Dernière mise à jour : mai 2026
+          Dernière mise à jour : juin 2026
         </Text>
         <Text style={[styles.footerText, { color: colors.textSecondary }]}>
           IMT Mines Alès — Tous droits réservés

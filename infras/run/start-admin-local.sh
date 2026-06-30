@@ -9,6 +9,14 @@ echo "--- 📋 Copie de la configuration admin ---"
 cp ./backend/admin/cmd/config.yaml "$ADMIN_CONFIG"
 sed -i 's|caCertPath:.*|caCertPath: /opt/rex-admin/certs/ca.crt|' "$ADMIN_CONFIG"
 
+FREETSA_CERT=./backend/admin/x509/freetsa/cacert.pem
+FREETSA_VOLUME=""
+if [ -f "$FREETSA_CERT" ]; then
+    FREETSA_VOLUME="-v $(pwd)/$FREETSA_CERT:/opt/rex-admin/conf/x509/freetsa/cacert.pem:ro"
+else
+    echo "--- ⚠️  Cert FreeTSA absent ($FREETSA_CERT) — ancrage TSA désactivé. Exécuter: make fetch-freetsa-cert"
+fi
+
 echo "--- 🚀 Lancement du container admin ---"
 docker rm -f rex-admin 2>/dev/null || true
 docker run -d \
@@ -20,6 +28,7 @@ docker run -d \
     -e HTTP_PROXY=socks5h://host.docker.internal:1080 \
     -e NO_PROXY=10.20.1.4,10.20.1.5,10.20.1.6,localhost,127.0.0.1 \
     -v "$(pwd)/$ADMIN_CONFIG":/opt/rex-admin/conf/config.yaml:ro \
+    $FREETSA_VOLUME \
     rex-admin
 
 echo " pour aller du telephone vers le PC socat TCP-LISTEN:8121,bind=10.208.113.46,fork TCP:10.20.1.11:8121"

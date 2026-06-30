@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -420,4 +421,110 @@ func ListSeancesHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	render.JSON(w, r, result)
+}
+
+// ─── Registre d'intégrité ─────────────────────────────────────────────────────
+
+type verifyResponse struct {
+	Chain   VerifyChainResult    `json:"chain"`
+	Anchors []AnchorVerifyResult `json:"anchors"`
+}
+
+// LedgerVerifyHandler vérifie l'intégrité de la chaîne et des ancres TSA.
+// GET /presence/ledger/verify
+func LedgerVerifyHandler(cfg timestampCfg) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		db := services.GetPgCtx(r.Context()).Db
+		ctx := context.Background()
+
+		chainResult, err := VerifyChain(ctx, db)
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+
+		anchorResults, err := VerifyAnchors(ctx, db, cfg.caCertPath)
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+
+		render.JSON(w, r, verifyResponse{
+			Chain:   chainResult,
+			Anchors: anchorResults,
+		})
+	}
+}
+
+type anchorResponse struct {
+	Results []AnchorResult `json:"results"`
+}
+
+// LedgerAnchorHandler déclenche un ancrage TSA manuel sur le dernier maillon.
+// POST /presence/ledger/anchor
+func LedgerAnchorHandler(cfg timestampCfg) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		db := services.GetPgCtx(r.Context()).Db
+		ctx := context.Background()
+
+		results, err := AnchorLast(ctx, db, cfg.tsCfg)
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+
+		render.JSON(w, r, anchorResponse{Results: results})
+	}
+}
+
+// PresencePdfHandler génère une feuille de présence PDF pour une séance clôturée.
+// GET /presence/seance/{seanceId}/pdf
+func PresencePdfHandler(w http.ResponseWriter, r *http.Request) {
+	seanceID, ok := parseSeanceID(r)
+	if !ok {
+		services.InvalidRequestError(w, r, "seanceId invalide", services.NO_INFORMATION, nil)
+		return
+	}
+
+	q := New(services.GetPgCtx(r.Context()).Db)
+	ctx := context.Background()
+
+	seance, err := q.GetSeanceDetail(ctx, seanceID)
+	if err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+	if !seance.ClosedAt.Valid {
+		http.Error(w, "la séance doit être clôturée pour générer le PDF", http.StatusUnprocessableEntity)
+		return
+	}
+
+	rows, err := q.ListPresence(ctx, seanceID)
+	if err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+	horsGroupe, err := q.ListPresenceHorsGroupe(ctx, seanceID)
+	if err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+
+	data := buildPdfData(seance, rows, horsGroupe)
+
+	filename := fmt.Sprintf("presence-seance-%d.pdf", seanceID)
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	w.Header().Set("Cache-Control", "no-store")
+
+	if err := generatePresencePDF(w, data); err != nil {
+		// Headers already sent; log only
+		_ = err
+	}
+}
+
+// timestampCfg regroupe la configuration TSA passée aux handlers.
+type timestampCfg struct {
+	tsCfg      services.TimestampConfig
+	caCertPath string
 }

@@ -31,6 +31,25 @@
     group: "{{ app_user }}"
     mode: "0644"
 
+- name: Créer le répertoire {{ app_dir }}/x509/freetsa
+  ansible.builtin.file:
+    path: "{{ app_dir }}/x509/freetsa"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0750"
+  when: freetsa_cert_container_path is defined and freetsa_cert_container_path
+
+- name: Copier le certificat racine FreeTSA
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../backend/admin/x509/freetsa/cacert.pem"
+    dest: "{{ app_dir }}/x509/freetsa/cacert.pem"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0644"
+  when: freetsa_cert_container_path is defined and freetsa_cert_container_path
+  notify: Restart container
+
 - name: Déployer config-{{ app_name }}.yaml
   ansible.builtin.template:
     src: "config-{{ app_name }}.yaml.j2"

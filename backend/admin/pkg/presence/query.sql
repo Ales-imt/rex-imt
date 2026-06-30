@@ -38,6 +38,20 @@ SELECT s.id, s.matiere_id, s.code, s.opened_at, s.closed_at,
        s.late_after_minutes, m.name AS matiere_name
 FROM seance s JOIN matiere m ON m.id = s.matiere_id WHERE s.id = @id;
 
+-- name: GetSeanceDetail :one
+SELECT s.id, s.code, s.opened_at, s.closed_at, s.late_after_minutes,
+       s.starts_at, s.ends_at,
+       COALESCE(s.salle, '') AS salle,
+       COALESCE(s.prof, '') AS prof,
+       m.name AS matiere_name,
+       COALESCE(g.name, pr.name, '') AS promo
+FROM seance s
+JOIN matiere m         ON m.id = s.matiere_id
+LEFT JOIN groupe g     ON g.id = s.groupe_id
+LEFT JOIN periode pe   ON pe.id = m.periode_id
+LEFT JOIN promotion pr ON pr.id = pe.promotion_id
+WHERE s.id = @id;
+
 -- name: ListPresence :many
 SELECT DISTINCT u.id AS user_id, u.name, u.surname,
        COALESCE(p.statut, 'ABSENT')::text AS statut, p.pointe_at
@@ -73,3 +87,31 @@ ORDER BY u.surname, u.name;
 -- name: ListSeancesByMatiere :many
 SELECT id, code, opened_at, closed_at FROM seance
 WHERE matiere_id = @matiere_id ORDER BY opened_at DESC;
+
+-- ── Registre d'intégrité ─────────────────────────────────────────────────────
+
+-- name: GetLastLedgerEntry :one
+-- Dernier maillon du registre (pour ancrage TSA et démarrage de VerifyChain).
+SELECT seq, hash FROM presence_ledger ORDER BY seq DESC LIMIT 1;
+
+-- name: ListLedgerBySeq :many
+-- Parcours ordonné pour VerifyChain : recalcule chaque hash et compare.
+SELECT seq, seance_id, user_id, statut, event_at, recorded_at, prev_hash, hash
+FROM presence_ledger
+ORDER BY seq ASC;
+
+-- name: InsertAnchor :one
+-- Archive un jeton RFC 3161 pour un maillon donné.
+INSERT INTO presence_anchor (ledger_seq, anchored_hash, tsa_url, hash_algorithm, token, tsa_cert)
+VALUES (@ledger_seq, @anchored_hash, @tsa_url, @hash_algorithm, @token, @tsa_cert)
+RETURNING id;
+
+-- name: ListAnchors :many
+-- Retourne toutes les ancres pour VerifyAnchors.
+SELECT id, ledger_seq, anchored_hash, tsa_url, hash_algorithm, token, tsa_cert, created_at
+FROM presence_anchor
+ORDER BY ledger_seq ASC, id ASC;
+
+-- name: GetAnchorByLedgerSeq :many
+-- Ancres existantes pour un maillon donné (idempotence d'AnchorLast).
+SELECT id, tsa_url FROM presence_anchor WHERE ledger_seq = @ledger_seq;

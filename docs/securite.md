@@ -103,6 +103,64 @@ Passer en `https://` si le serveur le supporte. Sinon, s'assurer que les VMs de 
 
 ---
 
+---
+
+## Registre d'intégrité des présences
+
+### Architecture
+
+La table `pointage` enregistre les présences ; elle ne possède pas d'identifiant ordonnable et peut être modifiée. Pour garantir l'inaltérabilité des enregistrements, une couche **append-only** est ajoutée par-dessus :
+
+| Table | Rôle |
+|---|---|
+| `presence_ledger` | Un maillon par pointage certifié ; séquence croissante stricte |
+| `presence_anchor` | Jetons RFC 3161 scellant l'extrémité de la chaîne auprès d'une TSA |
+
+### Chaînage cryptographique
+
+**Formule :**
+```
+hash(N) = SHA-256( seance_id | user_id | statut | event_at | recorded_at | prev_hash )
+```
+
+- Les champs sont concaténés avec `|` dans un **ordre fixe et contractuel** (voir [hash.go](../backend/common/pkg/ledger/hash.go)).
+- Les horodatages sont en RFC3339Nano UTC (précision nanoseconde).
+- `prev_hash` du premier maillon = `0000...0` (64 zéros, sentinel Genesis).
+- `recorded_at` est toujours positionné côté serveur Go (`time.Now().UTC()`) — jamais fourni par le client.
+- L'insertion utilise `pg_advisory_xact_lock` pour sérialiser les écritures concurrentes : aucun deux maillons ne peuvent partager le même prédécesseur.
+
+**Atomicité :** le pointage et son maillon sont insérés dans la **même transaction pgx** (backend student, `PostPointage`).
+
+**Vérification :** `GET /presence/ledger/verify` (admin) relit toute la chaîne, recalcule chaque hash et signale le premier `seq` cassé.
+
+### Ancrage externe RFC 3161
+
+**But :** protéger l'extrémité de la chaîne (le dernier maillon n'a pas encore de successeur). Un ancrage périodique le scelle auprès d'une autorité d'horodatage (TSA).
+
+**RGPD :** seul le hash SHA-256 transite vers la TSA. Aucune donnée nominative ne quitte le système. Base légale : obligation d'assiduité (art. L123-1 Code Éducation).
+
+**Déclenchement :**
+- Automatique : configurer un cron externe ou une tâche planifiée appelant `POST /presence/ledger/anchor` selon `anchorCron` (ex. `"0 2 * * *"`).
+- Manuel : `POST /api/v2/presence/ledger/anchor` (rôle admin ou gestionnaire).
+
+**TSA par défaut :** `https://freetsa.org/tsr`. Plusieurs TSA peuvent être configurées (`presence.timestamp.urls`) pour la redondance — un jeton est archivé par TSA.
+
+**Certificat racine FreeTSA :** télécharger depuis `https://freetsa.org/files/cacert.pem` et placer dans `./x509/freetsa/cacert.pem` (chemin configuré par `caCertPath`). Ce certificat est archivé avec chaque jeton dans `presence_anchor.tsa_cert`, garantissant la vérifiabilité hors ligne si la TSA disparaît.
+
+**Durée de conservation :** les maillons du registre et les jetons d'ancrage sont conservés aussi longtemps que les obligations légales de tenue du registre d'assiduité l'exigent (au moins la durée de la scolarité + 5 ans). La suppression d'un utilisateur est bloquée par la FK RESTRICT tant que des maillons existent — la procédure RGPD consiste à anonymiser les données nominatives dans `user` et `pointage` sans supprimer les hash du ledger.
+
+**Vérification des ancres :** `GET /api/v2/presence/ledger/verify` renvoie l'état de chaque ancre (signature CMS vérifiée, hash correspondant au `anchored_hash`).
+
+### Placer le certificat FreeTSA
+
+```bash
+mkdir -p backend/admin/x509/freetsa
+curl -o backend/admin/x509/freetsa/cacert.pem https://freetsa.org/files/cacert.pem
+# Vérifier l'empreinte publiée sur https://freetsa.org avant de faire confiance.
+```
+
+---
+
 ## Plan d'action
 
 | Priorité | Finding | Effort | Dépendance |

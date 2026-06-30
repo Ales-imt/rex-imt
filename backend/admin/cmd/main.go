@@ -63,6 +63,9 @@ func main() {
 	if !filepath.IsAbs(cfg.Rack.CaCertPath) {
 		cfg.Rack.CaCertPath = filepath.Join(configDir, cfg.Rack.CaCertPath)
 	}
+	if p := cfg.Presence.Timestamp.CaCertPath; p != "" && !filepath.IsAbs(p) {
+		cfg.Presence.Timestamp.CaCertPath = filepath.Join(configDir, p)
+	}
 	r.Use(services.MakeDatabasePgMiddleware(&cfg.Database))
 	auth.StartRefreshTokenCleanup(&cfg.Database)
 
@@ -159,7 +162,6 @@ func main() {
 		adminOnly := []string{auth.RoleAdmin}
 		adminAndGestionnaire := []string{auth.RoleAdmin, auth.RoleGestionnaire}
 
-		r.Route("/curriculum", curriculum.RouteCurriculum)
 		r.With(auth.Security(cfg.JWT, &adminOnly)).
 			Route("/user", func(r chi.Router) {
 				user.RouteUtilisateur(r, cfg.LDAP)
@@ -178,8 +180,11 @@ func main() {
 			})
 		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/presence", func(r chi.Router) {
-				presence.RoutePresence(r, cfg.Presence.TokenSecret)
+				presence.RoutePresence(r, cfg.Presence)
 			})
+
+		r.With(auth.Security(cfg.JWT, nil)).
+			Route("/curriculum", curriculum.RouteCurriculum)
 	})
 
 	log.Printf("Serveur démarré sur le port %d (HTTP)", cfg.Server.Port)
