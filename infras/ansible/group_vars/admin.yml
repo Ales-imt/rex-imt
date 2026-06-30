@@ -8,6 +8,7 @@ container_port: 8121
 app_dir: /home/userdfx/rex-admin
 config_dest_in_container: /opt/rex-admin/conf/config.yaml
 ca_cert_container_path: /opt/rex-admin/certs/ca.crt
+freetsa_cert_container_path: /opt/rex-admin/conf/x509/freetsa/cacert.pem
 
 postgres_host: "{{ postgres_host }}"
 postgres_port: "{{ postgres_port }}"

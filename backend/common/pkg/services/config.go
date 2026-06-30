@@ -28,9 +28,24 @@ type WebdfdConfig struct {
 }
 
 type PresenceConfig struct {
-	TokenSecret string `yaml:"tokenSecret"`
-	PlanningURL string `yaml:"planningURL"`
+	TokenSecret string          `yaml:"tokenSecret"`
+	PlanningURL string          `yaml:"planningURL"`
+	Timestamp   TimestampConfig `yaml:"timestamp"`
 }
+
+// TimestampConfig configures RFC 3161 external anchoring.
+// All fields have safe defaults; only tokenSecret is mandatory.
+type TimestampConfig struct {
+	Enabled       bool          `yaml:"enabled"`
+	URLs          []string      `yaml:"urls"`          // TSA endpoints; defaults to FreeTSA if empty
+	HashAlgorithm string        `yaml:"hashAlgorithm"` // "sha256" (only value currently supported)
+	Timeout       time.Duration `yaml:"timeout"`       // per-TSA HTTP timeout, e.g. 10s
+	AnchorCron    string        `yaml:"anchorCron"`    // cron expression for automatic anchoring
+	CaCertPath    string        `yaml:"caCertPath"`    // path to TSA root CA PEM for offline verification
+}
+
+// DefaultTSAURL is used when TimestampConfig.URLs is empty.
+const DefaultTSAURL = "https://freetsa.org/tsr"
 
 type AgeConfig struct {
 	PublicKey string `yaml:"publicKey"`

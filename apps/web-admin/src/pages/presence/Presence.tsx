@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -157,6 +157,28 @@ export function Presence() {
     // Séance active
     const [activeSeance, setActiveSeance] = useState<OpenSeanceResponse | null>(null);
     const [seanceClosed, setSeanceClosed] = useState(false);
+    const [downloading, setDownloading] = useState(false);
+
+    const handleDownloadPdf = useCallback(async () => {
+        if (!activeSeance) return;
+        setDownloading(true);
+        try {
+            const resp = await apiInstance.get(
+                `${ENDPOINT_PRESENCE}/seance/${activeSeance.id}/pdf`,
+                { responseType: 'blob' },
+            );
+            const url = URL.createObjectURL(new Blob([resp.data], { type: 'application/pdf' }));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `presence-seance-${activeSeance.id}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } finally {
+            setDownloading(false);
+        }
+    }, [activeSeance]);
 
     // Chargement automatique de l'état du créneau sélectionné
     const { data: slotData } = useQuery<OpenSeanceResponse | null>({
@@ -356,7 +378,20 @@ export function Presence() {
             )}
 
             {seanceClosed && (
-                <Alert severity="info" sx={{ mb: 3 }}>Séance clôturée — le tableau ci-dessous est figé.</Alert>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                    <Alert severity="info" sx={{ flex: 1, m: 0 }}>
+                        Séance clôturée — le tableau ci-dessous est figé.
+                    </Alert>
+                    <Button
+                        variant="outlined"
+                        disabled={downloading}
+                        onClick={handleDownloadPdf}
+                        sx={{ whiteSpace: 'nowrap' }}
+                    >
+                        {downloading ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                        Télécharger le PDF
+                    </Button>
+                </Box>
             )}
 
             {/* Metrics + tableau */}

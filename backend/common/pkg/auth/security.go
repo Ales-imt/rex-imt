@@ -87,7 +87,7 @@ func RequireRoles(allowedRoles []string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx, ok := r.Context().Value(SecurityCtxKey).(*SecurityCtx)
-			if !ok || ctx.Role == nil || !containsRole(*ctx.Role, &allowedRoles) {
+			if !ok || ctx.Role == nil || !containsRole(*ctx.Role, allowedRoles) {
 				services.AuthorizationError(w, r, "droit insuffissant", services.NO_INFORMATION, nil)
 				return
 			}
@@ -114,9 +114,9 @@ func Security(
 }
 
 // Helper pour vérifier si le rôle est autorisé
-func containsRole(role string, allowedRoles *[]string) bool {
+func containsRole(role string, allowedRoles []string) bool {
 	for userRole := range strings.SplitSeq(role, ",") {
-		if slices.Contains(*allowedRoles, strings.TrimSpace(userRole)) {
+		if slices.Contains(allowedRoles, strings.TrimSpace(userRole)) {
 			return true
 		}
 	}
@@ -145,7 +145,7 @@ func HasRole(ctx context.Context, role string) bool {
 	if !ok || ctxValue.Role == nil {
 		return false
 	}
-	return containsRole(*ctxValue.Role, &[]string{role})
+	return containsRole(*ctxValue.Role, []string{role})
 }
 
 func setSecurityCtx(r *http.Request, value *SecurityCtx) context.Context {

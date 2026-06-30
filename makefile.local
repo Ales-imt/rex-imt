@@ -56,7 +56,7 @@ start-local: start-admin start-eleve
 
 stop-local: stop-admin stop-eleve stop-infra
 
-start-admin:
+start-admin: fetch-freetsa-cert-if-missing
 	$(RUN_DIR)/build-admin.sh local
 	$(RUN_DIR)/start-admin-local.sh
 
