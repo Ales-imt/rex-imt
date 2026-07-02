@@ -1,8 +1,5 @@
 -- name: GetAnneeByDate :one
-SELECT id FROM public.annee WHERE debut <= $1 AND fin >= $1;
-
--- name: CreateAnnee :one
-INSERT INTO public.annee (name, debut, fin) VALUES ($1, $2, $3) RETURNING id;
+SELECT id, debut, fin FROM public.annee WHERE debut <= $1 AND fin >= $1;
 
 -- name: CreateInconnuPromotion :exec
 INSERT INTO public.promotion (id, name) VALUES (0, 'inconnu') ON CONFLICT (id) DO NOTHING;

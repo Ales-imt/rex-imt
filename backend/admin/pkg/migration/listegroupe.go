@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -110,11 +109,10 @@ func isNumeric(s string) bool {
 //  4. Upsert eleve_groupe.
 //  5. Supprime les entrées eleve_groupe qui ne sont plus dans la liste.
 //  6. Met à jour groupe.taille.
-func SyncElevesGroupe(ctx context.Context, listeGroupeBaseURL string, db *pgxpool.Pool) error {
-	_, anneeDebut, _ := schoolYear(time.Now())
-	annee := int32(anneeDebut.Year())
-
+func SyncElevesGroupe(ctx context.Context, listeGroupeBaseURL string, db *pgxpool.Pool, ac anneeCourante) error {
 	q := New(db)
+	annee := ac.Annee
+
 	groupes, err := q.ListGroupeWebdfdIDs(ctx, annee)
 	if err != nil {
 		return err

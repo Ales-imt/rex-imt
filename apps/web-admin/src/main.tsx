@@ -21,6 +21,9 @@ import { DiscussionPanel } from './pages/discussion/DiscussionPanel.tsx';
 import { Evaluation } from './pages/evaluation/Evaluation.tsx';
 import { PRESENCE_WORKFLOW } from './pages/presence/def.ts';
 import { Presence } from './pages/presence/Presence.tsx';
+import { ANNEE_WORKFLOW } from './pages/annee/def.ts';
+import { AnneeIndex } from './pages/annee/AnneeLayout.tsx';
+import { createAnneeRoutes } from './pages/annee/routes.tsx';
 
 const RoleGuard = ({ children, roles }: { children: React.ReactNode, roles: string[] }) => {
   const { session } = useContext(SessionContext);
@@ -53,6 +56,14 @@ const routes = [
             children: [
               { index: true, Component: UserIndex },
               ...createUserRoutes()
+            ]
+          },
+          {
+            path: ANNEE_WORKFLOW,
+            element: <RoleGuard roles={[Role.ADMIN]}><Outlet /></RoleGuard>,
+            children: [
+              { index: true, Component: AnneeIndex },
+              ...createAnneeRoutes()
             ]
           },
           {

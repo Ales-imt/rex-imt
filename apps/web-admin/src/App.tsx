@@ -21,6 +21,8 @@ import { DISCUSSION } from './pages/discussion/def';
 import { EVALUATION_WORKFLOW } from './pages/evaluation/def';
 import { PRESENCE_WORKFLOW } from './pages/presence/def';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
+import { ANNEE_WORKFLOW } from './pages/annee/def';
+import EventIcon from '@mui/icons-material/Event';
 
 
 type NavigationItemWithRoles = NavigationItem & {
@@ -30,16 +32,29 @@ type NavigationItemWithRoles = NavigationItem & {
 
 const NAVIGATION: NavigationItemWithRoles[] = [
   {
-    segment: USER_WORKFLOW,
-    title: 'Utilisateur',
+    title: 'Admin',
     icon: <PersonIcon/>,
     requiredRoles: [Role.ADMIN],
-  },
-  {
-    segment: FEEDBACK_WORKFLOW,
-    title: 'Feedback',
-    icon: <FeedbackIcon />,
-    requiredRoles: [Role.ADMIN],
+    children: [
+      {
+        segment: USER_WORKFLOW,
+        title: 'Utilisateur',
+        icon: <PersonIcon/>,
+        requiredRoles: [Role.ADMIN],
+      },
+      {
+        segment: FEEDBACK_WORKFLOW,
+        title: 'Feedback',
+        icon: <FeedbackIcon />,
+        requiredRoles: [Role.ADMIN],
+      },
+      {
+        segment: ANNEE_WORKFLOW,
+        title: 'Année',
+        icon: <EventIcon />,
+        requiredRoles: [Role.ADMIN],
+      },
+    ],
   },
   {
     segment: ANALYSE,

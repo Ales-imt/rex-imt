@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -35,7 +36,15 @@ func TestSyncPromotions(t *testing.T) {
 	db.Exec(ctx, "DELETE FROM public.promotion WHERE name = ANY($1)",
 		[]string{"1A BAT 2026-27", "2A BAT 2025-26"})
 
-	if err = SyncPromotions(ctx, srv.URL, db); err != nil {
+	ac, ok, err := getAnneeCourante(ctx, New(db), time.Now())
+	if err != nil {
+		t.Fatalf("getAnneeCourante: %v", err)
+	}
+	if !ok {
+		t.Skip("aucune année ne correspond à la date du jour")
+	}
+
+	if err = SyncPromotions(ctx, srv.URL, db, ac); err != nil {
 		t.Fatalf("SyncPromotions: %v", err)
 	}
 

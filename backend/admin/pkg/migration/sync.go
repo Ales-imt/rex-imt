@@ -66,26 +66,42 @@ func StartSync(ctx context.Context, cfg Config, db *pgxpool.Pool) {
 }
 
 // runSync exécute les six étapes dans l'ordre défini par le spec.
+// Les étapes dépendant de l'année (promotions, planning, eleve_groupe) sont
+// ignorées si aucune année de public.annee ne couvre la date du jour.
 func runSync(ctx context.Context, cfg Config, db *pgxpool.Pool) error {
-	// 1. Promotions.
-	if err := SyncPromotions(ctx, cfg.PromosURL, db); err != nil {
+	ac, ok, err := getAnneeCourante(ctx, New(db), time.Now())
+	if err != nil {
 		return err
+	}
+	if !ok {
+		log.Printf("sync: aucune année ne correspond à la date du jour, étapes liées à l'année ignorées")
+	}
+
+	// 1. Promotions.
+	if ok {
+		if err := SyncPromotions(ctx, cfg.PromosURL, db, ac); err != nil {
+			return err
+		}
 	}
 	// 2. Profs (avant le planning pour que prof_id soit résolvable dans syncSeances).
 	if err := SyncProfs(ctx, cfg.ProfsURL, db); err != nil {
 		return err
 	}
 	// 3 & 4. Planning (groupes + matières + séances + enrichissement via cours_txt).
-	if err := SyncPlanning(ctx, cfg.PlanningURL, db); err != nil {
-		return err
+	if ok {
+		if err := SyncPlanning(ctx, cfg.PlanningURL, db, ac); err != nil {
+			return err
+		}
 	}
 	// 5. Élèves.
 	if err := SyncEleves(ctx, cfg.ElevesURL, db); err != nil {
 		return err
 	}
 	// 6. Appartenance élève↔groupe.
-	if err := SyncElevesGroupe(ctx, cfg.ListeGroupeURL, db); err != nil {
-		return err
+	if ok {
+		if err := SyncElevesGroupe(ctx, cfg.ListeGroupeURL, db, ac); err != nil {
+			return err
+		}
 	}
 	log.Printf("sync: cycle complet terminé")
 	return nil

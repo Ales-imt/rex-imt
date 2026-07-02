@@ -10,19 +10,25 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func getOrCreateAnnee(ctx context.Context, q *Queries, name string, debut, fin time.Time) (int64, error) {
-	id, err := q.GetAnneeByDate(ctx, debut)
-	if err == nil {
-		return id, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return 0, fmt.Errorf("annee: lookup: %w", err)
-	}
-	id, err = q.CreateAnnee(ctx, CreateAnneeParams{Name: name, Debut: debut, Fin: fin})
+// anneeCourante décrit l'année scolaire (table public.annee) couvrant une date donnée.
+type anneeCourante struct {
+	ID    int64
+	Annee int32 // année civile de début, utilisée comme clé naturelle des tables migration.*_map
+	Debut time.Time
+	Fin   time.Time
+}
+
+// getAnneeCourante cherche dans public.annee l'année dont la période [debut, fin]
+// contient `now`. ok vaut false si aucune année ne correspond.
+func getAnneeCourante(ctx context.Context, q *Queries, now time.Time) (ac anneeCourante, ok bool, err error) {
+	row, err := q.GetAnneeByDate(ctx, now)
 	if err != nil {
-		return 0, fmt.Errorf("annee: create %s: %w", name, err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return anneeCourante{}, false, nil
+		}
+		return anneeCourante{}, false, fmt.Errorf("annee: lookup: %w", err)
 	}
-	return id, nil
+	return anneeCourante{ID: row.ID, Annee: int32(row.Debut.Year()), Debut: row.Debut, Fin: row.Fin}, true, nil
 }
 
 func createUserEleve(ctx context.Context, db *pgxpool.Pool, name, surname, email string) (int32, error) {
