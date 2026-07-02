@@ -1,6 +1,7 @@
 package main
 
 import (
+	"back-rex-admin/pkg/annee"
 	"back-rex-admin/pkg/authentification"
 	"back-rex-admin/pkg/curriculum"
 	"back-rex-admin/pkg/evaluation"
@@ -166,6 +167,8 @@ func main() {
 			Route("/user", func(r chi.Router) {
 				user.RouteUtilisateur(r, cfg.LDAP)
 			})
+		r.With(auth.Security(cfg.JWT, &adminOnly)).
+			Route("/annee", annee.RouteAnnee)
 		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/feedback", feedback.RouteFeedback)
 		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).

@@ -47,6 +47,17 @@ rack:
 presence:
   tokenSecret: ${PRESENCE_TOKEN_SECRET}
   planningURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe
+  timestamp:
+    enabled: true
+    urls:
+      - https://freetsa.org/tsr        # valeur par défaut ; ajoutez d'autres TSA pour redondance
+    hashAlgorithm: sha256
+    timeout: 10s
+    anchorCron: "0 2 * * *"            # ancrage automatique quotidien à 02h00
+    # Certificat racine FreeTSA — télécharger depuis https://freetsa.org/files/cacert.pem
+    # et placer à cet emplacement avant de démarrer le service.
+    # Il est archivé avec chaque jeton pour permettre la vérification si la TSA disparaît.
+    caCertPath: /opt/rex-admin/certs/ca.crt
 
 webdfd:
   baseURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe

@@ -8,7 +8,6 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -20,7 +19,11 @@ import (
 // SyncPromotions charge la liste des promotions depuis webdfd (promos_txt),
 // upserte chaque promotion dans public.promotion et insère la ligne de map
 // correspondante dans migration.promotion_map.
-func SyncPromotions(ctx context.Context, url string, db *pgxpool.Pool) error {
+func SyncPromotions(ctx context.Context, url string, db *pgxpool.Pool, ac anneeCourante) error {
+	q := New(db)
+	annee := ac.Annee
+	anneeID := ac.ID
+
 	resp, err := webdfdGet(url)
 	if err != nil {
 		return fmt.Errorf("webdfd: promos_txt inaccessible: %w", err)
@@ -32,15 +35,6 @@ func SyncPromotions(ctx context.Context, url string, db *pgxpool.Pool) error {
 	if err != nil {
 		return err
 	}
-
-	q := New(db)
-	now := time.Now()
-	anneeName, anneeDebut, anneeFin := schoolYear(now)
-	anneeID, err := getOrCreateAnnee(ctx, q, anneeName, anneeDebut, anneeFin)
-	if err != nil {
-		return err
-	}
-	annee := int32(anneeDebut.Year())
 
 	if err = q.CreateInconnuPromotion(ctx); err != nil {
 		return err
@@ -101,17 +95,6 @@ func SyncPromotions(ctx context.Context, url string, db *pgxpool.Pool) error {
 	}
 	log.Printf("promotion: %d promotions synchronisées (annee=%d)", count, annee)
 	return nil
-}
-
-func schoolYear(now time.Time) (name string, debut, fin time.Time) {
-	year := now.Year()
-	if now.Before(time.Date(year, time.July, 15, 0, 0, 0, 0, time.UTC)) {
-		year--
-	}
-	debut = time.Date(year, time.July, 15, 0, 0, 0, 0, time.UTC)
-	fin = time.Date(year+1, time.July, 14, 0, 0, 0, 0, time.UTC)
-	name = fmt.Sprintf("%d/%d", year, year+1)
-	return
 }
 
 func parseKV(line string) map[string]string {

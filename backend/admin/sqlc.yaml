@@ -13,6 +13,17 @@ sql:
         emit_json_tags: true
 
   - engine: "postgresql"
+    queries: "pkg/annee/query.sql"
+    schema: "../schema.sql"
+    gen:
+      go:
+        package: "annee"
+        out: "pkg/annee"
+        sql_package: "pgx/v5"
+        omit_unused_structs: true
+        emit_json_tags: true
+
+  - engine: "postgresql"
     queries: "pkg/curriculum/query.sql"
     schema: "../schema.sql"
     gen:

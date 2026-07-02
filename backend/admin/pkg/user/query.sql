@@ -24,3 +24,6 @@ RETURNING *;
 
 -- name: DeleteUser :exec
 DELETE FROM public.user WHERE id = @id;
+
+-- name: DeleteUserByIds :exec
+DELETE FROM public.user WHERE id = ANY(@ids::int[]);

@@ -1,0 +1,48 @@
+databaseChangeLog:
+
+  # ---- public.annee : données initiales ------------------------------------
+  - changeSet:
+      id: v0.0.1-015a-insert-annee-2025-2026
+      author: vjo
+      changes:
+        - insert:
+            tableName: annee
+            schemaName: public
+            columns:
+              - column:
+                  name: name
+                  value: "2025/2026"
+              - column:
+                  name: debut
+                  valueDate: "2025-08-20"
+              - column:
+                  name: fin
+                  valueDate: "2026-06-30"
+      rollback:
+        - delete:
+            tableName: annee
+            schemaName: public
+            where: name = '2025/2026'
+
+  - changeSet:
+      id: v0.0.1-015b-insert-annee-2026-2027
+      author: vjo
+      changes:
+        - insert:
+            tableName: annee
+            schemaName: public
+            columns:
+              - column:
+                  name: name
+                  value: "2026/2027"
+              - column:
+                  name: debut
+                  valueDate: "2026-08-20"
+              - column:
+                  name: fin
+                  valueDate: "2027-06-30"
+      rollback:
+        - delete:
+            tableName: annee
+            schemaName: public
+            where: name = '2026/2027'

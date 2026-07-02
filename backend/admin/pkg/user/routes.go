@@ -15,6 +15,8 @@ func RouteUtilisateur(r chi.Router, cfg services.LDAPConfig) {
 		CreateUser(w, r, cfg)
 	})
 
+	r.Delete("/bulk", DeleteUserBulk)
+
 	r.Route("/{userID}", func(r chi.Router) {
 		r.Use(UserUse)      // Load the *Article on the request context
 		r.Get("/", GetUser) // GET /articles/123

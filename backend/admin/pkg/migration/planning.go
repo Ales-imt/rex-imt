@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,17 +38,15 @@ type planningEntry struct {
 //
 // Ordre : 1. Récupérer cours_txt (noms complets). 2. Pour chaque promo,
 // parser planning_txt. 3. Déduplication puis upsert en base.
-func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool) error {
-	_, anneeDebut, _ := schoolYear(time.Now())
-	annee := int32(anneeDebut.Year())
+func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anneeCourante) error {
+	q := New(db)
+	annee := ac.Annee
 
 	// --- 1. Noms complets depuis cours_txt ---
 	coursNoms, err := fetchCoursNoms(baseURL + "?TYPE=cours_txt")
 	if err != nil {
 		return err
 	}
-
-	q := New(db)
 
 	// --- 2. Planning par promo ---
 	promos, err := q.ListPromotionWebdfdIDs(ctx, annee)
@@ -74,8 +73,8 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool) error {
 	// Correspond à l'unicité (matiere_id, starts_at) dans public.seance.
 	seanceKeys := make(map[string]planningEntry)
 
-	startAnnee := fmt.Sprintf("%d0715", anneeDebut.Year())
-	endAnnee := fmt.Sprintf("%d0714", anneeDebut.Year()+1)
+	startAnnee := ac.Debut.Format("20060102")
+	endAnnee := ac.Fin.Format("20060102")
 
 	for _, promo := range promos {
 		entries, err := fetchPlanning(baseURL, promo.ExternalID, startAnnee, endAnnee)
@@ -407,4 +406,24 @@ func fetchPlanning(baseURL, p0cle, debut, fin string) ([]planningEntry, error) {
 		})
 	}
 	return entries, nil
+}
+
+// semesterFromName extrait "S<n>" d'un nom commençant par "<n>.<x>.<y>…".
+// Ex : "9.2.1 PROJET" → "S9". Retourne ("INCONNU", false) si absent.
+func semesterFromName(nom string) (string, bool) {
+	idx := strings.IndexByte(nom, '.')
+	if idx < 1 {
+		return "INCONNU", false
+	}
+	prefix := nom[:idx]
+	for _, r := range prefix {
+		if r < '0' || r > '9' {
+			return "INCONNU", false
+		}
+	}
+	n, err := strconv.Atoi(prefix)
+	if err != nil || n <= 0 {
+		return "INCONNU", false
+	}
+	return fmt.Sprintf("S%d", n), true
 }
