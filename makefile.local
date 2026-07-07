@@ -1,8 +1,8 @@
-.PHONY: deploy-local infra-local stop-infra migration-local start-local stop-local start-admin stop-admin start-eleve stop-eleve
+.PHONY: local deploy-local infra-local stop-infra migration-local cyber_note start-local stop-local build-local build-admin-local start-admin stop-admin build-eleve-local start-eleve stop-eleve db-to-code-local
 
 _get_local=$(shell grep '^$(1)=' $(SECRETS_FILE_LOCAL) | cut -d= -f2)
 
-local:  infra-local migration-local cyber_note db-to-code-local start-local
+local:  infra-local migration-local cyber_note build-local  start-local
 
 
 #
@@ -44,25 +44,30 @@ cyber_note:
 		--skip-ssl  \
 		$(call _get_local,MARIADB_DB) < $(INFRA_DIR)/bd_data/dump_cyber_notes.sql
 
-# ── Code ──────────────────────────────────────────────────────────────────────
-
-db-to-code-local:
-	@echo "--- 🆕 gen code sqlc ---"
-	$(INFRA_DIR)/db-to-code.sh $(SECRETS_FILE_LOCAL)
 
 # ── Conteneurs locaux ─────────────────────────────────────────────────────────
 
 start-local: start-admin start-eleve
 
-stop-local: stop-admin stop-eleve stop-infra
-
-start-admin: fetch-freetsa-cert-if-missing
-	$(RUN_DIR)/build-admin.sh local
+start-admin: fetch-freetsa-cert-if-missing build-admin-local
 	$(RUN_DIR)/start-admin-local.sh
 
-start-eleve:
-	$(RUN_DIR)/build-eleve.sh local
+start-eleve: build-eleve-local
 	$(RUN_DIR)/start-eleve-local.sh
+
+stop-local: stop-admin stop-eleve stop-infra
+
+build-local : build-admin-local build-eleve-local
+
+build-admin-local: db-to-code-local
+	$(RUN_DIR)/build-admin.sh local
+
+build-eleve-local: db-to-code-local
+	$(RUN_DIR)/build-eleve.sh local
+
+db-to-code-local:
+	@echo "--- 🆕 gen code sqlc ---"
+	$(INFRA_DIR)/db-to-code.sh $(SECRETS_FILE_LOCAL)
 
 stop-admin:
 	@echo "--- 🛑 Arrêt du container admin ---"

@@ -19,7 +19,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { FlashList } from "@shopify/flash-list";
@@ -188,8 +187,6 @@ export default function ChatScreen() {
   }
   const [input, setInput] = useState('');
   const listRef = useRef<any>(null);
-  const { width, height } = useWindowDimensions();
-  const isLandscape = width > height;
   const orientation = useOrientation();
   const [keyboardOffset, setKeyboardOffset] = useState(56);
 
@@ -306,7 +303,7 @@ export default function ChatScreen() {
       />
       <SafeAreaView style={[styles.page, dynamicStyles.page]} edges={safeEdges}>
         <KeyboardAvoidingView
-          key={isLandscape ? 'landscape' : 'portrait'}
+          key={orientation === 'portrait' ? 'portrait' : 'landscape'}
           style={styles.container}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : keyboardOffset}

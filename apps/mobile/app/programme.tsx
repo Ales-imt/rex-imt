@@ -4,12 +4,8 @@ import { useNavMenu } from '@/hooks/use-nav-menu';
 import { useTheme } from '@/hooks/use-theme';
 import { apiInstance } from '@/services/api';
 import { Stack, useFocusEffect } from 'expo-router';
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { CalendarProvider, WeekCalendar } from 'react-native-calendars';
-import { UpdateSources } from 'react-native-calendars/src/expandableCalendar/commons';
-import CalendarContext from 'react-native-calendars/src/expandableCalendar/Context';
-import { MarkedDates } from 'react-native-calendars/src/types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type ApiCours = {
   date: string;   // YYYY-MM-DD
@@ -79,7 +75,7 @@ function shiftWeek(mondayStr: string, delta: number): string {
 }
 
 function toApiDate(dateStr: string): string {
-  return dateStr.replace(/-/g, '');
+  return dateStr.replaceAll('-', '');
 }
 
 function localToday(): string {
@@ -89,6 +85,95 @@ function localToday(): string {
 const MONTHS_SHORT = Array.from({ length: 12 }, (_, i) =>
   new Date(2000, i, 1).toLocaleDateString('fr-FR', { month: 'short' })
 );
+
+const WEEKDAYS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+
+function weekDates(mondayStr: string): string[] {
+  const base = parseLocal(mondayStr);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(base);
+    d.setDate(base.getDate() + i);
+    return fmtLocal(d);
+  });
+}
+
+function WeekStrip({ weekStart, selected, today, eventDates, onSelectDate, onPrevWeek, onNextWeek }: {
+  weekStart: string;
+  selected: string;
+  today: string;
+  eventDates: Set<string>;
+  onSelectDate: (date: string) => void;
+  onPrevWeek: () => void;
+  onNextWeek: () => void;
+}) {
+  const colors = useTheme();
+  // Keep the latest callbacks in refs so the PanResponder (created once) never goes stale.
+  const navRef = useRef({ onPrevWeek, onNextWeek });
+  navRef.current = { onPrevWeek, onNextWeek };
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, g) =>
+          Math.abs(g.dx) > 20 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+        onPanResponderRelease: (_, g) => {
+          if (g.dx > 50) navRef.current.onPrevWeek();
+          else if (g.dx < -50) navRef.current.onNextWeek();
+        },
+      }),
+    []
+  );
+
+  const days = weekDates(weekStart);
+
+  return (
+    <View style={styles.weekStrip} {...panResponder.panHandlers}>
+      <TouchableOpacity onPress={onPrevWeek} style={styles.weekNav} hitSlop={8}>
+        <Text style={[styles.weekArrow, { color: colors.tint }]}>‹</Text>
+      </TouchableOpacity>
+      <View style={styles.weekDays}>
+        {days.map((date, i) => {
+          const isSelected = date === selected;
+          const isToday = date === today;
+          const hasEvents = eventDates.has(date);
+          const dayNum = parseLocal(date).getDate();
+          return (
+            <TouchableOpacity
+              key={date}
+              style={styles.dayCell}
+              onPress={() => onSelectDate(date)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.dayName, { color: colors.textSecondary }]}>{WEEKDAYS[i]}</Text>
+              <View style={[styles.dayNumWrap, isSelected && { backgroundColor: colors.tint }]}>
+                <Text
+                  style={[
+                    styles.dayNum,
+                    {
+                      color: isSelected ? colors.background : isToday ? colors.tint : colors.text,
+                      fontWeight: isSelected || isToday ? '700' : '400',
+                    },
+                  ]}
+                >
+                  {dayNum}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.dayDot,
+                  { backgroundColor: hasEvents ? colors.tint : 'transparent' },
+                ]}
+              />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <TouchableOpacity onPress={onNextWeek} style={styles.weekNav} hitSlop={8}>
+        <Text style={[styles.weekArrow, { color: colors.tint }]}>›</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 function MonthPicker({ visible, onClose, onSelect, selectedYear, selectedMonth }: {
   visible: boolean;
@@ -139,12 +224,11 @@ function MonthPicker({ visible, onClose, onSelect, selectedYear, selectedMonth }
   );
 }
 
-function TodayButton({ today }: { today: string }) {
-  const { setDate } = useContext(CalendarContext);
+function TodayButton({ onPress }: { readonly onPress: () => void }) {
   const colors = useTheme();
   return (
     <TouchableOpacity
-      onPress={() => setDate(today, UpdateSources.TODAY_PRESS)}
+      onPress={onPress}
       style={[styles.todayBtn, { backgroundColor: colors.tint }]}
     >
       <Text style={[styles.todayBtnText, { color: colors.background }]}>Aujourd'hui</Text>
@@ -164,7 +248,6 @@ export const ProgrammeScreen = () => {
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [monthPickerVisible, setMonthPickerVisible] = useState(false);
-  const initialMount = useRef(true);
   const weekStartRef = useRef(weekStart);
 
   const selDate = parseLocal(selected);
@@ -194,11 +277,6 @@ export const ProgrammeScreen = () => {
   }, [selected]);
 
   useEffect(() => {
-    if (initialMount.current) { initialMount.current = false; return; }
-    setSelected(weekStart);
-  }, [weekStart]);
-
-  useEffect(() => {
     const weekChanged = weekStart !== weekStartRef.current;
     weekStartRef.current = weekStart;
     if (weekChanged) { setLoading(true); setError(''); }
@@ -220,26 +298,7 @@ export const ProgrammeScreen = () => {
     return () => { active = false; };
   }, [weekStart, refreshKey]);
 
-  const markedDates: MarkedDates = Object.keys(events).reduce<MarkedDates>((acc, date) => {
-    acc[date] = { marked: true, dotColor: colors.tint };
-    return acc;
-  }, {});
-
-  const calendarTheme = {
-    backgroundColor: 'transparent',
-    calendarBackground: 'transparent',
-    textSectionTitleColor: colors.textSecondary,
-    selectedDayBackgroundColor: colors.tint,
-    selectedDayTextColor: colors.background,
-    todayTextColor: colors.tint,
-    dayTextColor: colors.text,
-    textDisabledColor: colors.textSecondary,
-    dotColor: colors.tint,
-    selectedDotColor: colors.background,
-    arrowColor: colors.tint,
-    monthTextColor: colors.text,
-    indicatorColor: colors.tint,
-  };
+  const eventDates = useMemo(() => new Set(Object.keys(events)), [events]);
 
   const dayEvents = events[selected] ?? [];
 
@@ -248,65 +307,56 @@ export const ProgrammeScreen = () => {
       <Stack.Screen options={{ headerRight: () => <HeaderMenu items={navMenu} /> }} />
       <View style={styles.container}>
         <ZenBackground />
-        <CalendarProvider date={selected} onDateChanged={setSelected}>
-          <View style={[styles.calendarCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
-            <View style={styles.monthHeader}>
-              {Platform.OS === 'web' && (
-                <TouchableOpacity onPress={() => setWeekStart(w => shiftWeek(w, -1))}>
-                  <Text style={[styles.weekArrow, { color: colors.tint }]}>‹</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity style={styles.monthLabel} onPress={() => setMonthPickerVisible(true)}>
-                <Text style={[styles.monthLabelText, { color: colors.textPrimary }]}>{displayMonth} ▾</Text>
-              </TouchableOpacity>
-              {Platform.OS === 'web' && (
-                <TouchableOpacity onPress={() => setWeekStart(w => shiftWeek(w, 1))}>
-                  <Text style={[styles.weekArrow, { color: colors.tint }]}>›</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            <WeekCalendar
-              markedDates={markedDates}
-              theme={calendarTheme}
-              allowShadow={false}
-              firstDay={1}
-            />
+        <View style={[styles.calendarCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+          <View style={styles.monthHeader}>
+            <TouchableOpacity style={styles.monthLabel} onPress={() => setMonthPickerVisible(true)}>
+              <Text style={[styles.monthLabelText, { color: colors.textPrimary }]}>{displayMonth} ▾</Text>
+            </TouchableOpacity>
+          </View>
+          <WeekStrip
+            weekStart={weekStart}
+            selected={selected}
+            today={today}
+            eventDates={eventDates}
+            onSelectDate={setSelected}
+            onPrevWeek={() => setSelected(shiftWeek(weekStart, -1))}
+            onNextWeek={() => setSelected(shiftWeek(weekStart, 1))}
+          />
+        </View>
+
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+              {selected === today ? "Aujourd'hui" : selected}
+            </Text>
+            {selected !== today && <TodayButton onPress={() => setSelected(today)} />}
           </View>
 
-          <ScrollView contentContainerStyle={styles.scroll}>
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                {selected === today ? "Aujourd'hui" : selected}
-              </Text>
-              {selected !== today && <TodayButton today={today} />}
-            </View>
-
-            {loading ? (
-              <ActivityIndicator color={colors.tint} style={{ marginTop: 20 }} />
-            ) : error ? (
-              <Text style={[styles.empty, { color: 'red' }]}>{error}</Text>
-            ) : dayEvents.length === 0 ? (
-              <Text style={[styles.empty, { color: colors.textSecondary }]}>Aucun cours ce jour</Text>
-            ) : (
-              dayEvents.map((event, i) => (
-                <View key={i} style={[styles.eventRow, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
-                  <View style={styles.eventTime}>
-                    <Text style={[styles.eventTimeText, { color: colors.tint }]}>{event.time}</Text>
-                    <Text style={[styles.eventTimeEnd, { color: colors.textSecondary }]}>{event.endTime}</Text>
-                  </View>
-                  <View style={styles.eventBody}>
-                    <Text style={[styles.eventTitle, { color: colors.textPrimary }]} numberOfLines={2}>
-                      {event.title}
-                    </Text>
-                    <Text style={[styles.eventMeta, { color: colors.textSecondary }]}>
-                      {[event.room, event.prof].filter(Boolean).join(' · ')}
-                    </Text>
-                  </View>
+          {loading ? (
+            <ActivityIndicator color={colors.tint} style={{ marginTop: 20 }} />
+          ) : error ? (
+            <Text style={[styles.empty, { color: 'red' }]}>{error}</Text>
+          ) : dayEvents.length === 0 ? (
+            <Text style={[styles.empty, { color: colors.textSecondary }]}>Aucun cours ce jour</Text>
+          ) : (
+            dayEvents.map((event, i) => (
+              <View key={`${event.time}-${event.title}-${i}`} style={[styles.eventRow, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+                <View style={styles.eventTime}>
+                  <Text style={[styles.eventTimeText, { color: colors.tint }]}>{event.time}</Text>
+                  <Text style={[styles.eventTimeEnd, { color: colors.textSecondary }]}>{event.endTime}</Text>
                 </View>
-              ))
-            )}
-          </ScrollView>
-        </CalendarProvider>
+                <View style={styles.eventBody}>
+                  <Text style={[styles.eventTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                    {event.title}
+                  </Text>
+                  <Text style={[styles.eventMeta, { color: colors.textSecondary }]}>
+                    {[event.room, event.prof].filter(Boolean).join(' · ')}
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
         <MonthPicker
           visible={monthPickerVisible}
           onClose={() => setMonthPickerVisible(false)}
@@ -352,10 +402,30 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   todayBtnText: { fontSize: 12, fontWeight: '600' },
-  monthHeader: { flexDirection: 'row', alignItems: 'center', paddingTop: 8, paddingBottom: 2 },
+  monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 8, paddingBottom: 2 },
   weekArrow: { fontSize: 24, paddingHorizontal: 10 },
   monthLabel: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 2 },
   monthLabelText: { fontSize: 14, fontWeight: '600' },
+  weekStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingTop: 4,
+    paddingBottom: 10,
+  },
+  weekNav: { paddingHorizontal: 4, justifyContent: 'center', alignItems: 'center' },
+  weekDays: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
+  dayCell: { flex: 1, alignItems: 'center', paddingVertical: 2 },
+  dayName: { fontSize: 11, marginBottom: 4, textTransform: 'capitalize' },
+  dayNumWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dayNum: { fontSize: 15 },
+  dayDot: { width: 5, height: 5, borderRadius: 2.5, marginTop: 4 },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
