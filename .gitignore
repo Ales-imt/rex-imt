@@ -9,6 +9,8 @@ infras/migration/config-prod-runtime.yaml
 # ── Données BD ────────────────────────────────────────────────────────────────
 infras/bd_data/*
 feedback_classification.sql
+backend/schema_maria_db.sql
+backend/schema.sql
 
 # ── Code généré (sqlc) ────────────────────────────────────────────────────────
 **/gen/*
