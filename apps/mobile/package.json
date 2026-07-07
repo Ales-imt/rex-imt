@@ -9,8 +9,8 @@
     "start:localhost": "EXPO_PUBLIC_API_BASE=http://localhost:8081/api/v2 expo start ",
     "start:prod": "EXPO_PUBLIC_API_BASE=https://vecu-etudiant-eleves-2.mines-ales.fr/api/v2 expo start",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
+    "android": "EXPO_PUBLIC_API_BASE=https://vecu-etudiant-eleves-2.mines-ales.fr/api/v2 expo run:android",
+    "ios": "EXPO_PUBLIC_API_BASE=https://vecu-etudiant-eleves-2.mines-ales.fr/api/v2 expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint"
   },

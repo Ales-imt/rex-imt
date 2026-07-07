@@ -15,6 +15,21 @@ export function RootLayout() {
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
+
+    // Configurer le viewport pour forcer le redimensionnement du layout par le clavier sous Firefox/Android
+    let viewportMeta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+    if (viewportMeta) {
+      let content = viewportMeta.content;
+      if (!content.includes('interactive-widget')) {
+        viewportMeta.content = `${content}, interactive-widget=resizes-content`;
+      }
+    } else {
+      viewportMeta = document.createElement('meta');
+      viewportMeta.name = 'viewport';
+      viewportMeta.content = 'width=device-width, initial-scale=1, shrink-to-fit=no, interactive-widget=resizes-content';
+      document.head.appendChild(viewportMeta);
+    }
+
     let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
     if (!meta) {
       meta = document.createElement('meta');
