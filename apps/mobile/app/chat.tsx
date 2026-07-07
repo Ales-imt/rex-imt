@@ -19,6 +19,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { FlashList } from "@shopify/flash-list";
@@ -187,6 +188,9 @@ export default function ChatScreen() {
   }
   const [input, setInput] = useState('');
   const listRef = useRef<any>(null);
+  const inputRef = useRef<TextInput>(null);
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
   const orientation = useOrientation();
   const [keyboardOffset, setKeyboardOffset] = useState(56);
 
@@ -201,8 +205,37 @@ export default function ChatScreen() {
     return ['bottom'];
   }, [orientation]);
 
+  const isAtBottomRef = useRef(true);
+
+  const handleScroll = useCallback((event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 50;
+    const atBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+    isAtBottomRef.current = atBottom;
+  }, []);
+
+  const lastHeightRef = useRef(height);
+
   useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOffset(90));
+    if (Platform.OS === 'web' && height < lastHeightRef.current - 80) {
+      if (isAtBottomRef.current) {
+        setTimeout(() => {
+          listRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    }
+    lastHeightRef.current = height;
+  }, [height]);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardOffset(90);
+      if (Platform.OS !== 'web' && isAtBottomRef.current) {
+        setTimeout(() => {
+          listRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    });
     const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardOffset(56));
     return () => { show.remove(); hide.remove(); };
   }, []);
@@ -288,6 +321,8 @@ export default function ChatScreen() {
         ...prev,
         { id: message_id, text, from: 'me', time: now() },
       ]);
+      // Garder le focus sur le champ de saisie pour ne pas fermer le clavier
+      inputRef.current?.focus();
     } catch (e) {
       console.log(e)
       showError("Impossible d'envoyer le message.");
@@ -298,29 +333,31 @@ export default function ChatScreen() {
     <>
       <Stack.Screen
         options={{
+          headerTitle: () => (
+            <View style={styles.headerTitleRow}>
+              <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>Chat</Text>
+              <TouchableOpacity
+                style={[styles.filterBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
+                onPress={() => setMonthsOpen(true)}
+              >
+                <Text style={[styles.filterBtnText, { color: colors.textPrimary }]}>
+                  {months === 1 ? '1 mois' : `${months} mois`}
+                </Text>
+                <Text style={[styles.filterCaret, { color: colors.textSecondary }]}>▾</Text>
+              </TouchableOpacity>
+            </View>
+          ),
           headerRight: () => <HeaderMenu items={navMenu} />,
         }}
       />
       <SafeAreaView style={[styles.page, dynamicStyles.page]} edges={safeEdges}>
         <KeyboardAvoidingView
-          key={orientation === 'portrait' ? 'portrait' : 'landscape'}
+          key={Platform.OS !== 'web' ? (isLandscape ? 'landscape' : 'portrait') : undefined}
           style={styles.container}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : keyboardOffset}
         >
           <ZenBackground />
-
-          <View style={styles.filterRow}>
-            <TouchableOpacity
-              style={[styles.filterBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
-              onPress={() => setMonthsOpen(true)}
-            >
-              <Text style={[styles.filterBtnText, { color: colors.textPrimary }]}>
-                {months === 1 ? '1 mois' : `${months} mois`}
-              </Text>
-              <Text style={[styles.filterCaret, { color: colors.textSecondary }]}>▾</Text>
-            </TouchableOpacity>
-          </View>
 
           {error && (
             <View style={styles.errorBanner}>
@@ -352,25 +389,31 @@ export default function ChatScreen() {
                 keyExtractor={m => m.id}
                 renderItem={({ item }) => <Bubble message={item} colors={colors} onRequestDelete={setPendingDeleteId} />}
                 contentContainerStyle={styles.list}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
               />
             )
           }
 
           <View style={[styles.inputBar, dynamicStyles.inputBar]}>
             <TextInput
+              ref={inputRef}
               style={[styles.input, dynamicStyles.input]}
               value={input}
               onChangeText={setInput}
               placeholder="Message"
               placeholderTextColor={colors.inputPlaceholder}
-              multiline
-              submitBehavior="newline"
+              blurOnSubmit={false}
+              onSubmitEditing={send}
             />
             <TouchableOpacity
               style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
               onPress={send}
               activeOpacity={0.7}
               disabled={!input.trim()}
+              {...(Platform.OS === 'web'
+                ? ({ onMouseDown: (e: any) => e.preventDefault() } as any)
+                : {})}
             >
               <Text style={styles.sendIcon}>➤</Text>
             </TouchableOpacity>
@@ -389,10 +432,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
   },
-  filterRow: {
+  headerTitleRow: {
     flexDirection: 'row',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerTitleText: {
+    fontSize: 17,
+    fontWeight: '600',
   },
   filterBtn: {
     flexDirection: 'row',
@@ -443,7 +490,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'flex-end',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingBottom: 8,
+    paddingTop: 8,
   },
   row: {
     marginVertical: 3,
