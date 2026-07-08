@@ -257,8 +257,13 @@ export const ProgrammeScreen = () => {
   })();
 
   const handleMonthSelect = (year: number, month: number) => {
-    const p = (n: number) => String(n).padStart(2, '0');
-    setSelected(`${year}-${p(month + 1)}-01`);
+    const d = new Date(year, month, 1);
+    const day = d.getDay(); // 0=dim, 6=sam
+    // Si le 1er tombe un week-end, avancer au lundi suivant pour éviter
+    // d'atterrir sur un jour sans cours dans une semaine du mois précédent.
+    if (day === 0) d.setDate(d.getDate() + 1);
+    else if (day === 6) d.setDate(d.getDate() + 2);
+    setSelected(fmtLocal(d));
   };
 
   useFocusEffect(
@@ -304,15 +309,26 @@ export const ProgrammeScreen = () => {
 
   return (
     <>
-      <Stack.Screen options={{ headerRight: () => <HeaderMenu items={navMenu} /> }} />
+      <Stack.Screen
+        options={{
+          headerTitle: () => (
+            <View style={styles.headerTitleRow}>
+              <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>Programme</Text>
+              <TouchableOpacity
+                style={[styles.filterBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
+                onPress={() => setMonthPickerVisible(true)}
+              >
+                <Text style={[styles.filterBtnText, { color: colors.textPrimary }]}>{displayMonth}</Text>
+                <Text style={[styles.filterCaret, { color: colors.textSecondary }]}>▾</Text>
+              </TouchableOpacity>
+            </View>
+          ),
+          headerRight: () => <HeaderMenu items={navMenu} />,
+        }}
+      />
       <View style={styles.container}>
         <ZenBackground />
         <View style={[styles.calendarCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
-          <View style={styles.monthHeader}>
-            <TouchableOpacity style={styles.monthLabel} onPress={() => setMonthPickerVisible(true)}>
-              <Text style={[styles.monthLabelText, { color: colors.textPrimary }]}>{displayMonth} ▾</Text>
-            </TouchableOpacity>
-          </View>
           <WeekStrip
             weekStart={weekStart}
             selected={selected}
@@ -402,10 +418,27 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   todayBtnText: { fontSize: 12, fontWeight: '600' },
-  monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 8, paddingBottom: 2 },
   weekArrow: { fontSize: 24, paddingHorizontal: 10 },
-  monthLabel: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 2 },
-  monthLabelText: { fontSize: 14, fontWeight: '600' },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerTitleText: {
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  filterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  filterBtnText: { fontSize: 13, fontWeight: '500' },
+  filterCaret: { fontSize: 10 },
   weekStrip: {
     flexDirection: 'row',
     alignItems: 'center',
