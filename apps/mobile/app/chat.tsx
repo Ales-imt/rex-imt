@@ -321,8 +321,10 @@ export default function ChatScreen() {
         ...prev,
         { id: message_id, text, from: 'me', time: now() },
       ]);
-      // Garder le focus sur le champ de saisie pour ne pas fermer le clavier
-      inputRef.current?.focus();
+      // En portrait, garder le focus sur le champ pour ne pas fermer le
+      // clavier. En paysage, ne pas refocus : cela rouvrirait le mode
+      // plein écran natif du clavier.
+      if (!isLandscape) inputRef.current?.focus();
     } catch (e) {
       console.log(e)
       showError("Impossible d'envoyer le message.");
@@ -404,7 +406,12 @@ export default function ChatScreen() {
               placeholder="Message"
               placeholderTextColor={colors.inputPlaceholder}
               blurOnSubmit={false}
-              onSubmitEditing={send}
+              // En paysage sur Android, le focus déclenche le mode plein écran
+              // natif du clavier (type WhatsApp). La touche du clavier referme
+              // alors ce mode en gardant le texte dans le champ ; l'envoi se
+              // fait ensuite avec le bouton ➤.
+              onSubmitEditing={isLandscape ? () => Keyboard.dismiss() : send}
+              returnKeyType={isLandscape ? 'done' : 'send'}
             />
             <TouchableOpacity
               style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
