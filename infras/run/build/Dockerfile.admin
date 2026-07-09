@@ -4,7 +4,7 @@
 # definit en fin de fichier 
 
 # ── Stage Go sources (partagé) ───────────────────────────────────────────────
-FROM golang:1.25-alpine AS go-base
+FROM golang:1.26-alpine AS go-base
 
 RUN apk add --no-cache git
 
@@ -31,7 +31,7 @@ FROM go-base AS backend-local
 RUN go build -gcflags="all=-N -l" -o /rex-admin-server ./cmd
 
 # ── Stage Delve ───────────────────────────────────────────────────────────────
-FROM golang:1.25-alpine AS dlv-builder
+FROM golang:1.26-alpine AS dlv-builder
 
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
 
