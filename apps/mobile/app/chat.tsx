@@ -41,6 +41,12 @@ type ChatItem = {
 
 const MONTH_OPTIONS = [1, 3, 6, 12];
 
+// Web tactile (téléphone/tablette dans un navigateur) : le mode plein écran
+// du clavier Android n'existe pas, on le simule avec un composer modal.
+const IS_TOUCH_WEB = Platform.OS === 'web'
+  && typeof window !== 'undefined'
+  && (window.matchMedia?.('(pointer: coarse)').matches ?? false);
+
 function DropdownModal({
   visible, onClose, options, selected, onSelect,
 }: {
@@ -120,6 +126,52 @@ function ConfirmDeleteModal({ visible, onConfirm, onCancel }: {
   );
 }
 
+// Équivalent web du mode plein écran du clavier Android en paysage :
+// un modal avec le champ de saisie en haut. Valider (➤ ou Entrée) referme
+// le modal en gardant le texte dans la barre de saisie de la conversation.
+function FullscreenComposer({ visible, value, onChangeText, onDone, onClose, colors }: {
+  visible: boolean;
+  value: string;
+  onChangeText: (t: string) => void;
+  onDone: () => void;
+  onClose: () => void;
+  colors: typeof Colors.light;
+}) {
+  return (
+    <Modal visible={visible} animationType="fade" onRequestClose={onClose}>
+      <View style={[styles.composerPage, { backgroundColor: colors.pageBg }]}>
+        <View style={[styles.composerBar, { backgroundColor: colors.inputBar, borderBottomColor: colors.inputBarBorder }]}>
+          <TouchableOpacity onPress={onClose} hitSlop={8}>
+            <Text style={[styles.composerClose, { color: colors.inputPlaceholder }]}>✕</Text>
+          </TouchableOpacity>
+          <TextInput
+            autoFocus
+            style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.inputText }]}
+            value={value}
+            onChangeText={onChangeText}
+            placeholder="Message"
+            placeholderTextColor={colors.inputPlaceholder}
+            blurOnSubmit={false}
+            onSubmitEditing={onDone}
+            returnKeyType="done"
+          />
+          <TouchableOpacity
+            style={[styles.sendBtn, !value.trim() && styles.sendBtnDisabled]}
+            onPress={onDone}
+            activeOpacity={0.7}
+            disabled={!value.trim()}
+            {...(Platform.OS === 'web'
+              ? ({ onMouseDown: (e: any) => e.preventDefault() } as any)
+              : {})}
+          >
+            <Text style={styles.sendIcon}>➤</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function Bubble({ message, colors, onRequestDelete }: {
   message: Message;
   colors: typeof Colors.light;
@@ -180,6 +232,7 @@ export default function ChatScreen() {
   const [error, setError] = useState<string | null>(null);
   const errorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   function showError(msg: string) {
     setError(msg);
@@ -191,7 +244,15 @@ export default function ChatScreen() {
   const inputRef = useRef<TextInput>(null);
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
+  // Le mode plein écran du clavier Android ne concerne que le natif ;
+  // sur web tactile en paysage, on le simule avec le FullscreenComposer.
+  const nativeLandscape = Platform.OS !== 'web' && isLandscape;
+  const useWebComposer = IS_TOUCH_WEB && isLandscape;
   const orientation = useOrientation();
+
+  useEffect(() => {
+    if (!isLandscape) setComposerOpen(false);
+  }, [isLandscape]);
   const [keyboardOffset, setKeyboardOffset] = useState(56);
 
   const safeEdges = useMemo((): ('bottom' | 'left' | 'right')[] | EdgeRecord => {
@@ -381,6 +442,17 @@ export default function ChatScreen() {
             onCancel={() => setPendingDeleteId(null)}
           />
 
+          {/* Comme en natif : valider referme le mode plein écran en gardant
+              le texte dans la barre ; l'envoi se fait ensuite avec ➤. */}
+          <FullscreenComposer
+            visible={composerOpen}
+            value={input}
+            onChangeText={setInput}
+            onDone={() => setComposerOpen(false)}
+            onClose={() => setComposerOpen(false)}
+            colors={colors}
+          />
+
           {loading
             ? <ActivityIndicator style={styles.loader} size="large" />
             : (
@@ -406,12 +478,15 @@ export default function ChatScreen() {
               placeholder="Message"
               placeholderTextColor={colors.inputPlaceholder}
               blurOnSubmit={false}
-              // En paysage sur Android, le focus déclenche le mode plein écran
-              // natif du clavier (type WhatsApp). La touche du clavier referme
-              // alors ce mode en gardant le texte dans le champ ; l'envoi se
-              // fait ensuite avec le bouton ➤.
-              onSubmitEditing={isLandscape ? () => Keyboard.dismiss() : send}
-              returnKeyType={isLandscape ? 'done' : 'send'}
+              // En paysage sur Android natif, le focus déclenche le mode plein
+              // écran natif du clavier (type WhatsApp). La touche du clavier
+              // referme alors ce mode en gardant le texte dans le champ ;
+              // l'envoi se fait ensuite avec le bouton ➤.
+              onSubmitEditing={nativeLandscape ? () => Keyboard.dismiss() : send}
+              returnKeyType={nativeLandscape ? 'done' : 'send'}
+              // Sur web tactile en paysage, on ouvre le composer plein écran
+              // à la place de la saisie directe dans la barre.
+              onFocus={useWebComposer ? () => { inputRef.current?.blur(); setComposerOpen(true); } : undefined}
             />
             <TouchableOpacity
               style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
@@ -624,6 +699,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#dc2626',
     fontWeight: '600',
+  },
+  composerPage: {
+    flex: 1,
+  },
+  composerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  composerClose: {
+    fontSize: 18,
+    paddingHorizontal: 6,
   },
   errorBanner: {
     backgroundColor: '#dc2626',
