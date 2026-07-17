@@ -1,0 +1,77 @@
+databaseChangeLog:
+
+  # ---- public.presence_witness -------------------------------------------------
+  # Journal des témoins externes envoyés par e-mail après chaque ancrage RFC 3161.
+  # Le témoin (seq + hash + jeton + cert) part vers une boîte contrôlée par un
+  # TIERS (séparation des pouvoirs, voir docs/temoin-externe.md) : une chaîne
+  # réécrite puis ré-ancrée en base ne peut pas correspondre aux témoins déjà
+  # reçus. Cette table ne porte que le suivi d'envoi (idempotence + couverture) ;
+  # la preuve elle-même vit dans la boîte destinataire.
+  #
+  # Idempotence : un témoin n'est renvoyé à un destinataire que s'il n'existe pas
+  # déjà de ligne SENT pour ce couple (anchor_id, recipient).
+  # RGPD : aucune donnée personnelle — uniquement des références d'ancres.
+  - changeSet:
+      id: v0.0.1-016a-create-table-presence-witness
+      author: vjo
+      changes:
+        - createTable:
+            tableName: presence_witness
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: anchor_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: ledger_seq
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: recipient
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sent_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: error
+                  type: text
+        - createIndex:
+            tableName: presence_witness
+            schemaName: public
+            indexName: idx_presence_witness_anchor
+            columns:
+              - column:
+                  name: anchor_id
+        - addForeignKeyConstraint:
+            baseTableName: presence_witness
+            baseTableSchemaName: public
+            baseColumnNames: anchor_id
+            referencedTableSchemaName: public
+            referencedTableName: presence_anchor
+            referencedColumnNames: id
+            constraintName: fk_presence_witness_anchor
+            onDelete: RESTRICT
+      rollback:
+        - dropTable:
+            tableName: presence_witness
+            schemaName: public

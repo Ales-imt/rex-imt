@@ -1,32 +1,7 @@
-database:
-  host: ${POSTGRES_HOST}
-  port: ${POSTGRES_PORT}
-  user: ${POSTGRES_USER}
-  password: ${POSTGRES_PASSWORD}
-  name: ${POSTGRES_DB}
-
-mariaDB:
-  host:     ${MARIADB_HOST}
-  port:     ${MARIADB_PORT}
-  user:     ${MARIADB_USER}
-  password: ${MARIADB_PASSWORD}
-  database: ${MARIADB_DB}
-
-server:
-  host: localhost
-  port: 3300
-
-jwt:
-  secret: ${JWT_SECRET_ELEVE}
-  accessTokenExpiresIn: 15m
-  refreshTokenExpiresIn: 2160h
-
-ldap:
-  url: ldap://${LDAP_HOST}:389
-  baseDN: dc=ema,dc=fr
-
-age:
-  publicKey: ${AGE_PUBLIC_KEY}
-
-presence:
-  tokenSecret: ${PRESENCE_TOKEN_SECRET}
+{#
+  NE PAS ÉDITER LA CONFIG ICI.
+  Source de vérité : backend/student/cmd/config.yaml (les ${VAR} sont résolues
+  au runtime par le serveur via secrets.env). Aucune adaptation nécessaire :
+  cette config ne référence aucun chemin propre au container.
+#}
+{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../backend/student/cmd/config.yaml') }}

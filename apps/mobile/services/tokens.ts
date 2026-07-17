@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 const ACCESS_KEY = 'access_token';
 const REFRESH_KEY = 'refresh_token';
 const PSEUDO_KEY = 'pseudo';
+const ROLES_KEY = 'roles';
 
 // expo-secure-store ne fonctionne pas sur web : fallback localStorage
 const storage = {
@@ -101,10 +102,28 @@ export async function getRefreshToken(): Promise<string | null> {
   return storage.getItem(REFRESH_KEY);
 }
 
+// Rôles reçus au login, utilisés uniquement pour masquer/afficher des entrées
+// de menu — le contrôle d'accès réel est fait côté backend.
+export async function saveRoles(roles: string[]): Promise<void> {
+  await storage.setItem(ROLES_KEY, JSON.stringify(roles));
+}
+
+export async function getRoles(): Promise<string[]> {
+  const raw = await storage.getItem(ROLES_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function clearTokens(): Promise<void> {
   await storage.deleteItem(ACCESS_KEY);
   await storage.deleteItem(REFRESH_KEY);
   await storage.deleteItem(PSEUDO_KEY);
+  await storage.deleteItem(ROLES_KEY);
 }
 
 export function isExpiringSoon(token: string, thresholdSec = 30): boolean {

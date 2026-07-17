@@ -53,11 +53,29 @@ presence:
       - https://freetsa.org/tsr        # valeur par défaut ; ajoutez d'autres TSA pour redondance
     hashAlgorithm: sha256
     timeout: 10s
-    anchorCron: "0 2 * * *"            # ancrage automatique quotidien à 02h00
+    # L'ancrage automatique tourne toutes les heures (scheduler intégré) ;
+    # aucune ancre n'est créée si la tête de chaîne n'a pas bougé.
     # Certificat racine FreeTSA — télécharger depuis https://freetsa.org/files/cacert.pem
     # et placer à cet emplacement avant de démarrer le service.
     # Il est archivé avec chaque jeton pour permettre la vérification si la TSA disparaît.
     caCertPath: ./x509/freetsa/cacert.pem
+  # Témoin externe : après chaque nouvelle ancre, la tête de chaîne (seq + hash
+  # + jeton RFC 3161 + cert TSA) est envoyée vers une boîte EXTERNE.
+  # EXIGENCES DE DÉPLOIEMENT (voir docs/temoin-externe.md) :
+  #   - la boîte destinataire doit être gérée par un rôle distinct de l'admin infra ;
+  #   - le compte SMTP ci-dessous ne doit avoir QUE le droit d'envoi.
+  witness:
+    enabled: true                     # activer une fois la boîte tierce en place
+    recipients:
+      - ${WITNESS_RECIPIENT}           # ex. archive-presences@exemple-externe.org
+    smtp:
+      host: ${SMTP_HOST}
+      port: ${SMTP_PORT}
+      username: ${SMTP_USERNAME}
+      password: ${SMTP_PASSWORD}
+      from: rex-imt-noreply@mines-ales.fr
+      startTLS: false
+      timeout: 10s
 
 webdfd:
   baseURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe

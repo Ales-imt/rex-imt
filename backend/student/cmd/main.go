@@ -3,6 +3,7 @@ package main
 import (
 	"back-rex-common/pkg/auth"
 	"back-rex-common/pkg/health"
+	"back-rex-common/pkg/presencetoken"
 	"back-rex-common/pkg/services"
 	"back-rex-eleve/pkg/authentification"
 	"back-rex-eleve/pkg/evaluation"
@@ -112,11 +113,14 @@ func main() {
 		r.With(auth.Security(cfg.JWT, &role)).Route("/reponse", reponse.MakeRouteReponse())
 		r.With(auth.Security(cfg.JWT, &role)).Route("/note", note.MakeRouteNote(noteConnector))
 		r.With(auth.Security(cfg.JWT, &role)).Route("/programme", programme.MakeRouteProgramme(progConnector))
-		r.With(auth.Security(cfg.JWT, &role)).Route("/evaluation", evaluation.MakeRouteEvaluation(progConnector, cfg.Age.PublicKey))
+		r.With(auth.Security(cfg.JWT, &role)).Route("/evaluation", evaluation.MakeRouteEvaluation(cfg.Age.PublicKey))
 		r.With(auth.Security(cfg.JWT, &role)).Route("/postit", postit.MakeRoutePostit())
 		r.With(auth.Security(cfg.JWT, &role)).Route("/me", user.MakeRouteUser())
-		pointage.SetTokenSecret(cfg.Presence.TokenSecret)
-		r.With(auth.Security(cfg.JWT, &role)).Route("/pointage", pointage.MakeRoutePointage())
+		presencetoken.SetSecret(cfg.Presence.TokenSecret)
+		// /pointage mélange des routes élève (POST /) et prof/gestionnaire
+		// (séances du jour, pilotage de séance) : authentification au montage,
+		// contrôle de rôle par sous-route dans MakeRoutePointage.
+		r.With(auth.Security(cfg.JWT, nil)).Route("/pointage", pointage.MakeRoutePointage())
 
 	})
 

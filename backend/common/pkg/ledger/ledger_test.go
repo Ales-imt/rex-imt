@@ -1,9 +1,7 @@
-package presence_test
+package ledger_test
 
 import (
 	"back-rex-common/pkg/ledger"
-	"back-rex-common/pkg/services"
-	"back-rex-admin/pkg/presence"
 	"context"
 	"errors"
 	"fmt"
@@ -12,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ── Stub DBTX ────────────────────────────────────────────────────────────────
@@ -30,14 +29,7 @@ func (r *stubRow) Scan(dest ...any) error {
 		if i >= len(r.values) {
 			break
 		}
-		switch v := d.(type) {
-		case *int64:
-			*v = r.values[i].(int64)
-		case *int32:
-			*v = r.values[i].(int32)
-		case *string:
-			*v = r.values[i].(string)
-		}
+		assignStub(d, r.values[i])
 	}
 	return nil
 }
@@ -49,14 +41,14 @@ type stubRows struct {
 	err  error
 }
 
-func (r *stubRows) Next() bool        { r.idx++; return r.idx <= len(r.rows) }
-func (r *stubRows) Close()            {}
-func (r *stubRows) Err() error        { return r.err }
-func (r *stubRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
-func (r *stubRows) FieldDescriptions() []pgconn.FieldDescription { return nil }
-func (r *stubRows) Values() ([]any, error) { return nil, nil }
-func (r *stubRows) RawValues() [][]byte { return nil }
-func (r *stubRows) Conn() *pgx.Conn { return nil }
+func (r *stubRows) Next() bool                                    { r.idx++; return r.idx <= len(r.rows) }
+func (r *stubRows) Close()                                        {}
+func (r *stubRows) Err() error                                    { return r.err }
+func (r *stubRows) CommandTag() pgconn.CommandTag                 { return pgconn.CommandTag{} }
+func (r *stubRows) FieldDescriptions() []pgconn.FieldDescription  { return nil }
+func (r *stubRows) Values() ([]any, error)                        { return nil, nil }
+func (r *stubRows) RawValues() [][]byte                           { return nil }
+func (r *stubRows) Conn() *pgx.Conn                               { return nil }
 func (r *stubRows) Scan(dest ...any) error {
 	if r.idx < 1 || r.idx > len(r.rows) {
 		return errors.New("out of range")
@@ -66,19 +58,25 @@ func (r *stubRows) Scan(dest ...any) error {
 		if i >= len(row) {
 			break
 		}
-		switch v := d.(type) {
-		case *int64:
-			*v = row[i].(int64)
-		case *int32:
-			*v = row[i].(int32)
-		case *string:
-			*v = row[i].(string)
-		}
+		assignStub(d, row[i])
 	}
 	return nil
 }
 
-// stubDB implements the DBTX interface used by VerifyChain.
+func assignStub(dest any, val any) {
+	switch v := dest.(type) {
+	case *int64:
+		*v = val.(int64)
+	case *int32:
+		*v = val.(int32)
+	case *string:
+		*v = val.(string)
+	case *pgtype.Timestamptz:
+		*v = pgtype.Timestamptz{Time: val.(time.Time), Valid: true}
+	}
+}
+
+// stubDB implements the DBTX interface used by VerifyChain and GetLastLedgerEntry.
 type stubDB struct {
 	queryFunc    func(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	queryRowFunc func(ctx context.Context, sql string, args ...any) pgx.Row
@@ -106,8 +104,8 @@ func (s *stubDB) Exec(ctx context.Context, sql string, args ...any) (pgconn.Comm
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// buildChain builds n consecutive ledger entries in memory and returns their
-// rows in the format expected by VerifyChain's Query scan.
+// buildChainRows builds n consecutive valid ledger entries in memory and
+// returns their rows in the format expected by ListLedgerBySeq's scan.
 // Row columns: seq, seance_id, user_id, statut, event_at, recorded_at, prev_hash, hash
 func buildChainRows(n int) [][]any {
 	t0 := time.Date(2026, 6, 29, 10, 0, 0, 0, time.UTC)
@@ -130,7 +128,7 @@ func buildChainRows(n int) [][]any {
 			int64(1),     // seance_id
 			int32(i + 1), // user_id
 			"PRESENT",    // statut
-			eventAt,      // event_at  (stubRows.Scan handles time.Time via pgtype below)
+			eventAt,      // event_at
 			recordedAt,   // recorded_at
 			prevHash,     // prev_hash
 			h,            // hash
@@ -140,20 +138,18 @@ func buildChainRows(n int) [][]any {
 	return rows
 }
 
-// ── Tests VerifyChain ────────────────────────────────────────────────────────
-
-// Note: VerifyChain scans pgtype.Timestamptz from rows.Scan.
-// The stub above handles string/int types; for a full integration test against
-// a real DB, use db-to-code.sh + testcontainers. The tests below cover the
-// pure Go chain-verification logic via ComputeHash directly.
-
-func TestVerifyChain_EmptyLedger(t *testing.T) {
-	db := &stubDB{
+func chainDB(rows [][]any) *stubDB {
+	return &stubDB{
 		queryFunc: func(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
-			return &stubRows{}, nil
+			return &stubRows{rows: rows}, nil
 		},
 	}
-	res, err := presence.VerifyChain(context.Background(), db)
+}
+
+// ── Tests VerifyChain ────────────────────────────────────────────────────────
+
+func TestVerifyChain_EmptyLedger(t *testing.T) {
+	res, err := ledger.VerifyChain(context.Background(), chainDB(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,14 +158,85 @@ func TestVerifyChain_EmptyLedger(t *testing.T) {
 	}
 }
 
-// ── Tests unitaires de ComputeHash (partagés avec common/pkg/ledger) ─────────
-// Ces tests valident la logique de hachage indépendamment de la DB.
+func TestVerifyChain_IntactChain(t *testing.T) {
+	res, err := ledger.VerifyChain(context.Background(), chainDB(buildChainRows(5)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.OK {
+		t.Fatalf("intact chain should be OK, got: %s", res.Error)
+	}
+}
+
+func TestVerifyChain_CorruptedStatut(t *testing.T) {
+	rows := buildChainRows(5)
+	rows[2][3] = "RETARD" // statut altered without recomputing the hash
+
+	res, err := ledger.VerifyChain(context.Background(), chainDB(rows))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OK {
+		t.Fatal("corrupted entry must break the chain")
+	}
+	if res.BrokenAt != 3 {
+		t.Fatalf("BrokenAt = %d, want 3", res.BrokenAt)
+	}
+}
+
+func TestVerifyChain_BrokenPrevHash(t *testing.T) {
+	rows := buildChainRows(5)
+	rows[3][6] = fmt.Sprintf("%064x", 1) // prev_hash no longer matches entry 3
+
+	res, err := ledger.VerifyChain(context.Background(), chainDB(rows))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OK {
+		t.Fatal("broken prev_hash linkage must break the chain")
+	}
+	if res.BrokenAt != 4 {
+		t.Fatalf("BrokenAt = %d, want 4", res.BrokenAt)
+	}
+}
+
+// ── Tests GetLastLedgerEntry ─────────────────────────────────────────────────
+
+func TestGetLastLedgerEntry_Empty(t *testing.T) {
+	seq, hash, err := ledger.GetLastLedgerEntry(context.Background(), &stubDB{})
+	if !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("expected pgx.ErrNoRows, got %v", err)
+	}
+	if seq != 0 || hash != ledger.GenesisHash {
+		t.Fatalf("empty ledger must return (0, GenesisHash), got (%d, %s)", seq, hash)
+	}
+}
+
+func TestGetLastLedgerEntry_Last(t *testing.T) {
+	rows := buildChainRows(3)
+	lastHash := rows[2][7].(string)
+	db := &stubDB{
+		queryRowFunc: func(_ context.Context, _ string, _ ...any) pgx.Row {
+			return &stubRow{values: []any{int64(3), lastHash}}
+		},
+	}
+	seq, hash, err := ledger.GetLastLedgerEntry(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seq != 3 || hash != lastHash {
+		t.Fatalf("got (%d, %s), want (3, %s)", seq, hash, lastHash)
+	}
+}
+
+// ── Tests unitaires de ComputeHash ───────────────────────────────────────────
+// Complètent hash_test.go : linkage entre maillons consécutifs.
 
 func TestComputeHash_ChainLinkage(t *testing.T) {
 	t0 := time.Date(2026, 6, 29, 10, 0, 0, 0, time.UTC)
 
 	e1 := ledger.LedgerEntry{
-		SeanceID:   42, UserID: 7, Statut: "PRESENT",
+		SeanceID: 42, UserID: 7, Statut: "PRESENT",
 		EventAt:    t0,
 		RecordedAt: t0.Add(50 * time.Millisecond),
 		PrevHash:   ledger.GenesisHash,
@@ -177,7 +244,7 @@ func TestComputeHash_ChainLinkage(t *testing.T) {
 	h1 := ledger.ComputeHash(e1)
 
 	e2 := ledger.LedgerEntry{
-		SeanceID:   42, UserID: 8, Statut: "RETARD",
+		SeanceID: 42, UserID: 8, Statut: "RETARD",
 		EventAt:    t0.Add(5 * time.Minute),
 		RecordedAt: t0.Add(5*time.Minute + 50*time.Millisecond),
 		PrevHash:   h1,
@@ -218,13 +285,5 @@ func TestComputeHash_PrevHashCascade(t *testing.T) {
 
 	if h == hTampered {
 		t.Fatal("changing prev_hash must change the current hash")
-	}
-}
-
-// ── Tests de configuration ────────────────────────────────────────────────────
-
-func TestDefaultTSAURL(t *testing.T) {
-	if services.DefaultTSAURL == "" {
-		t.Fatal("DefaultTSAURL must not be empty")
 	}
 }

@@ -87,7 +87,11 @@ La contrainte `UNIQUE` sur la colonne `hash` et les FK `ON DELETE RESTRICT` sur 
 
 ### 3.3 Horodatage externe (Quand ?)
 
-L'ancrage RFC 3161 confie à une autorité d'horodatage tierce (FreeTSA) la preuve que le hash `H` existait **avant** l'heure indiquée dans le jeton. Le jeton CMS signé est archivé dans `presence_anchor` avec le certificat racine de la TSA, garantissant la vérification hors ligne.
+L'ancrage RFC 3161 confie à une autorité d'horodatage tierce (FreeTSA) la preuve que le hash `H` existait **avant** l'heure indiquée dans le jeton. Le jeton CMS signé est archivé dans `presence_anchor` avec le certificat racine de la TSA, garantissant la vérification hors ligne. L'ancrage automatique tourne toutes les heures et n'ancre que si la tête de chaîne a bougé.
+
+### 3.4 Témoin externe (Résistance à un initié)
+
+Après chaque nouvel ancrage, la tête de chaîne (seq + hash + jeton + certificat TSA) est envoyée par e-mail vers une boîte contrôlée par un tiers, hors de portée d'un administrateur de l'infrastructure. Une chaîne réécrite puis ré-ancrée ne peut pas correspondre aux témoins déjà reçus : l'altération devient **détectable** (pas impossible). Exigences de déploiement et limites : voir [temoin-externe.md](temoin-externe.md).
 
 ---
 
@@ -158,6 +162,7 @@ La suppression d'un compte étudiant est bloquée par les FK `RESTRICT` sur `pre
 | Partage de mot de passe LDAP entre étudiants | Organisationnel | Charte informatique ; impossibilité de prouver le partage a posteriori |
 | Accès physique à l'application mobile d'un autre étudiant | Organisationnel | JWT de 15 min ; déverrouillage du téléphone requis |
 | Compromission de la base PostgreSQL | Technique | La chaîne cassée est détectable ; FK RESTRICT empêche la suppression silencieuse |
+| Initié avec accès base + infra (réécriture puis ré-ancrage) | Technique/Organisationnel | Témoin externe : la chaîne falsifiée ne correspond plus aux témoins archivés chez un tiers ([temoin-externe.md](temoin-externe.md)) |
 | Compromission du serveur Go | Technique | `recorded_at` fixé côté serveur, advisory lock ; altération visible dans les logs |
 | FreeTSA hors ligne lors de l'ancrage | Disponibilité | Plusieurs URLs TSA configurables ; l'absence d'ancrage ne casse pas la chaîne |
 
@@ -179,6 +184,28 @@ Réponse : `{"ok": true}` ou `{"ok": false, "broken_at": <seq>, "error": "..."}`
 ```bash
 curl -X POST -H "Authorization: Bearer <token_admin>" \
      https://vecu-etudiant-admin-2.mines-ales.fr/api/v2/presence/ledger/anchor
+```
+
+### Vérifier un témoin externe (audit)
+
+Page **Audit présences** du front web admin (`apps/web-admin`) : l'auditeur
+colle un jeton RFC 3161 reçu par e-mail depuis la boîte externe et obtient un
+verdict (`CONFORME`, `REECRITURE_DETECTEE`, `CHAINE_CORROMPUE`, …). API :
+
+```bash
+curl -X POST -H "Authorization: Bearer <token_admin>" -H "Content-Type: application/json" \
+     -d '{"token": "<base64 ou PEM>", "tsa_cert": "<PEM optionnel>"}' \
+     https://vecu-etudiant-admin-2.mines-ales.fr/api/v2/presence/ledger/verify-witness
+```
+
+Verdicts, principe et procédure de dichotomie : voir
+[temoin-externe.md](temoin-externe.md), §6.
+
+### Renvoyer un témoin externe en échec
+
+```bash
+curl -X POST -H "Authorization: Bearer <token_admin>" \
+     https://vecu-etudiant-admin-2.mines-ales.fr/api/v2/presence/witness/resend/<anchorID>
 ```
 
 ### Télécharger le certificat FreeTSA

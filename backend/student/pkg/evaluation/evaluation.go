@@ -4,16 +4,13 @@ import (
 	"back-rex-common/pkg/auth"
 	"back-rex-common/pkg/services"
 	"back-rex-eleve/pkg/evaluation/gen"
-	"back-rex-eleve/pkg/programme"
 	"back-rex-eleve/pkg/service"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -66,91 +63,35 @@ type MatiereSummary struct {
 	Fait      bool   `json:"fait"`
 }
 
-type matiereGroup struct {
-	cocle     string
-	nom       string
-	prof      string
-	formation string
-	lastDate  string // YYYY-MM-DD
-	lastHF    string // HH:MM
-}
-
-func schoolYearDates(now time.Time) (start, end string) {
-	year := now.Year()
-	if now.Month() < time.September {
-		year--
-	}
-	s := time.Date(year, time.September, 1, 0, 0, 0, 0, time.UTC)
-	e := time.Date(year+1, time.July, 1, 0, 0, 0, 0, time.UTC)
-	return s.Format("20060102"), e.Format("20060102")
-}
-
-// sessionDone retourne true si la séance (date YYYY-MM-DD + fin HH:MM) est terminée.
-func sessionDone(date, hf string, now time.Time) bool {
-	t, err := time.ParseInLocation("2006-01-02 15:04", date+" "+hf, now.Location())
-	if err != nil {
-		return false
-	}
-	return !t.After(now)
-}
-
-func getMatiere(connector programme.ProgrammeConnector) http.HandlerFunc {
+func getMatiere() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		pseudo := services.GetPseudo(r)
 		ctx := context.Background()
 
 		userID := auth.GetSecurityUserId(r.Context())
 		pgCtx := services.GetPgCtx(r.Context())
+		queries := gen.New(pgCtx.Db)
 
-		user, err := auth.New(pgCtx.Db).GetUserById(ctx, int32(*userID))
+		// Matières de l'étudiant sans séance future (la requête porte la règle d'éligibilité)
+		rows, err := queries.GetMatieresAEvaluer(ctx, int32(*userID))
 		if err != nil {
 			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 			return
 		}
 
-		start, end := schoolYearDates(time.Now())
-		seances, err := connector.GetProgramme(r.Context(), user.Email, start, end)
-		if err != nil {
-			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-			return
-		}
-
-		// Regrouper les séances par COCLE et retenir la dernière séance de chaque matière
-		groups := make(map[string]*matiereGroup)
-		for _, s := range seances {
-			if s.Cocle == "" {
-				continue
+		result := make([]MatiereSummary, len(rows))
+		eligible := make(map[string]*MatiereSummary, len(rows))
+		for i, row := range rows {
+			result[i] = MatiereSummary{
+				MatiereID: row.MatiereID,
+				Nom:       row.Nom,
+				Prof:      row.Prof,
+				Formation: row.Formation,
 			}
-			g, ok := groups[s.Cocle]
-			if !ok {
-				g = &matiereGroup{cocle: s.Cocle, nom: s.Cours, prof: s.Prof, formation: s.Promo}
-				groups[s.Cocle] = g
-			}
-			// Garder la séance la plus tardive (tri lexicographique valide sur YYYY-MM-DD HH:MM)
-			if s.Date > g.lastDate || (s.Date == g.lastDate && s.HF > g.lastHF) {
-				g.lastDate = s.Date
-				g.lastHF = s.HF
-				g.prof = s.Prof
-				g.formation = s.Promo
-			}
-		}
-
-		// Ne retenir que les matières dont toutes les séances sont terminées (dernière séance passée)
-		now := time.Now()
-		eligible := make(map[string]*MatiereSummary)
-		for cocle, g := range groups {
-			if sessionDone(g.lastDate, g.lastHF, now) {
-				eligible[cocle] = &MatiereSummary{
-					MatiereID: cocle,
-					Nom:       g.nom,
-					Prof:      g.prof,
-					Formation: g.formation,
-				}
-			}
+			eligible[row.MatiereID] = &result[i]
 		}
 
 		if pseudo != "" {
-			queries := gen.New(pgCtx.Db)
 			submittedIDs, err := queries.GetSubmittedMatiereIDs(ctx, pseudo)
 			if err == nil {
 				for _, id := range submittedIDs {
@@ -160,14 +101,6 @@ func getMatiere(connector programme.ProgrammeConnector) http.HandlerFunc {
 				}
 			}
 		}
-
-		result := make([]MatiereSummary, 0, len(eligible))
-		for _, m := range eligible {
-			result = append(result, *m)
-		}
-		sort.Slice(result, func(i, j int) bool {
-			return result[i].Nom < result[j].Nom
-		})
 
 		render.JSON(w, r, result)
 	}
@@ -197,11 +130,8 @@ func SubmitEvaluation(agePublicKey string) http.HandlerFunc {
 		queries := gen.New(pgCtx.Db)
 		ctx := context.Background()
 
-		// Résoudre l'external_id (CO webdfd) en surrogate matiere.id pour l'année courante
-		matiereID, err := queries.GetMatiereIDByWebdfdAndAnnee(ctx, gen.GetMatiereIDByWebdfdAndAnneeParams{
-			WebdfdID: strconv.FormatInt(req.MatiereID, 10),
-			Annee:    service.AcademicYear(time.Now()),
-		})
+		// Vérifier que la matière (id interne) existe pour l'année académique courante
+		matiereID, err := queries.GetMatiereIDAnneeCourante(ctx, req.MatiereID)
 		if err != nil {
 			services.InvalidRequestError(w, r, "matière introuvable pour l'année en cours", services.NO_INFORMATION, nil)
 			return
@@ -424,7 +354,7 @@ func getSessionDetail() http.HandlerFunc {
 		}
 
 		matiereIDStr := r.URL.Query().Get("matiere_id")
-		externalID, err := strconv.ParseInt(matiereIDStr, 10, 64)
+		matiereIDParam, err := strconv.ParseInt(matiereIDStr, 10, 64)
 		if err != nil {
 			services.InvalidRequestError(w, r, "matiere_id invalide", services.NO_INFORMATION, nil)
 			return
@@ -434,10 +364,7 @@ func getSessionDetail() http.HandlerFunc {
 		queries := gen.New(pgCtx.Db)
 		ctx := context.Background()
 
-		matiereID, err := queries.GetMatiereIDByWebdfdAndAnnee(ctx, gen.GetMatiereIDByWebdfdAndAnneeParams{
-			WebdfdID: strconv.FormatInt(externalID, 10),
-			Annee:    service.AcademicYear(time.Now()),
-		})
+		matiereID, err := queries.GetMatiereIDAnneeCourante(ctx, matiereIDParam)
 		if err != nil {
 			http.Error(w, "matière introuvable", http.StatusNotFound)
 			return

@@ -1,52 +1,9 @@
-database:
-  host: ${POSTGRES_HOST}
-  port: ${POSTGRES_PORT}
-  user: ${POSTGRES_USER}
-  password: ${POSTGRES_PASSWORD}
-  name: ${POSTGRES_DB}
-
-mariaDB:
-  host:     ${MARIADB_HOST}
-  port:     ${MARIADB_PORT}
-  user:     ${MARIADB_USER}
-  password: ${MARIADB_PASSWORD}
-  database: ${MARIADB_DB}
-
-server:
-  host: localhost
-  port: 3333
-
-jwt:
-  secret: ${JWT_SECRET_ADMIN}
-  accessTokenExpiresIn: 15m
-  refreshTokenExpiresIn: 2160h
-
-ldap:
-  url: ldap://${LDAP_HOST}:389
-  baseDN: dc=ema,dc=fr
-
-ia:
-  provider: rack
-
-ollama:
-  baseURL: ""
-  model: mistral-nemo
-
-ragarenn:
-  baseURL: https://ragarenn.eskemm-numerique.fr/sso/ch@t
-  apiKey: ""
-  model: RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic
-
-rack:
-  baseURL: https://${IP_SERVEUR_IA}
-  model: mistral-small:latest
-  apiKey: ${RACK_API_KEY}
-  caCertPath: /opt/rex-admin/certs/ca.crt
-
-presence:
-  tokenSecret: ${PRESENCE_TOKEN_SECRET}
-  planningURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe
-
-webdfd:
-  baseURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe
-  listeGroupeURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgihtml.exe
+{#
+  NE PAS ÉDITER LA CONFIG ICI.
+  Source de vérité : backend/admin/cmd/config.yaml (les ${VAR} sont résolues au
+  runtime par le serveur via secrets.env). Ce template ne fait qu'adapter les
+  chemins de certificats aux montages du container (voir group_vars/admin.yml).
+#}
+{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../backend/admin/cmd/config.yaml')
+   | regex_replace('caCertPath:\s*\./x509/mtls_certs/ca\.crt', 'caCertPath: ' ~ ca_cert_container_path)
+   | regex_replace('caCertPath:\s*\./x509/freetsa/cacert\.pem', 'caCertPath: ' ~ freetsa_cert_container_path) }}

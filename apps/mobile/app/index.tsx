@@ -2,7 +2,7 @@ import { Colors } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { API_BASE, login } from '@/services/auth';
 import { apiInstance } from '@/services/api';
-import { getPseudo, saveTokens } from '@/services/tokens';
+import { getPseudo, saveRoles, saveTokens } from '@/services/tokens';
 import { useRouter } from 'expo-router';
 import {  useMemo, useState } from 'react';
 import {
@@ -85,6 +85,7 @@ export default function SignInScreen() {
     try {
       const resp = await login(email, password);
       await saveTokens(resp.access_token, resp.refresh_token);
+      await saveRoles(resp.roles ?? []);
       const pseudo = await getPseudo();
       if (!pseudo) {
         router.replace('/pseudo-setup');

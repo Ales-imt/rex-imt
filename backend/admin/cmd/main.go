@@ -110,6 +110,7 @@ func main() {
 
 	go feedback.ListenForNewFeedbacks(&cfg.Database, iaConnector)
 	rgpd.StartPurge(&cfg.Database, &cfg.MariaDBConfig)
+	presence.StartAnchorScheduler(&cfg.Database, cfg.Presence)
 
 	// permeet une analyse au lancement du programme.
 	go feedback.ProcessPendingFeedbacks(&cfg.Database, iaConnector)

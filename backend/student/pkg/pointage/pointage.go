@@ -2,12 +2,11 @@ package pointage
 
 import (
 	"back-rex-common/pkg/auth"
+	"back-rex-common/pkg/ledger"
+	"back-rex-common/pkg/presencetoken"
 	"back-rex-common/pkg/services"
 	"back-rex-eleve/pkg/pointage/gen"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -18,12 +17,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype" // pour pgtype.Text dans resolveSeance
 )
-
-var tokenSecret string
-
-func SetTokenSecret(secret string) {
-	tokenSecret = secret
-}
 
 type postPointageRequest struct {
 	Code string `json:"code"`
@@ -102,7 +95,7 @@ func PostPointage() http.HandlerFunc {
 		}
 
 		if !dejaPointe {
-			if _, _, err := AppendLedger(ctx, tx, seance.ID, uid, statut, pointageRow.PointeAt.Time); err != nil {
+			if _, _, err := ledger.AppendLedger(ctx, tx, seance.ID, uid, statut, pointageRow.PointeAt.Time); err != nil {
 				services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 				return
 			}
@@ -141,11 +134,11 @@ func PostPointage() http.HandlerFunc {
 
 type seanceRow = gen.GetSeanceByCodeRow
 
-// resolveSeance accepte un code court ou un token HMAC signé par l'admin.
-// Format token : base64url(JSON{seance_id,exp}).base64url(HMAC-SHA256)
+// resolveSeance accepte un code court ou un token HMAC signé par le service
+// qui affiche le QR (voir back-rex-common/pkg/presencetoken).
 func resolveSeance(ctx context.Context, q *gen.Queries, code string) (seanceRow, error) {
 	if strings.Contains(code, ".") {
-		seanceID, err := verifyToken(code)
+		seanceID, err := presencetoken.Verify(code)
 		if err != nil {
 			return seanceRow{}, err
 		}
@@ -162,34 +155,4 @@ func resolveSeance(ctx context.Context, q *gen.Queries, code string) (seanceRow,
 		}, nil
 	}
 	return q.GetSeanceByCode(ctx, pgtype.Text{String: code, Valid: true})
-}
-
-type tokenPayload struct {
-	SeanceID int64 `json:"seance_id"`
-	Exp      int64 `json:"exp"`
-}
-
-func verifyToken(token string) (int64, error) {
-	parts := strings.SplitN(token, ".", 2)
-	if len(parts) != 2 {
-		return 0, errors.New("token invalide")
-	}
-	payloadJSON, err := base64.RawURLEncoding.DecodeString(parts[0])
-	if err != nil {
-		return 0, errors.New("token invalide")
-	}
-	mac := hmac.New(sha256.New, []byte(tokenSecret))
-	mac.Write(payloadJSON)
-	expected := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
-	if !hmac.Equal([]byte(parts[1]), []byte(expected)) {
-		return 0, errors.New("signature invalide")
-	}
-	var p tokenPayload
-	if err := json.Unmarshal(payloadJSON, &p); err != nil {
-		return 0, errors.New("token invalide")
-	}
-	if time.Now().Unix() > p.Exp {
-		return 0, errors.New("token expiré")
-	}
-	return p.SeanceID, nil
 }

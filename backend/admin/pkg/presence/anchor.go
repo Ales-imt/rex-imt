@@ -10,6 +10,7 @@ package presence
 // Dépendance : github.com/digitorus/timestamp (déjà dans go.mod)
 
 import (
+	"back-rex-common/pkg/ledger"
 	"back-rex-common/pkg/services"
 	"bytes"
 	"context"
@@ -30,9 +31,12 @@ import (
 )
 
 // AnchorResult est retourné par AnchorLast pour chaque TSA.
+// Created distingue une ancre nouvellement archivée d'une ancre déjà existante
+// (skip idempotent) : seules les nouvelles ancres déclenchent un témoin externe.
 type AnchorResult struct {
 	TSAURL   string
 	AnchorID int64
+	Created  bool
 	Err      error
 }
 
@@ -54,7 +58,7 @@ func AnchorLast(ctx context.Context, db DBTX, cfg services.TimestampConfig) ([]A
 		urls = []string{services.DefaultTSAURL}
 	}
 
-	seq, h, err := GetLastLedgerEntry(ctx, db)
+	seq, h, err := ledger.GetLastLedgerEntry(ctx, db)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil // ledger vide, rien à ancrer
 	}
@@ -80,24 +84,25 @@ func AnchorLast(ctx context.Context, db DBTX, cfg services.TimestampConfig) ([]A
 		algo = "sha256"
 	}
 
+	q := New(db)
+
+	// Idempotence : ancres déjà existantes pour ce maillon, indexées par TSA.
+	existing, err := q.GetAnchorByLedgerSeq(ctx, seq)
+	if err != nil {
+		return nil, fmt.Errorf("anchor list existing: %w", err)
+	}
+	existingByURL := make(map[string]int64, len(existing))
+	for _, a := range existing {
+		existingByURL[a.TsaUrl] = a.ID
+	}
+
 	results := make([]AnchorResult, 0, len(urls))
 
 	for _, tsaURL := range urls {
 		res := AnchorResult{TSAURL: tsaURL}
 
-		// Idempotence : skip si ancre déjà existante pour ce (seq, tsaURL).
-		var existingID int64
-		scanErr := db.QueryRow(ctx,
-			"SELECT id FROM presence_anchor WHERE ledger_seq = $1 AND tsa_url = $2 LIMIT 1",
-			seq, tsaURL,
-		).Scan(&existingID)
-		if scanErr == nil {
-			res.AnchorID = existingID
-			results = append(results, res)
-			continue
-		}
-		if !errors.Is(scanErr, pgx.ErrNoRows) {
-			res.Err = fmt.Errorf("check existing anchor: %w", scanErr)
+		if id, ok := existingByURL[tsaURL]; ok {
+			res.AnchorID = id
 			results = append(results, res)
 			continue
 		}
@@ -162,20 +167,21 @@ func AnchorLast(ctx context.Context, db DBTX, cfg services.TimestampConfig) ([]A
 			})...)
 		}
 
-		var anchorID int64
-		err = db.QueryRow(ctx,
-			`INSERT INTO presence_anchor
-			 (ledger_seq, anchored_hash, tsa_url, hash_algorithm, token, tsa_cert)
-			 VALUES ($1, $2, $3, $4, $5, $6)
-			 RETURNING id`,
-			seq, h, tsaURL, algo, tsResp.RawToken, tsaCertPEM,
-		).Scan(&anchorID)
+		anchorID, err := q.InsertAnchor(ctx, InsertAnchorParams{
+			LedgerSeq:     seq,
+			AnchoredHash:  h,
+			TsaUrl:        tsaURL,
+			HashAlgorithm: algo,
+			Token:         tsResp.RawToken,
+			TsaCert:       tsaCertPEM,
+		})
 		if err != nil {
 			res.Err = fmt.Errorf("insert anchor: %w", err)
 			results = append(results, res)
 			continue
 		}
 		res.AnchorID = anchorID
+		res.Created = true
 		results = append(results, res)
 	}
 	return results, nil
@@ -209,32 +215,16 @@ func VerifyAnchors(ctx context.Context, db DBTX, caCertPath string) ([]AnchorVer
 		}
 	}
 
-	rows, err := db.Query(ctx,
-		`SELECT id, ledger_seq, anchored_hash, tsa_url, token, tsa_cert
-		 FROM presence_anchor ORDER BY ledger_seq ASC, id ASC`,
-	)
+	anchors, err := New(db).ListAnchors(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list anchors: %w", err)
 	}
-	defer rows.Close()
 
 	var results []AnchorVerifyResult
-	for rows.Next() {
-		var (
-			anchorID     int64
-			ledgerSeq    int64
-			anchoredHash string
-			tsaURL       string
-			token        []byte
-			tsaCertPEM   []byte
-		)
-		if err := rows.Scan(&anchorID, &ledgerSeq, &anchoredHash, &tsaURL, &token, &tsaCertPEM); err != nil {
-			return nil, fmt.Errorf("scan anchor: %w", err)
-		}
+	for _, a := range anchors {
+		res := AnchorVerifyResult{AnchorID: a.ID, LedgerSeq: a.LedgerSeq, TSAURL: a.TsaUrl}
 
-		res := AnchorVerifyResult{AnchorID: anchorID, LedgerSeq: ledgerSeq, TSAURL: tsaURL}
-
-		hashBytes, decErr := hex.DecodeString(anchoredHash)
+		hashBytes, decErr := hex.DecodeString(a.AnchoredHash)
 		if decErr != nil {
 			res.Err = fmt.Sprintf("decode anchored_hash: %v", decErr)
 			results = append(results, res)
@@ -242,7 +232,7 @@ func VerifyAnchors(ctx context.Context, db DBTX, caCertPath string) ([]AnchorVer
 		}
 
 		// Parse vérifie la signature CMS (si le jeton contient son certificat).
-		ts, parseErr := timestamp.Parse(token)
+		ts, parseErr := timestamp.Parse(a.Token)
 		if parseErr != nil {
 			res.Err = fmt.Sprintf("parse token: %v", parseErr)
 			results = append(results, res)
@@ -257,15 +247,21 @@ func VerifyAnchors(ctx context.Context, db DBTX, caCertPath string) ([]AnchorVer
 		}
 
 		// Vérification optionnelle de la chaîne de certification.
-		if len(ts.Certificates) > 0 && (len(tsaCertPEM) > 0 || len(rootCAPEM) > 0) {
+		if len(ts.Certificates) > 0 && (len(a.TsaCert) > 0 || len(rootCAPEM) > 0) {
 			pool := x509.NewCertPool()
-			if len(tsaCertPEM) > 0 {
-				pool.AppendCertsFromPEM(tsaCertPEM)
+			if len(a.TsaCert) > 0 {
+				pool.AppendCertsFromPEM(a.TsaCert)
 			}
 			if len(rootCAPEM) > 0 {
 				pool.AppendCertsFromPEM(rootCAPEM)
 			}
-			_, certErr := ts.Certificates[0].Verify(x509.VerifyOptions{Roots: pool})
+			// KeyUsages est indispensable : sans lui, x509.Verify exige l'EKU
+			// ServerAuth alors qu'un certificat TSA porte l'EKU TimeStamping
+			// (RFC 3161 §2.3).
+			_, certErr := ts.Certificates[0].Verify(x509.VerifyOptions{
+				Roots:     pool,
+				KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageTimeStamping},
+			})
 			if certErr != nil {
 				res.Err = fmt.Sprintf("cert chain: %v", certErr)
 				results = append(results, res)
@@ -275,9 +271,6 @@ func VerifyAnchors(ctx context.Context, db DBTX, caCertPath string) ([]AnchorVer
 
 		res.OK = true
 		results = append(results, res)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("anchors rows: %w", err)
 	}
 	return results, nil
 }
