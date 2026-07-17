@@ -7,6 +7,7 @@ import (
 	"back-rex-common/pkg/services"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
@@ -29,10 +30,14 @@ func PostLdap(r *http.Request, ldapIdentity *auth.LdapIdentity) (*jwt.MapClaims,
 	userByMail, err := queriesAuth.GetUserByMail(ctx, ldapIdentity.Mail)
 
 	var id int
+	roles := auth.RoleEleve
 
 	switch err {
 	case nil:
 		id = int(userByMail.ID)
+		if len(userByMail.Roles) > 0 {
+			roles = strings.Join(userByMail.Roles, ",")
+		}
 	case pgx.ErrNoRows: // 🆕 S'il n'existe pas, on l’insère dans la table `student`
 		id, err = user.CreateUser(tx, ldapIdentity, ctx, []string{auth.RoleEleve}, true)
 		if err != nil {
@@ -46,7 +51,7 @@ func PostLdap(r *http.Request, ldapIdentity *auth.LdapIdentity) (*jwt.MapClaims,
 		return nil, nil, err
 	}
 
-	claims := jwt.MapClaims{"roles": auth.RoleEleve}
+	claims := jwt.MapClaims{"roles": roles}
 	subject := strconv.Itoa(id)
 
 	return &claims, &subject, nil // Pas de claims supplémentaires pour l'instant

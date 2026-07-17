@@ -1,4 +1,10 @@
-package presence
+package presencetoken
+
+// Token de séance HMAC — émis par le service qui affiche le QR (admin,
+// student côté prof) et vérifié par le pointage étudiant. UNIQUE
+// implémentation, partagée pour que signature et format ne divergent jamais.
+//
+// Format : base64url(JSON{seance_id,exp}).base64url(HMAC-SHA256)
 
 import (
 	"crypto/hmac"
@@ -6,13 +12,29 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"math/rand"
 	"strings"
 	"time"
 )
 
+// codeAlphabet exclut les caractères ambigus (I, L, O, 0, 1) pour une saisie
+// manuelle fiable du code de repli affiché à côté du QR.
+const codeAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+// GenerateCode produit le code court assigné à une séance à son ouverture.
+func GenerateCode() string {
+	b := make([]byte, 6)
+	for i := range b {
+		b[i] = codeAlphabet[rand.Intn(len(codeAlphabet))]
+	}
+	return string(b)
+}
+
 var tokenSecret string
 
-func SetTokenSecret(secret string) {
+// SetSecret installe le secret HMAC partagé (config presence.tokenSecret,
+// identique entre les services pour qu'un token émis ici se vérifie là-bas).
+func SetSecret(secret string) {
 	tokenSecret = secret
 }
 
@@ -21,12 +43,13 @@ type tokenPayload struct {
 	Exp      int64 `json:"exp"`
 }
 
-const tokenTTL = 30 * time.Second
+// TTL est la durée de validité d'un token (le QR se rafraîchit avant expiration).
+const TTL = 30 * time.Second
 
-func IssueToken(seanceID int64) string {
+func Issue(seanceID int64) string {
 	payload := tokenPayload{
 		SeanceID: seanceID,
-		Exp:      time.Now().Add(tokenTTL).Unix(),
+		Exp:      time.Now().Add(TTL).Unix(),
 	}
 	payloadJSON, _ := json.Marshal(payload)
 	payloadB64 := base64.RawURLEncoding.EncodeToString(payloadJSON)
@@ -38,7 +61,7 @@ func IssueToken(seanceID int64) string {
 	return payloadB64 + "." + sig
 }
 
-func VerifyToken(token string) (int64, error) {
+func Verify(token string) (int64, error) {
 	parts := strings.SplitN(token, ".", 2)
 	if len(parts) != 2 {
 		return 0, errors.New("token invalide")

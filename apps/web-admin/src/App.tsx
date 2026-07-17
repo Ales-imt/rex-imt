@@ -19,8 +19,9 @@ import { FEEDBACK_WORKFLOW } from './pages/feedback/def';
 import { ANALYSE } from './pages/analyse/def';
 import { DISCUSSION } from './pages/discussion/def';
 import { EVALUATION_WORKFLOW } from './pages/evaluation/def';
-import { PRESENCE_WORKFLOW } from './pages/presence/def';
+import { PRESENCE_WORKFLOW, PRESENCE_WITNESS_WORKFLOW } from './pages/presence/def';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
 import { ANNEE_WORKFLOW } from './pages/annee/def';
 import EventIcon from '@mui/icons-material/Event';
 
@@ -33,13 +34,13 @@ type NavigationItemWithRoles = NavigationItem & {
 const NAVIGATION: NavigationItemWithRoles[] = [
   {
     title: 'Admin',
-    icon: <PersonIcon/>,
+    icon: <PersonIcon />,
     requiredRoles: [Role.ADMIN],
     children: [
       {
         segment: USER_WORKFLOW,
         title: 'Utilisateur',
-        icon: <PersonIcon/>,
+        icon: <PersonIcon />,
         requiredRoles: [Role.ADMIN],
       },
       {
@@ -53,6 +54,12 @@ const NAVIGATION: NavigationItemWithRoles[] = [
         title: 'Année',
         icon: <EventIcon />,
         requiredRoles: [Role.ADMIN],
+      },
+      {
+        segment: PRESENCE_WITNESS_WORKFLOW,
+        title: 'Audit présences',
+        icon: <FactCheckIcon />,
+        requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
       },
     ],
   },
@@ -80,6 +87,7 @@ const NAVIGATION: NavigationItemWithRoles[] = [
     icon: <HowToRegIcon />,
     requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
   },
+
 ]
 
 

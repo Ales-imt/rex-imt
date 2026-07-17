@@ -3,6 +3,9 @@
 infras/ansible/vault-vars.yml
 infras/migration/config-runtime.yaml
 infras/migration/config-prod-runtime.yaml
+# Fichiers dérivés, régénérés par start-{admin,eleve}-local.sh depuis backend/{admin,student}/cmd/config.yaml
+infras/run/config-admin.yaml
+infras/run/config-eleve.yaml
 **/*.pem
 **/*.age*
 

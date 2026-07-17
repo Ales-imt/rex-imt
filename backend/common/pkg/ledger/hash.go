@@ -28,16 +28,18 @@ type LedgerEntry struct {
 //
 //	seance_id|user_id|statut|event_at|recorded_at|prev_hash
 //
-// Timestamps are formatted as RFC3339Nano in UTC (nanosecond precision,
-// e.g. "2026-06-29T14:30:00.123456789Z"). Using a fixed format avoids any
-// platform-dependent time.String() ambiguity.
+// Timestamps are truncated to MICROSECOND precision, then formatted as
+// RFC3339Nano in UTC (e.g. "2026-06-29T14:30:00.123456Z"). The truncation is
+// contractual: timestamptz stores microseconds, so hashing anything finer
+// (time.Now() carries nanoseconds) would make the hash impossible to
+// reproduce after a database round-trip and break chain verification.
 func ComputeHash(e LedgerEntry) string {
 	canonical := fmt.Sprintf("%d|%d|%s|%s|%s|%s",
 		e.SeanceID,
 		e.UserID,
 		e.Statut,
-		e.EventAt.UTC().Format(time.RFC3339Nano),
-		e.RecordedAt.UTC().Format(time.RFC3339Nano),
+		e.EventAt.UTC().Truncate(time.Microsecond).Format(time.RFC3339Nano),
+		e.RecordedAt.UTC().Truncate(time.Microsecond).Format(time.RFC3339Nano),
 		e.PrevHash,
 	)
 	sum := sha256.Sum256([]byte(canonical))

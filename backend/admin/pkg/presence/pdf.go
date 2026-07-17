@@ -1,6 +1,7 @@
 package presence
 
 import (
+	presencedata "back-rex-common/pkg/presencedata/gen"
 	"fmt"
 	"io"
 	"strings"
@@ -287,7 +288,7 @@ func generatePresencePDF(w io.Writer, d pdfData) error {
 // ─── Handler data builder ─────────────────────────────────────────────────────
 
 // buildPdfData assembles pdfData from DB rows.
-func buildPdfData(seance GetSeanceDetailRow, rows []ListPresenceRow, horsGroupe []ListPresenceHorsGroupeRow) pdfData {
+func buildPdfData(seance GetSeanceDetailRow, rows []presencedata.ListPresenceRow, horsGroupe []presencedata.ListPresenceHorsGroupeRow) pdfData {
 	var presents, retards, absents int
 	eleves := make([]pdfEleveRow, 0, len(rows)+len(horsGroupe))
 	rank := 1

@@ -20,11 +20,17 @@ Pour serveur-ia, generation de clef:
 tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48 ; echo ''
 
 Pour utiliser cybema en local, necessite proxy socks5h. 
-    ssh -N   -D 0.0.0.0:1080   -L 5433:sql2.mines-ales.fr:5433   -L 3306:sql2.mines-ales.fr:3306   userdfx@vecu-etudiant-eleves-2.mines-ales.fr
+    ssh -N -D 0.0.0.0:1080   -L 5433:sql2.mines-ales.fr:5433   -L 3306:sql2.mines-ales.fr:3306   -L 0.0.0.0:2525:mail.mines-ales.fr:25  userdfx@vecu-etudiant-eleves-2.mines-ales.fr
+
     curl --proxy socks5h://127.0.0.1:1080 "http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe?TYPE=planning_txt&DATEDEBUT=20260223&DATEFIN=20260301&TYPECLE=evcleunik&VALCLE=17979"
 Les containers en local doive avoir :
     -e HTTP_PROXY=socks5h://host.docker.internal:1080 \
     -e NO_PROXY=10.20.1.4,10.20.1.5,10.20.1.6,localhost,127.0.0.1 \
+
+Pour utiliser le telephone avec un container et eviter https pour la camera:
+  /home/vjo/Android/Sdk/platform-tools/adb reverse tcp:8131 tcp:8131
+  socat TCP-LISTEN:8131,bind=localhost,fork TCP:10.20.1.11:8131
+
 
 Pour expo,
    npx expo start

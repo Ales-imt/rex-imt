@@ -109,15 +109,15 @@ export function PresenceScanner({ active, onScan }: Props) {
           return label.includes('back') || label.includes('rear') || label.includes('environment') || label.includes('arrière');
         });
 
-        // Si pas de caméra arrière trouvée, prendre toutes les caméras
+        // Si pas de caméra arrière trouvée, proposer toutes les caméras
         const camerasToUse = backCameras.length > 0 ? backCameras : videoDevices;
         setCameras(camerasToUse);
 
-        // Une seule caméra → démarrage automatique sans modal
-        if (camerasToUse.length === 1 && camerasToUse[0].deviceId) {
-          startWithCamera(camerasToUse[0].deviceId);
-        } else if (camerasToUse.length > 1) {
-          setStatus('picking');
+        // Démarrage automatique sur la première caméra de la liste ;
+        // le choix reste accessible via « Changer de caméra »
+        const defaultCam = camerasToUse.find(cam => cam.deviceId);
+        if (defaultCam) {
+          startWithCamera(defaultCam.deviceId);
         } else {
           // Aucune caméra disponible
           setStatus('unavailable');

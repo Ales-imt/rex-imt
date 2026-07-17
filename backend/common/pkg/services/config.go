@@ -31,6 +31,7 @@ type PresenceConfig struct {
 	TokenSecret string          `yaml:"tokenSecret"`
 	PlanningURL string          `yaml:"planningURL"`
 	Timestamp   TimestampConfig `yaml:"timestamp"`
+	Witness     WitnessConfig   `yaml:"witness"`
 }
 
 // TimestampConfig configures RFC 3161 external anchoring.
@@ -40,8 +41,30 @@ type TimestampConfig struct {
 	URLs          []string      `yaml:"urls"`          // TSA endpoints; defaults to FreeTSA if empty
 	HashAlgorithm string        `yaml:"hashAlgorithm"` // "sha256" (only value currently supported)
 	Timeout       time.Duration `yaml:"timeout"`       // per-TSA HTTP timeout, e.g. 10s
-	AnchorCron    string        `yaml:"anchorCron"`    // cron expression for automatic anchoring
 	CaCertPath    string        `yaml:"caCertPath"`    // path to TSA root CA PEM for offline verification
+}
+
+// WitnessConfig configures the external witness email sent after each new
+// RFC 3161 anchor. The recipient mailbox MUST be controlled by a role distinct
+// from the infrastructure administrators, and the application must only have
+// send rights on it (see docs/temoin-externe.md) — the code cannot enforce
+// this; it is a deployment requirement.
+type WitnessConfig struct {
+	Enabled    bool       `yaml:"enabled"`
+	Recipients []string   `yaml:"recipients"` // external mailboxes receiving the witness
+	SMTP       SMTPConfig `yaml:"smtp"`
+}
+
+// SMTPConfig holds send-only SMTP parameters. Secrets come from env vars via
+// the ${VAR} substitution done by LoadConfigYaml.
+type SMTPConfig struct {
+	Host     string        `yaml:"host"`
+	Port     int           `yaml:"port"`
+	Username string        `yaml:"username"`
+	Password string        `yaml:"password"`
+	From     string        `yaml:"from"`
+	StartTLS bool          `yaml:"startTLS"` // upgrade the connection with STARTTLS before auth
+	Timeout  time.Duration `yaml:"timeout"`  // network timeout, e.g. 10s
 }
 
 // DefaultTSAURL is used when TimestampConfig.URLs is empty.

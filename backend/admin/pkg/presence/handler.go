@@ -1,12 +1,14 @@
 package presence
 
 import (
+	"back-rex-common/pkg/ledger"
+	presencedata "back-rex-common/pkg/presencedata/gen"
+	"back-rex-common/pkg/presencetoken"
 	"back-rex-common/pkg/services"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,18 +18,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
-
-// ─── Code court ──────────────────────────────────────────────────────────────
-
-const codeAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-
-func generateCode() string {
-	b := make([]byte, 6)
-	for i := range b {
-		b[i] = codeAlphabet[rand.Intn(len(codeAlphabet))]
-	}
-	return string(b)
-}
 
 // ─── Response types ───────────────────────────────────────────────────────────
 
@@ -207,11 +197,12 @@ func OpenSeanceHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// Séance importée, pas encore activée → on lui assigne un code
-			activated, err := q.ActivateSeance(ctx, ActivateSeanceParams{
-				ID:               existing.ID,
-				Code:             toText(generateCode()),
-				LateAfterMinutes: req.LateAfterMinutes,
-			})
+			activated, err := presencedata.New(services.GetPgCtx(r.Context()).Db).
+				ActivateSeance(ctx, presencedata.ActivateSeanceParams{
+					ID:               existing.ID,
+					Code:             toText(presencetoken.GenerateCode()),
+					LateAfterMinutes: req.LateAfterMinutes,
+				})
 			if err != nil {
 				services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 				return
@@ -228,7 +219,7 @@ func OpenSeanceHandler(w http.ResponseWriter, r *http.Request) {
 
 	row, err := q.OpenSeance(ctx, OpenSeanceParams{
 		MatiereID:        req.MatiereID,
-		Code:             toText(generateCode()),
+		Code:             toText(presencetoken.GenerateCode()),
 		StartsAt:         startsAt,
 		EndsAt:           toTstz(req.EndsAt),
 		Salle:            toText(req.Salle),
@@ -296,7 +287,7 @@ func CloseSeanceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := New(services.GetPgCtx(r.Context()).Db)
+	q := presencedata.New(services.GetPgCtx(r.Context()).Db)
 	if err := q.CloseSeance(context.Background(), seanceID); err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
@@ -311,7 +302,7 @@ func GetTokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := New(services.GetPgCtx(r.Context()).Db)
+	q := presencedata.New(services.GetPgCtx(r.Context()).Db)
 	seance, err := q.GetSeance(context.Background(), seanceID)
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
@@ -323,9 +314,9 @@ func GetTokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	render.JSON(w, r, tokenResponse{
-		Token:      IssueToken(seanceID),
+		Token:      presencetoken.Issue(seanceID),
 		Code:       seance.Code.String,
-		TTLSeconds: int(tokenTTL.Seconds()),
+		TTLSeconds: int(presencetoken.TTL.Seconds()),
 	})
 }
 
@@ -336,7 +327,7 @@ func GetPresenceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := New(services.GetPgCtx(r.Context()).Db)
+	q := presencedata.New(services.GetPgCtx(r.Context()).Db)
 	ctx := context.Background()
 
 	seance, err := q.GetSeance(ctx, seanceID)
@@ -426,8 +417,8 @@ func ListSeancesHandler(w http.ResponseWriter, r *http.Request) {
 // ─── Registre d'intégrité ─────────────────────────────────────────────────────
 
 type verifyResponse struct {
-	Chain   VerifyChainResult    `json:"chain"`
-	Anchors []AnchorVerifyResult `json:"anchors"`
+	Chain   ledger.VerifyChainResult `json:"chain"`
+	Anchors []AnchorVerifyResult     `json:"anchors"`
 }
 
 // LedgerVerifyHandler vérifie l'intégrité de la chaîne et des ancres TSA.
@@ -437,7 +428,7 @@ func LedgerVerifyHandler(cfg timestampCfg) http.HandlerFunc {
 		db := services.GetPgCtx(r.Context()).Db
 		ctx := context.Background()
 
-		chainResult, err := VerifyChain(ctx, db)
+		chainResult, err := ledger.VerifyChain(ctx, db)
 		if err != nil {
 			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 			return
@@ -460,7 +451,9 @@ type anchorResponse struct {
 	Results []AnchorResult `json:"results"`
 }
 
-// LedgerAnchorHandler déclenche un ancrage TSA manuel sur le dernier maillon.
+// LedgerAnchorHandler déclenche un ancrage TSA manuel sur le dernier maillon,
+// puis l'envoi du témoin externe pour chaque nouvelle ancre. Un échec d'envoi
+// ne fait pas échouer l'ancrage (l'ancre en base reste valide).
 // POST /presence/ledger/anchor
 func LedgerAnchorHandler(cfg timestampCfg) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -473,7 +466,104 @@ func LedgerAnchorHandler(cfg timestampCfg) http.HandlerFunc {
 			return
 		}
 
+		SendWitnesses(ctx, db, cfg.witness, results)
+
 		render.JSON(w, r, anchorResponse{Results: results})
+	}
+}
+
+type verifyWitnessRequest struct {
+	Token   string `json:"token"`
+	TsaCert string `json:"tsa_cert"`
+}
+
+// WitnessVerifyHandler confronte un témoin RFC 3161 fourni par l'auditeur
+// (jeton reçu par e-mail depuis la boîte externe) à l'état actuel du registre.
+// Décodage tolérant du jeton (base64 avec sauts de ligne, PEM) ; le certificat
+// TSA est optionnel, à défaut le CA racine caCertPath sert de confiance.
+// Lecture seule : rien n'est écrit ni conservé.
+// POST /presence/ledger/verify-witness
+func WitnessVerifyHandler(cfg timestampCfg) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req verifyWitnessRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			services.InvalidRequestError(w, r, "corps invalide", services.NO_INFORMATION, nil)
+			return
+		}
+
+		tokenDER, err := decodeWitnessToken([]byte(req.Token))
+		if err != nil {
+			services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+		tsaCertPEM, err := decodeWitnessCert(req.TsaCert)
+		if err != nil {
+			services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+
+		db := services.GetPgCtx(r.Context()).Db
+		result, err := VerifyWitness(context.Background(), db, tokenDER, tsaCertPEM, cfg.caCertPath)
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+		render.JSON(w, r, result)
+	}
+}
+
+type anchorRefItem struct {
+	LedgerSeq int64  `json:"ledger_seq"`
+	CreatedAt string `json:"created_at"`
+	TsaUrl    string `json:"tsa_url"`
+}
+
+// LedgerAnchorsHandler liste les ancres présentes en base. Pour la page de
+// vérification d'un témoin, ce sont de simples repères temporels (intervalle
+// entre témoins pour la dichotomie) : ces dates viennent de la base et ne
+// constituent pas une preuve — la preuve reste les témoins externes.
+// GET /presence/ledger/anchors
+func LedgerAnchorsHandler(w http.ResponseWriter, r *http.Request) {
+	rows, err := New(services.GetPgCtx(r.Context()).Db).ListAnchors(context.Background())
+	if err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+	items := make([]anchorRefItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, anchorRefItem{
+			LedgerSeq: row.LedgerSeq,
+			CreatedAt: fmtTs(row.CreatedAt),
+			TsaUrl:    row.TsaUrl,
+		})
+	}
+	render.JSON(w, r, items)
+}
+
+// WitnessResendHandler retente l'envoi du témoin externe d'une ancre donnée
+// (utile si le SMTP était indisponible). Idempotent : les destinataires déjà
+// SENT sont ignorés.
+// POST /presence/witness/resend/{anchorID}
+func WitnessResendHandler(cfg timestampCfg) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		anchorID, err := strconv.ParseInt(chi.URLParam(r, "anchorID"), 10, 64)
+		if err != nil {
+			services.InvalidRequestError(w, r, "anchorID invalide", services.NO_INFORMATION, nil)
+			return
+		}
+		if !cfg.witness.Enabled {
+			services.InvalidRequestError(w, r, "témoin externe désactivé (presence.witness.enabled)", services.NO_INFORMATION, nil)
+			return
+		}
+
+		db := services.GetPgCtx(r.Context()).Db
+		report, err := SendWitnessForAnchor(context.Background(), db, cfg.witness, anchorID)
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+
+		render.JSON(w, r, report)
 	}
 }
 
@@ -486,7 +576,9 @@ func PresencePdfHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := New(services.GetPgCtx(r.Context()).Db)
+	db := services.GetPgCtx(r.Context()).Db
+	q := New(db)
+	qd := presencedata.New(db)
 	ctx := context.Background()
 
 	seance, err := q.GetSeanceDetail(ctx, seanceID)
@@ -499,12 +591,12 @@ func PresencePdfHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := q.ListPresence(ctx, seanceID)
+	rows, err := qd.ListPresence(ctx, seanceID)
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}
-	horsGroupe, err := q.ListPresenceHorsGroupe(ctx, seanceID)
+	horsGroupe, err := qd.ListPresenceHorsGroupe(ctx, seanceID)
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
@@ -523,8 +615,9 @@ func PresencePdfHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// timestampCfg regroupe la configuration TSA passée aux handlers.
+// timestampCfg regroupe la configuration TSA et témoin passée aux handlers.
 type timestampCfg struct {
 	tsCfg      services.TimestampConfig
 	caCertPath string
+	witness    services.WitnessConfig
 }

@@ -79,10 +79,46 @@ SET submitted_at = CURRENT_TIMESTAMP
 WHERE id = @session_id;
 
 
+-- name: GetMatieresAEvaluer :many
+-- Matières de l'étudiant pour l'année académique courante dont toutes les
+-- séances sont terminées (aucune séance non annulée dans le futur).
+-- L'identifiant renvoyé est l'id interne de matiere.
+SELECT
+    m.id::text AS matiere_id,
+    m.name::text AS nom,
+    COALESCE((array_agg(s.prof ORDER BY s.ends_at DESC))[1], '')::text AS prof,
+    COALESCE((array_agg(COALESCE(gs.name, pr.name) ORDER BY s.ends_at DESC))[1], '')::text AS formation
+FROM seance s
+JOIN matiere m ON m.id = s.matiere_id
+JOIN periode pe ON pe.id = m.periode_id
+JOIN promotion pr ON pr.id = pe.promotion_id
+LEFT JOIN groupe gs ON gs.id = s.groupe_id
+WHERE m.annee = (
+      -- Année académique courante d'après la table annee (matiere.annee = année de debut).
+      -- LIMIT 1 : si plusieurs périodes se chevauchent, on prend la plus récente.
+      SELECT EXTRACT(YEAR FROM a.debut)::int
+      FROM annee a
+      WHERE a.debut <= CURRENT_DATE AND a.fin >= CURRENT_DATE
+      ORDER BY a.debut DESC
+      LIMIT 1
+  )
+  AND s.cancelled_at IS NULL
+  AND EXISTS (
+      SELECT 1
+      FROM eleve_groupe eg
+      JOIN groupe g ON g.id = eg.id_groupe
+      WHERE eg.num_etudiant = @user_id
+        AND g.promo_id = pr.id
+        AND (s.groupe_id IS NULL OR g.id = s.groupe_id)
+  )
+GROUP BY m.id, m.name
+HAVING COUNT(*) FILTER (WHERE s.ends_at IS NULL OR s.ends_at > NOW()) = 0
+ORDER BY m.name;
+
+
 -- name: GetSubmittedMatiereIDs :many
-SELECT mm.external_id
+SELECT es.matiere_id::text
 FROM eval_session es
-JOIN migration.matiere_map mm ON mm.internal_id = es.matiere_id AND mm.source = 'webdfd'
 WHERE es.pseudo = @pseudo
   AND es.submitted_at IS NOT NULL;
 
@@ -118,10 +154,18 @@ WHERE es.pseudo = @pseudo
   AND es.submitted_at IS NOT NULL;
 
 
--- name: GetMatiereIDByWebdfdAndAnnee :one
+-- name: GetMatiereIDAnneeCourante :one
+-- Vérifie que la matière existe pour l'année académique courante,
+-- déterminée par la table annee (matiere.annee = année de debut).
 SELECT m.id FROM matiere m
-JOIN migration.matiere_map mm ON mm.internal_id = m.id
-WHERE mm.source = 'webdfd' AND mm.external_id = @webdfd_id AND m.annee = @annee;
+WHERE m.id = @matiere_id
+  AND m.annee = (
+      SELECT EXTRACT(YEAR FROM a.debut)::int
+      FROM annee a
+      WHERE a.debut <= CURRENT_DATE AND a.fin >= CURRENT_DATE
+      ORDER BY a.debut DESC
+      LIMIT 1
+  );
 
 -- name: DeleteEvalSession :exec
 DELETE FROM eval_session WHERE id = @session_id AND pseudo = @pseudo;
