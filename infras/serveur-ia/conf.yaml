@@ -1,3 +1,0 @@
-port: ":3344"
-keysFile: "keys.txt"
-ollamaURL: "http://localhost:11434"
