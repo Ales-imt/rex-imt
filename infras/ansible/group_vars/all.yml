@@ -11,4 +11,3 @@ ghcr_org: ales-imt
 # jwt_secret_admin: ""
 # jwt_secret_eleve: ""
 # rack_api_key: ""
-# ip_serveur_ia_prod: ""

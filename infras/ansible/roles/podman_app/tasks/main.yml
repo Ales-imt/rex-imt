@@ -7,14 +7,6 @@
     group: "{{ app_user }}"
     mode: "0750"
 
-- name: Créer le répertoire {{ app_dir }}/x509/mtls_certs
-  ansible.builtin.file:
-    path: "{{ app_dir }}/x509/mtls_certs"
-    state: directory
-    owner: "{{ app_user }}"
-    group: "{{ app_user }}"
-    mode: "0750"
-
 - name: Copier deploy-{{ app_name }}.sh
   ansible.builtin.copy:
     src: "deploy-{{ app_name }}.sh"
@@ -22,14 +14,6 @@
     owner: "{{ app_user }}"
     group: "{{ app_user }}"
     mode: "0755"
-
-- name: Copier le certificat CA mTLS
-  ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../x509/mtls_certs/ca.crt"
-    dest: "{{ app_dir }}/x509/mtls_certs/ca.crt"
-    owner: "{{ app_user }}"
-    group: "{{ app_user }}"
-    mode: "0644"
 
 - name: Créer le répertoire {{ app_dir }}/x509/freetsa
   ansible.builtin.file:

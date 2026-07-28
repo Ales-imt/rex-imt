@@ -1,3 +1,8 @@
+-- name: GetUserNameSurname :one
+SELECT name, surname
+FROM "user"
+WHERE id = $1;
+
 -- name: GetStudentPromoAndGroupes :one
 SELECT
     p.name                                     AS promotion,

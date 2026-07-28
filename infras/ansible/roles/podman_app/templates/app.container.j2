@@ -10,9 +10,6 @@ AddHost=host.containers.internal:host-gateway
 Environment=HOST={{ ansible_default_ipv4.address }}
 EnvironmentFile={{ app_dir }}/secrets.env
 Volume={{ app_dir }}/config-{{ app_name }}.yaml:{{ config_dest_in_container }}:ro,z
-{% if ca_cert_container_path %}
-Volume={{ app_dir }}/x509/mtls_certs/ca.crt:{{ ca_cert_container_path }}:ro,z
-{% endif %}
 {% if freetsa_cert_container_path is defined and freetsa_cert_container_path %}
 Volume={{ app_dir }}/x509/freetsa/cacert.pem:{{ freetsa_cert_container_path }}:ro,z
 {% endif %}

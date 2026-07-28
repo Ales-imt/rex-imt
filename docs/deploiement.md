@@ -361,7 +361,6 @@ Les secrets de production sont dans `.vscode/secrets-prod.env`. Le script `gener
 - Secrets JWT admin et élève
 - Token GHCR (`GITHUB_DOCKER_TOKEN`)
 - Clé API du serveur IA (`RACK_API_KEY`)
-- IP du serveur IA prod (`IP_SERVEUR_IA_PROD`)
 - Clé publique `age` (`AGE_PUBLIC_KEY`)
 
 ---

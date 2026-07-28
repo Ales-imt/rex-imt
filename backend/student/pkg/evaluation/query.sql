@@ -169,3 +169,9 @@ WHERE m.id = @matiere_id
 
 -- name: DeleteEvalSession :exec
 DELETE FROM eval_session WHERE id = @session_id AND pseudo = @pseudo;
+
+
+-- name: GetUserNameSurname :one
+SELECT name, surname
+FROM "user"
+WHERE id = @user_id;

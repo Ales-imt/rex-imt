@@ -29,8 +29,6 @@ jwt_secret_eleve: "$(get JWT_SECRET_ELEVE)"
 
 rack_api_key: "$(get RACK_API_KEY)"
 
-ip_serveur_ia_prod: "$(get IP_SERVEUR_IA)"
-
 age_public_key: "$(get AGE_PUBLIC_KEY)"
 
 presence_token_secret: "$(get PRESENCE_TOKEN_SECRET)"

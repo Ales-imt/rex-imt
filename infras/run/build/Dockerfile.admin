@@ -57,8 +57,7 @@ COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 COPY infras/run/build/nginx-admin.conf /etc/nginx/nginx.conf
 COPY infras/run/build/logrotate-nginx /etc/logrotate.d/nginx
 
-RUN mkdir -p /opt/rex-admin/conf /opt/rex-admin/certs /opt/rex-admin/conf/x509/freetsa
-COPY infras/x509/mtls_certs/ca.crt /opt/rex-admin/certs/ca.crt
+RUN mkdir -p /opt/rex-admin/conf /opt/rex-admin/conf/x509/freetsa
 
 RUN chown -R rex:rex /usr/share/nginx/html /var/log/nginx /var/lib/nginx /opt/rex-admin && \
     mkdir -p /tmp/client_body /tmp/proxy /tmp/fastcgi /tmp/uwsgi /tmp/scgi && \

@@ -16,9 +16,6 @@ age -d cle_privee_chiffree.age | age -d -i - donnees_a_dechiffrer.age
 age --decrypt -i cle_privee.txt t.txt
 
 
-Pour serveur-ia, generation de clef:
-tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48 ; echo ''
-
 Pour utiliser cybema en local, necessite proxy socks5h. 
     ssh -N -D 0.0.0.0:1080   -L 5433:sql2.mines-ales.fr:5433   -L 3306:sql2.mines-ales.fr:3306   -L 0.0.0.0:2525:mail.mines-ales.fr:25  userdfx@vecu-etudiant-eleves-2.mines-ales.fr
 
