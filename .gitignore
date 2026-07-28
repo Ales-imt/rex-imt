@@ -23,7 +23,6 @@ backend/schema.sql
 
 # ── Binaires compilés ─────────────────────────────────────────────────────────
 infras/migration/migration
-infras/serveur-ia/serveur-ia
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
 apps/web-admin/node_modules

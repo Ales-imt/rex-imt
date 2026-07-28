@@ -69,7 +69,12 @@ func InsertFeedbacks(r *http.Request, inputs []FeedbackRequest, agePublicKey str
 	userID := auth.GetSecurityUserId(r.Context())
 	studentID := *userID
 
-	strongbox, err := service.EncryptStrongbox(agePublicKey, r, studentID)
+	nameSurname, err := queries.GetUserNameSurname(context.Background(), int32(studentID))
+	if err != nil {
+		return fmt.Errorf("échec récupération nom/prénom : %w", err)
+	}
+
+	strongbox, err := service.EncryptStrongbox(agePublicKey, r, studentID, nameSurname.Name, nameSurname.Surname)
 	if err != nil {
 		return fmt.Errorf("échec chiffrement strongbox : %w", err)
 	}

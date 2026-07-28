@@ -7,10 +7,9 @@ ADMIN_CONFIG=./infras/run/config-admin.yaml
 
 echo "--- 📋 Copie de la configuration admin ---"
 cp ./backend/admin/cmd/config.yaml "$ADMIN_CONFIG"
-# Mêmes réécritures de chemins que le template ansible config-admin.yaml.j2 :
-# seuls les caCertPath changent entre la source backend et le container.
+# Même réécriture de chemin que le template ansible config-admin.yaml.j2 :
+# seul le caCertPath freetsa change entre la source backend et le container.
 sed -i \
-    -e 's|caCertPath: \./x509/mtls_certs/ca\.crt|caCertPath: /opt/rex-admin/certs/ca.crt|' \
     -e 's|caCertPath: \./x509/freetsa/cacert\.pem|caCertPath: /opt/rex-admin/conf/x509/freetsa/cacert.pem|' \
     "$ADMIN_CONFIG"
 

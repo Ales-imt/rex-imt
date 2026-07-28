@@ -61,9 +61,6 @@ func main() {
 	}
 
 	configDir := filepath.Dir(configPath)
-	if !filepath.IsAbs(cfg.Rack.CaCertPath) {
-		cfg.Rack.CaCertPath = filepath.Join(configDir, cfg.Rack.CaCertPath)
-	}
 	if p := cfg.Presence.Timestamp.CaCertPath; p != "" && !filepath.IsAbs(p) {
 		cfg.Presence.Timestamp.CaCertPath = filepath.Join(configDir, p)
 	}
@@ -82,18 +79,9 @@ func main() {
 			Model:   cfg.Ollama.Model,
 		}
 	case "rack":
-		iaConnector = &rack.Connector{
-			BaseURL:    cfg.Rack.BaseURL,
-			APIKey:     cfg.Rack.APIKey,
-			Model:      cfg.Rack.Model,
-			CaCertPath: cfg.Rack.CaCertPath,
-		}
+		iaConnector = rack.New(cfg.Rack.BaseURL, cfg.Rack.APIKey, cfg.Rack.Model)
 	case "ragarenn":
-		iaConnector = &ragarenn.Connector{
-			BaseURL: cfg.RAGaRenn.BaseURL,
-			APIKey:  cfg.RAGaRenn.APIKey,
-			Model:   cfg.RAGaRenn.Model,
-		}
+		iaConnector = ragarenn.New(cfg.RAGaRenn.BaseURL, cfg.RAGaRenn.APIKey, cfg.RAGaRenn.Model)
 	default:
 		log.Fatal("Ia inconnu")
 

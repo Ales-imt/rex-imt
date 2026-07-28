@@ -90,10 +90,9 @@ type RAGaRennConfig struct {
 }
 
 type RackConfig struct {
-	BaseURL    string `yaml:"baseURL"`
-	Model      string `yaml:"model"`
-	APIKey     string `yaml:"apiKey"`
-	CaCertPath string `yaml:"caCertPath"`
+	BaseURL string `yaml:"baseURL"`
+	Model   string `yaml:"model"`
+	APIKey  string `yaml:"apiKey"`
 }
 
 type DatabaseConfig struct {

@@ -7,7 +7,6 @@ container_image: ghcr.io/ales-imt/rex-admin:latest
 container_port: 8121
 app_dir: /home/userdfx/rex-admin
 config_dest_in_container: /opt/rex-admin/conf/config.yaml
-ca_cert_container_path: /opt/rex-admin/certs/ca.crt
 freetsa_cert_container_path: /opt/rex-admin/conf/x509/freetsa/cacert.pem
 
 postgres_host: "{{ postgres_host }}"
@@ -19,4 +18,3 @@ mariadb_database: "{{ mariadb_database }}"
 ldap_host: "{{ ldap_host }}"
 
 jwt_secret: "{{ jwt_secret_admin }}"
-ip_serveur_ia: "{{ ip_serveur_ia_prod }}"

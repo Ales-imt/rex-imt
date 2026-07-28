@@ -5,5 +5,4 @@
   chemins de certificats aux montages du container (voir group_vars/admin.yml).
 #}
 {{ lookup('ansible.builtin.file', playbook_dir ~ '/../../backend/admin/cmd/config.yaml')
-   | regex_replace('caCertPath:\s*\./x509/mtls_certs/ca\.crt', 'caCertPath: ' ~ ca_cert_container_path)
    | regex_replace('caCertPath:\s*\./x509/freetsa/cacert\.pem', 'caCertPath: ' ~ freetsa_cert_container_path) }}
