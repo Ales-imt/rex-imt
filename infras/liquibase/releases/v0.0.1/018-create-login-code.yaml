@@ -1,0 +1,72 @@
+databaseChangeLog:
+
+  # ---- public.login_code --------------------------------------------------
+  # Codes de connexion à usage unique envoyés par e-mail aux comptes externes
+  # (auth_source='email', voir 017-alter-user-auth-source.yaml). Seul le hash
+  # du code est stocké ; un nouveau code invalide les précédents (consumed_at)
+  # et les tentatives sont bornées (attempts) en plus du rate-limiting HTTP.
+  - changeSet:
+      id: v0.0.1-018a-create-table-login-code
+      author: vjo
+      changes:
+        - createTable:
+            tableName: login_code
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: code_hash
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expires_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: consumed_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: attempts
+                  type: integer
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: login_code
+            schemaName: public
+            indexName: idx_login_code_user
+            columns:
+              - column:
+                  name: user_id
+        - addForeignKeyConstraint:
+            baseTableName: login_code
+            baseTableSchemaName: public
+            baseColumnNames: user_id
+            referencedTableSchemaName: public
+            referencedTableName: user
+            referencedColumnNames: id
+            constraintName: fk_login_code_user
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: login_code
+            schemaName: public

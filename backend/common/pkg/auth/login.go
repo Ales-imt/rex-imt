@@ -7,9 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"context"
-	"time"
-
 	"github.com/go-chi/render"
 )
 
@@ -66,48 +63,19 @@ func Login(w http.ResponseWriter, r *http.Request,
 		}
 		return
 	}
-	// 🆕 Génération des tokens JWT
-
-	tokenPaire, err := genereTokenPaire(jwtCfg, nil, claim, *subject)
-	if err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
-
-	pgCtx := services.GetPgCtx(r.Context())
-
-	//sauvegarde le token dans la base de données
-	queriesToken := New(pgCtx.Db)
-	now := time.Now()
 
 	userId, err := strconv.Atoi(*subject)
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}
-	err = queriesToken.CreateRefreshToken(context.Background(), CreateRefreshTokenParams{
-		Userid:       int32(userId),
-		Token:        hashToken(tokenPaire.RefreshTokenInfo.Token),
-		Expire:       services.ToPgTimestamptz(&tokenPaire.RefreshTokenInfo.Expiration),
-		Session:      tokenPaire.RefreshTokenInfo.Session,
-		TokenVersion: services.ToPgInt4(tokenPaire.RefreshTokenInfo.Version),
-		Created:      services.ToPgTimestamptz(&now),
-		Revoked:      false,
-	})
 
-	if err != nil {
+	rolesStr, _ := (*claim)["roles"].(string)
+	roles := strings.Split(rolesStr, ",")
+
+	// 🆕 Génération des tokens JWT + réponse
+	if err := issueSession(w, r, jwtCfg, userId, roles); err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}
-
-	rolesStr := (*claim)["roles"].(string)
-
-	// ✅ Réponse avec le token
-	render.JSON(w, r, &LoginResponse{
-		Name:         data.Identifiant,
-		Surname:      ldapIdentity.Surname,
-		AccessToken:  tokenPaire.AccessToken.Token,
-		RefreshToken: tokenPaire.RefreshTokenInfo.Token,
-		Roles:        strings.Split(rolesStr, ","),
-	})
 }

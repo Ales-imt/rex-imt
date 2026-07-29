@@ -28,6 +28,15 @@ interface RefreshResponse {
 
 type SessionObserver = (session: Session | null) => void
 
+// Le back renvoie en cas d'erreur { code, message, details }. Pour une erreur
+// de validation, `message` est générique ("Erreur validation") et le texte utile
+// est dans `details.message` (details peut être un objet ou un tableau de
+// { path, message }). On privilégie donc ce message détaillé.
+function errorMessage(data: any): string | undefined {
+    const detail = Array.isArray(data?.details) ? data.details[0] : data?.details
+    return detail?.message ?? data?.message
+}
+
 export class CredentialsProvider {
     private currentSession: Session | null = null
     private observers: Set<SessionObserver> = new Set()
@@ -131,7 +140,7 @@ export class CredentialsProvider {
             }
         } catch (err) {
             const error = axios.isAxiosError(err)
-                ? (err.response?.data?.message ?? err.message)
+                ? (errorMessage(err.response?.data) ?? err.message)
                 : "Erreur inconnue"
 
             return {

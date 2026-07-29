@@ -15,15 +15,23 @@ import (
 )
 
 type UserRequest struct {
-	ID      int32    `json:"id"`
-	Version int      `json:"version"`
-	Name    string   `json:"name"`
-	Surname string   `json:"surname"`
-	Email   string   `json:"email"`
-	Roles   []string `json:"roles"`
-	Blame   bool     `json:"blame"`
+	ID         int32    `json:"id"`
+	Version    int      `json:"version"`
+	Name       string   `json:"name"`
+	Surname    string   `json:"surname"`
+	Email      string   `json:"email"`
+	Roles      []string `json:"roles"`
+	Blame      bool     `json:"blame"`
+	AuthSource string   `json:"auth_source"`
 }
 
+// CreateUser provisionne un utilisateur. La source d'authentification est
+// déduite du domaine de l'e-mail (voir auth.AuthSourceForEmail) :
+//   - "ldap" : domaine interne (@mines-ales.fr / @etu.mines-ales.fr), compte
+//     interne dont l'identité (nom/prénom) est vérifiée contre l'annuaire LDAP.
+//   - "email" : tout autre domaine, intervenant externe sans mot de passe ni
+//     entrée LDAP, authentifié plus tard par code à usage unique (voir
+//     back-rex-common/pkg/auth/email_otp.go). Rôle PROF obligatoire.
 func CreateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig) {
 	var input UserRequest
 	if err := render.DecodeJSON(r.Body, &input); err != nil {
@@ -31,16 +39,32 @@ func CreateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 		return
 	}
 
-	sr, err := getLdapUser(input.Email, cfg)
-	if err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
+	authSource := auth.AuthSourceForEmail(input.Email)
 
-	issues := validateUser(input, sr)
-	if len(issues) != 0 {
-		services.InvalidRequestError(w, r, "Invalid user", services.VALIDATION_ERROR, issues)
-		return
+	var ldapIdentity *auth.LdapIdentity
+	if authSource == auth.AuthSourceLDAP {
+		sr, err := getLdapUser(input.Email, cfg)
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+		issues := validateUser(input, sr)
+		if len(issues) != 0 {
+			services.InvalidRequestError(w, r, "Invalid user", services.VALIDATION_ERROR, issues)
+			return
+		}
+		ldapIdentity = auth.GetLdapIdentity(sr.Entries[0])
+	} else {
+		issues := validateExternalUser(input)
+		if len(issues) != 0 {
+			services.InvalidRequestError(w, r, "Invalid user", services.VALIDATION_ERROR, issues)
+			return
+		}
+		ldapIdentity = &auth.LdapIdentity{
+			Name:    input.Name,
+			Surname: input.Surname,
+			Mail:    strings.ToLower(input.Email),
+		}
 	}
 
 	ctx := r.Context()
@@ -66,9 +90,8 @@ func CreateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 	}
 
 	etudiant := slices.Contains(input.Roles, auth.RoleEleve)
-	ldapIdentity := auth.GetLdapIdentity(sr.Entries[0])
 
-	id, err := usercommon.CreateUser(tx, ldapIdentity, ctx, input.Roles, etudiant)
+	id, err := usercommon.CreateUser(tx, ldapIdentity, ctx, input.Roles, etudiant, authSource)
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
@@ -76,8 +99,51 @@ func CreateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 
 	tx.Commit(r.Context())
 	input.ID = int32(id)
+	input.AuthSource = authSource
 
 	render.JSON(w, r, input)
+}
+
+// validateExternalUser valide un intervenant externe (auth_source="email") :
+// pas de vérification LDAP, mais rôle PROF obligatoire (ce sont les seuls
+// comptes "email" prévus, voir docs chantier auth).
+func validateExternalUser(user UserRequest) []services.FormValidation {
+	issues := []services.FormValidation{}
+
+	if len(user.Roles) == 0 {
+		issues = append(issues, services.FormValidation{
+			Path:    "roles",
+			Message: "Un role doit etre précisé",
+		})
+	} else {
+		for _, role := range user.Roles {
+			role = strings.TrimSpace(role)
+			if _, ok := allowedRoles[role]; !ok {
+				issues = append(issues, services.FormValidation{
+					Path:    "roles",
+					Message: fmt.Sprintf("role %s non autorisé", role),
+				})
+			}
+		}
+		if !slices.Contains(user.Roles, auth.RoleProf) {
+			issues = append(issues, services.FormValidation{
+				Path:    "roles",
+				Message: "un intervenant externe doit avoir le rôle PROF",
+			})
+		}
+	}
+
+	if user.Name == "" {
+		issues = append(issues, services.FormValidation{Path: "name", Message: "Nom obligatoire"})
+	}
+	if user.Surname == "" {
+		issues = append(issues, services.FormValidation{Path: "surname", Message: "Prénom obligatoire"})
+	}
+	if user.Email == "" || !services.IsValidEmail(user.Email) {
+		issues = append(issues, services.FormValidation{Path: "email", Message: "Email invalide"})
+	}
+
+	return issues
 }
 
 var allowedRoles = map[string]struct{}{

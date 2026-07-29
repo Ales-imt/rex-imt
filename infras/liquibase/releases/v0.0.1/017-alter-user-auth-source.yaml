@@ -1,0 +1,26 @@
+databaseChangeLog:
+
+  # ---- public.user : origine de l'authentification -----------------------
+  # 'ldap' (défaut) : comptes internes, authentifiés via l'annuaire LDAP.
+  # 'email' : intervenants externes, sans mot de passe ni entrée LDAP,
+  # authentifiés par un code à usage unique envoyé par e-mail (voir
+  # login_code, 018-create-login-code.yaml).
+  - changeSet:
+      id: v0.0.1-017-alter-user-auth-source
+      author: vjo
+      changes:
+        - addColumn:
+            tableName: user
+            schemaName: public
+            columns:
+              - column:
+                  name: auth_source
+                  type: text
+                  defaultValue: ldap
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropColumn:
+            tableName: user
+            schemaName: public
+            columnName: auth_source

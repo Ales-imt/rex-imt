@@ -9,9 +9,9 @@ type Route = 'agora' | 'chat' | 'programme' | 'presence' | 'pointage' | 'notes' 
 // `roles` : entrée visible uniquement si l'utilisateur a l'un de ces rôles.
 // Simple masquage d'UI — le contrôle d'accès réel est fait côté backend.
 const NAV_ITEMS: { route: Route; icon: string; label: string; roles?: string[] }[] = [
-  { route: 'agora',      icon: '📋', label: 'Agora' },
-  { route: 'chat',       icon: '💬', label: 'Chat' },
-  { route: 'programme',  icon: '📅', label: 'Programme', roles: ['PROF','ELEVE'] },
+  { route: 'agora',      icon: '📋', label: 'Agora', roles: ['ELEVE'] },
+  { route: 'chat',       icon: '💬', label: 'Chat' , roles: ['ELEVE']},
+  { route: 'programme',  icon: '📅', label: 'Programme', roles: ['PROF','ELEVE','GESTIONNAIRE'] },
   { route: 'presence',   icon: '✅', label: 'Présence' , roles: ['ELEVE']},
   { route: 'pointage',   icon: '🧑‍🏫', label: 'Pointage', roles: ['PROF', 'GESTIONNAIRE'] },
   { route: 'notes',      icon: '📝', label: 'Notes' ,roles: ['ELEVE']},

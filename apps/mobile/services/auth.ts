@@ -26,6 +26,34 @@ export async function login(identifiant: string, password: string): Promise<Logi
 
 }
 
+export async function requestEmailCode(email: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/auth/email/request`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.message ?? `Erreur ${res.status}`);
+  }
+}
+
+export async function verifyEmailCode(email: string, code: string): Promise<LoginResponse> {
+  const res = await fetch(`${API_BASE}/auth/email/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, code }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.message ?? `Erreur ${res.status}`);
+  }
+
+  return res.json();
+}
+
 export async function logout(): Promise<void> {
   // Import dynamique pour éviter la dépendance circulaire auth ↔ api
   const { apiInstance } = await import('./api');

@@ -18,7 +18,7 @@ export default function AproposFirstLoginScreen() {
       await apiInstance.patch('/me/informed');
     } finally {
       setLoading(false);
-      router.replace('/agora');
+      router.replace('/programme');
     }
   }
 

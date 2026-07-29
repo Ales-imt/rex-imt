@@ -28,6 +28,10 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	// Embarque la base IANA des fuseaux dans le binaire : l'image runtime
+	// (alpine sans paquet tzdata) ne fournit pas les zones, donc sans ceci
+	// LoadLocation("Europe/Paris") retombe sur UTC et le planning est décalé.
+	_ "time/tzdata"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"

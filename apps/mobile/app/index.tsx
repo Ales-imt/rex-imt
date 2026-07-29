@@ -1,10 +1,10 @@
 import { Colors } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { API_BASE, login } from '@/services/auth';
+import { login, requestEmailCode, verifyEmailCode, type LoginResponse } from '@/services/auth';
 import { apiInstance } from '@/services/api';
 import { getPseudo, saveRoles, saveTokens } from '@/services/tokens';
 import { useRouter } from 'expo-router';
-import {  useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -19,6 +19,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const PRIMARY = '#1976d2';
 
+// Domaine interne (LDAP) : mines-ales.fr et ses sous-domaines (etu.mines-ales.fr, ...).
+// Purement indicatif côté front — le backend ne fait jamais confiance à ce
+// routage : /auth/login reste strictement LDAP, /auth/email/* ne sert que les
+// comptes auth_source='email'.
+function getEmailDomain(email: string): string {
+  const at = email.lastIndexOf('@');
+  if (at === -1) return '';
+  return email.slice(at + 1).toLowerCase();
+}
+
+function isInternalDomain(email: string): boolean {
+  const domain = getEmailDomain(email);
+  return domain === 'mines-ales.fr' || domain.endsWith('.mines-ales.fr');
+}
+
+type Step = 'identify' | 'password' | 'external' | 'code';
+
 function LabeledInput({
   label,
   value,
@@ -32,7 +49,7 @@ function LabeledInput({
   value: string;
   onChangeText: (v: string) => void;
   secureTextEntry?: boolean;
-  keyboardType?: 'email-address' | 'default';
+  keyboardType?: 'email-address' | 'default' | 'number-pad';
   autoCapitalize?: 'none' | 'sentences';
   colors: typeof Colors.light;
 }) {
@@ -63,8 +80,10 @@ function LabeledInput({
 export default function SignInScreen() {
   const router = useRouter();
   const colors = useTheme();
+  const [step, setStep] = useState<Step>('identify');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -74,34 +93,84 @@ export default function SignInScreen() {
     dividerLine: { backgroundColor: colors.dividerLine },
   }), [colors]);
 
+  async function afterLoginSuccess(resp: LoginResponse) {
+    await saveTokens(resp.access_token, resp.refresh_token);
+    await saveRoles(resp.roles ?? []);
+    const pseudo = await getPseudo();
+    if (!pseudo) {
+      router.replace('/pseudo-setup');
+      return;
+    }
+    const me = await apiInstance.get('/me');
+    if (!me.data.informed_at) {
+      router.replace('/apropos-first-login');
+    } else {
+      router.replace('/programme');
+    }
+  }
+
+  function handleContinue() {
+    if (!email) {
+      setError('Veuillez renseigner votre adresse e-mail.');
+      return;
+    }
+    setError('');
+    setStep(isInternalDomain(email) ? 'password' : 'external');
+  }
 
   async function handleSignIn() {
-    if (!email || !password) {
-      setError('Veuillez renseigner tous les champs.');
+    if (!password) {
+      setError('Veuillez renseigner votre mot de passe.');
       return;
     }
     setError('');
     setLoading(true);
     try {
       const resp = await login(email, password);
-      await saveTokens(resp.access_token, resp.refresh_token);
-      await saveRoles(resp.roles ?? []);
-      const pseudo = await getPseudo();
-      if (!pseudo) {
-        router.replace('/pseudo-setup');
-        return;
-      }
-      const me = await apiInstance.get('/me');
-      if (!me.data.informed_at) {
-        router.replace('/apropos-first-login');
-      } else {
-        router.replace('/agora');
-      }
+      await afterLoginSuccess(resp);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erreur de connexion');
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleRequestCode() {
+    setError('');
+    setLoading(true);
+    try {
+      await requestEmailCode(email);
+      setCode('');
+      setStep('code');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erreur lors de l’envoi du code');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleVerifyCode() {
+    if (!code) {
+      setError('Veuillez renseigner le code reçu par e-mail.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const resp = await verifyEmailCode(email, code);
+      await afterLoginSuccess(resp);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Code invalide');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleChangeEmail() {
+    setError('');
+    setPassword('');
+    setCode('');
+    setStep('identify');
   }
 
   return (
@@ -127,26 +196,76 @@ export default function SignInScreen() {
               </View>
             ) : null}
 
-            <View style={styles.form}>
-              <LabeledInput
-                label="Adresse e-mail"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                colors={colors}
-              />
-              <LabeledInput
-                label="Mot de passe"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                colors={colors}
-              />
+            {step === 'identify' && (
+              <View style={styles.form}>
+                <LabeledInput
+                  label="Adresse e-mail"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  colors={colors}
+                />
+                <TouchableOpacity style={[styles.signInBtn, loading && { opacity: 0.6 }]} onPress={handleContinue} activeOpacity={0.85} disabled={loading}>
+                  <Text style={styles.signInBtnText}>Continuer</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-              <TouchableOpacity style={[styles.signInBtn, loading && { opacity: 0.6 }]} onPress={handleSignIn} activeOpacity={0.85} disabled={loading}>
-                <Text style={styles.signInBtnText}>{loading ? 'Connexion…' : 'Se connecter'}</Text>
-              </TouchableOpacity>
-            </View>
+            {step === 'password' && (
+              <View style={styles.form}>
+                <Text style={[styles.subtitle, { color: colors.textSecondary, marginBottom: 0 }]}>{email}</Text>
+                <LabeledInput
+                  label="Mot de passe"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  colors={colors}
+                />
+                <TouchableOpacity style={[styles.signInBtn, loading && { opacity: 0.6 }]} onPress={handleSignIn} activeOpacity={0.85} disabled={loading}>
+                  <Text style={styles.signInBtnText}>{loading ? 'Connexion…' : 'Se connecter'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleChangeEmail} disabled={loading}>
+                  <Text style={[styles.linkText, { color: colors.textSecondary }]}>Changer d’adresse e-mail</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {step === 'external' && (
+              <View style={styles.form}>
+                <Text style={[styles.subtitle, { color: colors.textSecondary, marginBottom: 0 }]}>{email}</Text>
+                <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+                  Adresse externe détectée : un code de connexion à usage unique vous sera envoyé par e-mail.
+                </Text>
+                <TouchableOpacity style={[styles.signInBtn, loading && { opacity: 0.6 }]} onPress={handleRequestCode} activeOpacity={0.85} disabled={loading}>
+                  <Text style={styles.signInBtnText}>{loading ? 'Envoi…' : 'Recevoir un code'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleChangeEmail} disabled={loading}>
+                  <Text style={[styles.linkText, { color: colors.textSecondary }]}>Changer d’adresse e-mail</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {step === 'code' && (
+              <View style={styles.form}>
+                <Text style={[styles.subtitle, { color: colors.textSecondary, marginBottom: 0 }]}>{email}</Text>
+                <LabeledInput
+                  label="Code reçu par e-mail"
+                  value={code}
+                  onChangeText={setCode}
+                  keyboardType="number-pad"
+                  colors={colors}
+                />
+                <TouchableOpacity style={[styles.signInBtn, loading && { opacity: 0.6 }]} onPress={handleVerifyCode} activeOpacity={0.85} disabled={loading}>
+                  <Text style={styles.signInBtnText}>{loading ? 'Vérification…' : 'Valider'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleRequestCode} disabled={loading}>
+                  <Text style={[styles.linkText, { color: colors.textSecondary }]}>Renvoyer un code</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleChangeEmail} disabled={loading}>
+                  <Text style={[styles.linkText, { color: colors.textSecondary }]}>Changer d’adresse e-mail</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -206,6 +325,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
   },
+  helperText: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
   alert: {
     backgroundColor: '#fdecea',
     borderRadius: 4,
@@ -249,5 +372,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0.5,
+  },
+  linkText: {
+    fontSize: 12,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
   },
 });
