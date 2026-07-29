@@ -20,6 +20,7 @@ type Config struct {
 	Rack          RackConfig     `yaml:"rack"`
 	Presence      PresenceConfig `yaml:"presence"`
 	Webdfd        WebdfdConfig   `yaml:"webdfd"`
+	SMTP          SMTPConfig     `yaml:"smtp"`
 }
 
 type WebdfdConfig struct {

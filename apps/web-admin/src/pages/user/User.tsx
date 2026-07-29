@@ -21,6 +21,7 @@ const userSchema = z.object({
         z.string().transform((val) => val.split(',').map(r => r.trim()).filter(r => r !== '')),
         z.array(z.string())
     ]).optional(),
+    blame: z.boolean().optional(),
 });
 
 export type User = z.infer<typeof userSchema>;
@@ -57,18 +58,7 @@ const UserFields = ({ register, control, errors, isReadOnly }: RenderProps<User>
             helperText={errors.email?.message}
             sx={{ mb: 2 }}
         />
-        {!isReadOnly && (
-            <TextField
-                {...register("password")}
-                label="Mot de passe"
-                type="password"
-                variant="outlined"
-                fullWidth
-                error={!!errors.password}
-                helperText={errors.password?.message}
-                sx={{ mb: 2 }}
-            />
-        )}
+        
         <Controller
             name="roles"
             control={control}
@@ -101,6 +91,24 @@ const UserFields = ({ register, control, errors, isReadOnly }: RenderProps<User>
                     </FormControl>
                 );
             }}
+        />
+
+        <Controller
+            name="blame"
+            control={control}
+            render={({ field }) => (
+                <FormControlLabel
+                    control={
+                        <Checkbox
+                            checked={!!field.value}
+                            onChange={(e) => field.onChange(e.target.checked)}
+                            disabled={isReadOnly}
+                        />
+                    }
+                    label="Blamé"
+                    sx={{ mb: 2 }}
+                />
+            )}
         />
     </>
 );
@@ -136,13 +144,17 @@ export const userColumns: MRT_ColumnDef<User>[] = [
             );
         }
     },
-    { accessorKey: 'blame', header: 'Blamé' },
+    {
+        accessorKey: 'blame',
+        header: 'Blamé',
+        Cell: ({ cell }) => (cell.getValue<boolean>() ? 'Oui' : 'Non'),
+    },
 
 ]
 
 export const userViewConfig: ViewConfig<User> = {
     schema: userSchema,
-    emptyValue: { id: -1, version: 0, keycloak_id: "-", roles: [] },
+    emptyValue: { id: -1, version: 0, keycloak_id: "-", roles: [], blame: false },
     columns: userColumns,
     render: UserFields,
 };

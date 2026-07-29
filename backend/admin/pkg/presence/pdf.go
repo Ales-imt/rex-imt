@@ -62,12 +62,24 @@ var frDays = [7]string{"Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendr
 var frMonths = [13]string{"", "janvier", "février", "mars", "avril", "mai", "juin",
 	"juillet", "août", "septembre", "octobre", "novembre", "décembre"}
 
+// parisLoc : les séances et pointages sont des instants ; on les affiche en
+// heure de Paris (fuseau des plannings). tzdata est embarqué dans le binaire
+// (cf. cmd/main.go), donc LoadLocation aboutit ; UTC en ultime filet.
+var parisLoc = func() *time.Location {
+	l, err := time.LoadLocation("Europe/Paris")
+	if err != nil {
+		return time.UTC
+	}
+	return l
+}()
+
 func formatDateFR(t time.Time) string {
+	t = t.In(parisLoc)
 	return fmt.Sprintf("%s %d %s %d", frDays[t.Weekday()], t.Day(), frMonths[t.Month()], t.Year())
 }
 
 func formatHeure(t time.Time) string {
-	return t.UTC().Format("15:04")
+	return t.In(parisLoc).Format("15:04")
 }
 
 func capitalize(s string) string {
@@ -347,19 +359,18 @@ func buildPdfData(seance GetSeanceDetailRow, rows []presencedata.ListPresenceRow
 	// Date + horaire
 	var dateStr, horaireStr string
 	if seance.StartsAt.Valid {
-		t := seance.StartsAt.Time.UTC()
-		dateStr = formatDateFR(t)
-		horaireStr = formatHeure(t)
+		dateStr = formatDateFR(seance.StartsAt.Time)
+		horaireStr = formatHeure(seance.StartsAt.Time)
 		if seance.EndsAt.Valid {
 			horaireStr += " – " + formatHeure(seance.EndsAt.Time)
 		}
 	}
 	var openedStr, closedStr string
 	if seance.OpenedAt.Valid {
-		openedStr = seance.OpenedAt.Time.UTC().Format("15:04")
+		openedStr = formatHeure(seance.OpenedAt.Time)
 	}
 	if seance.ClosedAt.Valid {
-		closedStr = seance.ClosedAt.Time.UTC().Format("15:04")
+		closedStr = formatHeure(seance.ClosedAt.Time)
 	}
 
 	return pdfData{

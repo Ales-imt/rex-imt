@@ -2,9 +2,9 @@ package authentification
 
 import (
 	"back-rex-common/pkg/auth"
-	"back-rex-common/pkg/user"
 
 	"back-rex-common/pkg/services"
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,45 +14,28 @@ import (
 )
 
 func PostLdap(r *http.Request, ldapIdentity *auth.LdapIdentity) (*jwt.MapClaims, *string, error) {
+	pgCtx := services.GetPgCtx(r.Context())
+	queriesAuth := auth.New(pgCtx.Db)
+	return postLdap(r.Context(), queriesAuth, ldapIdentity)
+}
 
-	// ✅ Vérifie si l'étudiant existe déjà dans la base
-
-	ctx := r.Context()
-	pgCtx := services.GetPgCtx(ctx)
-
-	tx, err := pgCtx.Db.Begin(ctx)
+// postLdap contient la logique de résolution (utilisateur connu/inconnu,
+// rôles), indépendamment du contexte HTTP : testable avec un DBTX en mémoire
+// (voir post_ldap_test.go).
+func postLdap(ctx context.Context, queriesAuth *auth.Queries, ldapIdentity *auth.LdapIdentity) (*jwt.MapClaims, *string, error) {
+	userByMail, err := queriesAuth.GetUserByMail(ctx, ldapIdentity.Mail)
+	if err == pgx.ErrNoRows {
+		return nil, nil, services.NewAppValidationError("Utilisateur inconnu", "identifiant")
+	}
 	if err != nil {
 		return nil, nil, err
 	}
-	defer tx.Rollback(ctx)
 
-	queriesAuth := auth.New(pgCtx.Db)
-	userByMail, err := queriesAuth.GetUserByMail(ctx, ldapIdentity.Mail)
-
-	var id int
 	roles := auth.RoleEleve
-
-	switch err {
-	case nil:
-		id = int(userByMail.ID)
-		if len(userByMail.Roles) > 0 {
-			roles = strings.Join(userByMail.Roles, ",")
-		}
-	case pgx.ErrNoRows: // 🆕 S'il n'existe pas, on l’insère dans la table `student`
-		id, err = user.CreateUser(tx, ldapIdentity, ctx, []string{auth.RoleEleve}, true)
-		if err != nil {
-			return nil, nil, err
-		}
-		err = tx.Commit(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-	default:
-		return nil, nil, err
+	if len(userByMail.Roles) > 0 {
+		roles = strings.Join(userByMail.Roles, ",")
 	}
-
 	claims := jwt.MapClaims{"roles": roles}
-	subject := strconv.Itoa(id)
-
-	return &claims, &subject, nil // Pas de claims supplémentaires pour l'instant
+	subject := strconv.Itoa(int(userByMail.ID))
+	return &claims, &subject, nil
 }

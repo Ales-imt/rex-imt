@@ -37,7 +37,7 @@ export default function PseudoSetupScreen() {
     if (!me.data.informed_at) {
       router.replace('/apropos-first-login');
     } else {
-      router.replace('/agora');
+      router.replace('/programme');
     }
   }
 

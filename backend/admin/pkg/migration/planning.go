@@ -106,7 +106,16 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 		}
 	}
 
-	// --- 3. Upsert matières (construit cocleToMatiereID au passage) ---
+	// --- 3. Année de chaque matière déduite de sa première séance ---
+	// On ne peut pas se contenter de l'année courante : une matière est rattachée
+	// à l'année (table public.annee) qui couvre la date de sa première séance.
+	cocleFirstSeance := firstSeanceByCocle(seanceKeys)
+	annees, err := q.ListAnnees(ctx)
+	if err != nil {
+		return fmt.Errorf("annee: liste: %w", err)
+	}
+
+	// --- 4. Upsert matières (construit cocleToMatiereID au passage) ---
 	cocleToMatiereID := make(map[string]int64, len(cocles))
 	mCount := 0
 	for cocleStr, info := range cocles {
@@ -118,6 +127,14 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 			continue
 		}
 
+		// Année rattachée à la première séance ; à défaut, année courante.
+		matAnnee := annee
+		if first, ok := cocleFirstSeance[cocleStr]; ok {
+			if ay, found := anneeForDate(annees, first); found {
+				matAnnee = ay
+			}
+		}
+
 		matiereID, err := q.GetMatiereBySource(ctx, GetMatiereBySourceParams{Source: "webdfd", ExternalID: cocleStr, Annee: annee})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("matiere_map: lookup planning COCLE=%s: %w", cocleStr, err)
@@ -126,8 +143,11 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 			if err = q.UpdateMatiereName(ctx, UpdateMatiereNameParams{Name: nom, ID: matiereID}); err != nil {
 				return err
 			}
+			if err = q.UpdateMatiereAnnee(ctx, UpdateMatiereAnneeParams{Annee: matAnnee, ID: matiereID}); err != nil {
+				return err
+			}
 		} else {
-			matiereID, err = q.CreateMatiere(ctx, CreateMatiereParams{Name: nom, Annee: annee})
+			matiereID, err = q.CreateMatiere(ctx, CreateMatiereParams{Name: nom, Annee: matAnnee})
 			if err != nil {
 				return err
 			}
@@ -158,7 +178,7 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 	}
 	log.Printf("planning: %d matières synchronisées depuis le planning (annee=%d)", mCount, annee)
 
-	// --- 4. Upsert groupes (construit grcleToGroupeID au passage) ---
+	// --- 5. Upsert groupes (construit grcleToGroupeID au passage) ---
 	grcleToGroupeID := make(map[string]int64, len(grcles))
 	gCount := 0
 	for grcleStr, info := range grcles {
@@ -199,7 +219,7 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 	}
 	log.Printf("planning: %d groupes synchronisés depuis le planning (annee=%d)", gCount, annee)
 
-	// --- 5. Résolution prof_id depuis prof_map ---
+	// --- 6. Résolution prof_id depuis prof_map ---
 	prcleToUserID := make(map[string]int32)
 	for _, e := range seanceKeys {
 		if e.prcle == "" {
@@ -217,8 +237,8 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 		}
 	}
 
-	// --- 6. Upsert séances ---
-	sCount, sErr := syncSeances(ctx, q, seanceKeys, cocleToMatiereID, grcleToGroupeID, prcleToUserID, promos, annee)
+	// --- 7. Upsert séances ---
+	sCount, sErr := syncSeances(ctx, q, seanceKeys, cocleToMatiereID, grcleToGroupeID, prcleToUserID, promos)
 	log.Printf("planning: %d séances synchronisées (annee=%d)", sCount, annee)
 	return sErr
 }
@@ -253,7 +273,6 @@ func syncSeances(
 	grcleToGroupeID map[string]int64,
 	prcleToUserID map[string]int32,
 	promos []ListPromotionWebdfdIDsRow,
-	annee int32,
 ) (int, error) {
 	p0cleToPromoID := make(map[string]int64, len(promos))
 	for _, p := range promos {
@@ -406,6 +425,45 @@ func fetchPlanning(baseURL, p0cle, debut, fin string) ([]planningEntry, error) {
 		})
 	}
 	return entries, nil
+}
+
+// firstSeanceByCocle parcourt les créneaux collectés et retourne, par COCLE
+// (matière webdfd), l'horaire de début de la première séance rencontrée.
+// Les créneaux dont la date/heure est illisible sont ignorés.
+func firstSeanceByCocle(seanceKeys map[string]planningEntry) map[string]time.Time {
+	first := make(map[string]time.Time)
+	for _, e := range seanceKeys {
+		if e.cocle == "" || e.cocle == "0" {
+			continue
+		}
+		t, ok := parseWebdfdTime(e.date, e.hd)
+		if !ok {
+			continue
+		}
+		if cur, seen := first[e.cocle]; !seen || t.Before(cur) {
+			first[e.cocle] = t
+		}
+	}
+	return first
+}
+
+// anneeForDate retourne l'année civile de début de l'année scolaire (table
+// public.annee) dont la période [debut, fin] couvre la date de `t`. La
+// comparaison se fait au jour près pour rester cohérente avec le type `date`
+// des bornes en base. ok vaut false si aucune année ne couvre la date.
+func anneeForDate(annees []ListAnneesRow, t time.Time) (int32, bool) {
+	y, m, d := t.Date()
+	day := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	for _, a := range annees {
+		debut := a.Debut.UTC()
+		fin := a.Fin.UTC()
+		debutDay := time.Date(debut.Year(), debut.Month(), debut.Day(), 0, 0, 0, 0, time.UTC)
+		finDay := time.Date(fin.Year(), fin.Month(), fin.Day(), 0, 0, 0, 0, time.UTC)
+		if !day.Before(debutDay) && !day.After(finDay) {
+			return int32(a.Debut.Year()), true
+		}
+	}
+	return 0, false
 }
 
 // semesterFromName extrait "S<n>" d'un nom commençant par "<n>.<x>.<y>…".

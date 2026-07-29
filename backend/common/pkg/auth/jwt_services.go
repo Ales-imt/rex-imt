@@ -186,3 +186,23 @@ func StartRefreshTokenCleanup(cfg *services.DatabaseConfig) {
 		}
 	}()
 }
+
+// StartLoginCodeCleanup purge périodiquement les codes de connexion par
+// e-mail expirés ou déjà consommés (voir email_otp.go).
+func StartLoginCodeCleanup(cfg *services.DatabaseConfig) {
+	dsn := services.ToDBS(cfg)
+	pg := services.NewPG(context.Background(), dsn)
+
+	go func() {
+		queries := New(pg.Db)
+		ticker := time.NewTicker(12 * time.Hour)
+		defer ticker.Stop()
+		for {
+			err := queries.CleanUpLoginCodes(context.Background())
+			if err != nil {
+				fmt.Printf("Erreur lors de la suppression des codes de connexion expirés: %v", err)
+			}
+			<-ticker.C
+		}
+	}()
+}

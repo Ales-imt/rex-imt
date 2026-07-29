@@ -1,6 +1,9 @@
 -- name: GetAnneeByDate :one
 SELECT id, debut, fin FROM public.annee WHERE debut <= $1 AND fin >= $1;
 
+-- name: ListAnnees :many
+SELECT id, debut, fin FROM public.annee ORDER BY debut;
+
 -- name: CreateInconnuPromotion :exec
 INSERT INTO public.promotion (id, name) VALUES (0, 'inconnu') ON CONFLICT (id) DO NOTHING;
 
@@ -41,6 +44,9 @@ INSERT INTO public.matiere (name, annee) VALUES ($1, $2) RETURNING id;
 
 -- name: UpdateMatiereName :exec
 UPDATE public.matiere SET name = $1 WHERE id = $2;
+
+-- name: UpdateMatiereAnnee :exec
+UPDATE public.matiere SET annee = $1 WHERE id = $2;
 
 -- name: UpsertPeriode :one
 INSERT INTO public.periode (name, promotion_id, annee)

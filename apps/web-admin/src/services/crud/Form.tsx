@@ -20,6 +20,10 @@ interface Props<D extends FieldValues> {
 }
 
 export function Form<D extends FieldValues>({ initialData, mode, datasource, }: Props<D>) {
+  // React Compiler casse l'abonnement par proxy de formState de react-hook-form :
+  // sans cette directive, setError met à jour l'état interne mais ne redéclenche
+  // pas de re-render, donc les messages d'erreur serveur ne s'affichent pas.
+  "use no memo";
   const { rootPath } = useCrudContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -44,10 +48,11 @@ export function Form<D extends FieldValues>({ initialData, mode, datasource, }: 
       if (error instanceof ApiError) {
         if (error.payload?.code === ERROR_CODE.VALIDATION_ERROR) {
           const details = error.payload.details;
-          if (details?.errors) {
+          if (Array.isArray(details)) {
             // On parcourt les erreurs renvoyées par le serveur pour les afficher sur les champs
-            Object.entries(details.errors).forEach(([field, message]) => {
-              setError(field as any, { type: 'server', message: message as string });
+            details.forEach(({ path, message }: { path: string; message: string }) => {
+              console.log('Setting error for path:', path, 'with message:', message);
+              setError(path as any, { type: 'server', message });
             });
           }
           return

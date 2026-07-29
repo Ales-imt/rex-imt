@@ -3,11 +3,13 @@ package webdfd
 import (
 	"back-rex-eleve/pkg/programme"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -41,30 +43,49 @@ func parseKV(line string) map[string]string {
 	return m
 }
 
-// lookupWebdfdID retrouve l'identifiant webdfd (EV/evcleunik) d'un utilisateur
-// via migration.user_map en joignant sur son email.
-func (c *Connector) lookupWebdfdID(ctx context.Context, email string) (string, error) {
-	var extID string
-	err := c.DB.QueryRow(ctx,
+// lookupWebdfdID retrouve l'identifiant webdfd d'un utilisateur et le type de
+// clé associé, en joignant sur son email :
+//   - un étudiant est résolu via migration.user_map → TYPECLE=evcleunik ;
+//   - un professeur est résolu via migration.prof_map → TYPECLE=prcleunik.
+//
+// La table user_map est consultée en priorité, puis prof_map en repli.
+func (c *Connector) lookupWebdfdID(ctx context.Context, email string) (extID, typecle string, err error) {
+	err = c.DB.QueryRow(ctx,
 		`SELECT um.external_id
 		 FROM migration.user_map um
 		 JOIN public."user" u ON u.id = um.internal_id
 		 WHERE u.email = $1 AND um.source = 'webdfd'`,
 		email).Scan(&extID)
-	if err != nil {
-		return "", fmt.Errorf("webdfd: étudiant non trouvé pour %s: %w", email, err)
+	if err == nil {
+		return extID, "evcleunik", nil
 	}
-	return extID, nil
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", "", fmt.Errorf("webdfd: résolution étudiant %s: %w", email, err)
+	}
+
+	err = c.DB.QueryRow(ctx,
+		`SELECT pm.external_id
+		 FROM migration.prof_map pm
+		 JOIN public."user" u ON u.id = pm.internal_id
+		 WHERE u.email = $1 AND pm.source = 'webdfd'`,
+		email).Scan(&extID)
+	if err == nil {
+		return extID, "prcleunik", nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", fmt.Errorf("webdfd: utilisateur non trouvé (ni étudiant ni prof) pour %s", email)
+	}
+	return "", "", fmt.Errorf("webdfd: résolution prof %s: %w", email, err)
 }
 
 func (c *Connector) GetProgramme(ctx context.Context, email, start, end string) ([]programme.Cours, error) {
-	valcle, err := c.lookupWebdfdID(ctx, email)
+	valcle, typecle, err := c.lookupWebdfdID(ctx, email)
 	if err != nil {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s?TYPE=planning_txt&DATEDEBUT=%s&DATEFIN=%s&TYPECLE=evcleunik&VALCLE=%s",
-		c.PlanningURL, start, end, valcle)
+	url := fmt.Sprintf("%s?TYPE=planning_txt&DATEDEBUT=%s&DATEFIN=%s&TYPECLE=%s&VALCLE=%s",
+		c.PlanningURL, start, end, typecle, valcle)
 
 	resp, err := http.Get(url)
 	if err != nil {

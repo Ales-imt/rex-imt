@@ -31,3 +31,12 @@ age:
 
 presence:
   tokenSecret: ${PRESENCE_TOKEN_SECRET}
+
+smtp:
+  host: ${SMTP_HOST}
+  port: ${SMTP_PORT}
+  username: ${SMTP_USERNAME}
+  password: ${SMTP_PASSWORD}
+  from: rex-imt-noreply@mines-ales.fr
+  startTLS: false
+  timeout: 10s
