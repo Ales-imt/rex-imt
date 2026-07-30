@@ -11,6 +11,7 @@ import (
 	"back-rex-admin/pkg/ia/rack"
 	"back-rex-admin/pkg/ia/ragarenn"
 	"back-rex-admin/pkg/migration"
+	"back-rex-admin/pkg/planning"
 	"back-rex-admin/pkg/postit"
 	"back-rex-admin/pkg/presence"
 	"back-rex-admin/pkg/reponse"
@@ -178,6 +179,9 @@ func main() {
 			Route("/presence", func(r chi.Router) {
 				presence.RoutePresence(r, cfg.Presence)
 			})
+
+		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
+			Route("/planning", planning.RoutePlanning)
 
 		r.With(auth.Security(cfg.JWT, nil)).
 			Route("/curriculum", curriculum.RouteCurriculum)

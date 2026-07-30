@@ -25,6 +25,9 @@ import { VerifyWitness } from './pages/presence/VerifyWitness.tsx';
 import { ANNEE_WORKFLOW } from './pages/annee/def.ts';
 import { AnneeIndex } from './pages/annee/AnneeLayout.tsx';
 import { createAnneeRoutes } from './pages/annee/routes.tsx';
+import { PROGRAMME_WORKFLOW } from './pages/programme/def.ts';
+import { ProgrammeSelect, ProgrammeIndex } from './pages/programme/ProgrammeSelect.tsx';
+import { Planning } from './pages/programme/Planning.tsx';
 
 const RoleGuard = ({ children, roles }: { children: React.ReactNode, roles: string[] }) => {
   const { session } = useContext(SessionContext);
@@ -94,6 +97,15 @@ const routes = [
           {
             path: PRESENCE_WITNESS_WORKFLOW,
             element: <RoleGuard roles={[Role.ADMIN, Role.GESTIONNAIRE]}><VerifyWitness /></RoleGuard>,
+          },
+          {
+            path: PROGRAMME_WORKFLOW,
+            element: <RoleGuard roles={[Role.ADMIN, Role.GESTIONNAIRE]}><Outlet /></RoleGuard>,
+            children: [
+              { index: true, Component: ProgrammeIndex },
+              { path: 'select', Component: ProgrammeSelect },
+              { path: ':periodeId', Component: Planning },
+            ]
           }
         ]
       },

@@ -24,6 +24,8 @@ import HowToRegIcon from '@mui/icons-material/HowToReg';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import { ANNEE_WORKFLOW } from './pages/annee/def';
 import EventIcon from '@mui/icons-material/Event';
+import { PROGRAMME_WORKFLOW } from './pages/programme/def';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 
 
 type NavigationItemWithRoles = NavigationItem & {
@@ -85,6 +87,12 @@ const NAVIGATION: NavigationItemWithRoles[] = [
     segment: PRESENCE_WORKFLOW,
     title: 'Présence',
     icon: <HowToRegIcon />,
+    requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+  },
+  {
+    segment: PROGRAMME_WORKFLOW,
+    title: 'Programme',
+    icon: <CalendarMonthIcon />,
     requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
   },
 

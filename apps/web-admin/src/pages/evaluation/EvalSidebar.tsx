@@ -28,7 +28,7 @@ export function EvalSidebar({ selectedMatiereId, onSelectMatiere }: Props) {
     const {
         annees, anneesLoading, annee, setSelectedAnnee,
         tree, treeLoading, selectedPromoId, setSelectedPromoId, selectedPromo,
-    } = useAnneePromo();
+    } = useAnneePromo('evaluation');
 
     const [expandedPeriodeId, setExpandedPeriodeId] = useState<number | null>(null);
     useEffect(() => {
