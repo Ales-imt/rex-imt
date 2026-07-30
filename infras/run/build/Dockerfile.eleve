@@ -47,7 +47,7 @@ COPY apps/mobile/ ./
 
 ENV EXPO_PUBLIC_API_BASE=/api/v2
 
-RUN npx expo export --platform web --no-minify
+RUN npx expo export --platform web
 
 # ── Stage base commune ────────────────────────────────────────────────────────
 FROM alpine:3.21 AS base

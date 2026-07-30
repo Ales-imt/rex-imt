@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"time"
+
 	// Embarque la base IANA des fuseaux dans le binaire : l'image runtime
 	// (alpine sans paquet tzdata) ne fournit pas les zones, donc sans ceci
 	// LoadLocation("Europe/Paris") retombe sur UTC et le planning est décalé.
@@ -114,15 +115,15 @@ func main() {
 			auth.RoutesAuth(r, cfg, authentification.PostLdap)
 		})
 		studentAccess := []string{auth.RoleEleve}
-		studentAndProfAccess := []string{auth.RoleEleve, auth.RoleProf}
+		allRoles := []string{auth.RoleEleve, auth.RoleProf, auth.RoleGestionnaire}
 
 		r.With(auth.Security(cfg.JWT, &studentAccess)).Route("/feedback", feedback.MakeRouteFeedBack(cfg.Age.PublicKey))
 		r.With(auth.Security(cfg.JWT, &studentAccess)).Route("/reponse", reponse.MakeRouteReponse())
 		r.With(auth.Security(cfg.JWT, &studentAccess)).Route("/note", note.MakeRouteNote(noteConnector))
-		r.With(auth.Security(cfg.JWT, &studentAndProfAccess)).Route("/programme", programme.MakeRouteProgramme(progConnector))
+		r.With(auth.Security(cfg.JWT, &allRoles)).Route("/programme", programme.MakeRouteProgramme(progConnector))
 		r.With(auth.Security(cfg.JWT, &studentAccess)).Route("/evaluation", evaluation.MakeRouteEvaluation(cfg.Age.PublicKey))
 		r.With(auth.Security(cfg.JWT, &studentAccess)).Route("/postit", postit.MakeRoutePostit())
-		r.With(auth.Security(cfg.JWT, &studentAndProfAccess)).Route("/me", user.MakeRouteUser())
+		r.With(auth.Security(cfg.JWT, &allRoles)).Route("/me", user.MakeRouteUser())
 		presencetoken.SetSecret(cfg.Presence.TokenSecret)
 		// /pointage mélange des routes élève (POST /) et prof/gestionnaire
 		// (séances du jour, pilotage de séance) : authentification au montage,

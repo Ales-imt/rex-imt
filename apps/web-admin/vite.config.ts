@@ -9,12 +9,16 @@ export default defineConfig({
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] }),
-    visualizer({
-      filename: "./dist/report.html", // Nom du fichier de rapport HTML
-      open: true, // Ouvre le rapport automatiquement après le build
-      gzipSize: true, // Affiche les tailles gzip
-      brotliSize: true, // Affiche les tailles brotli
-    }),
+    // Désactivé dans le build du conteneur (CONTAINER_BUILD=1) : pas de navigateur
+    // pour `open`, et le report.html ne doit pas finir dans l'image nginx.
+    ...(process.env.CONTAINER_BUILD
+      ? []
+      : [visualizer({
+          filename: "./dist/report.html", // Nom du fichier de rapport HTML
+          open: true, // Ouvre le rapport automatiquement après le build
+          gzipSize: true, // Affiche les tailles gzip
+          brotliSize: true, // Affiche les tailles brotli
+        })]),
   ],
 
   server: {

@@ -5,6 +5,7 @@ import (
 	"back-rex-common/pkg/services"
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -31,7 +32,9 @@ func getProgramme(connector ProgrammeConnector) http.HandlerFunc {
 			end = time.Now().AddDate(0, 1, 0).Format("20060102")
 		}
 
-		cours, err := connector.GetProgramme(r.Context(), user.Email, start, end)
+		gestionnaire := slices.Contains(user.Roles, auth.RoleGestionnaire)
+
+		cours, err := connector.GetProgramme(r.Context(), user.Email, start, end, gestionnaire)
 		if err != nil {
 			services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
 			return

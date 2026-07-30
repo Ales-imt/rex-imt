@@ -14,8 +14,9 @@ type Connector struct {
 	APIKey  string
 }
 
-func (c *Connector) GetProgramme(ctx context.Context, email, start, end string) ([]programme.Cours, error) {
-	url := fmt.Sprintf("%s/programme?email=%s&start=%s&end=%s", c.BaseURL, email, start, end)
+func (c *Connector) GetProgramme(ctx context.Context, email, start, end string, gestionnaire bool) ([]programme.Cours, error) {
+	// gestionnaire : toutes les séances de la période (email ignoré côté API).
+	url := fmt.Sprintf("%s/programme?email=%s&start=%s&end=%s&all=%t", c.BaseURL, email, start, end, gestionnaire)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
