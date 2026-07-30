@@ -2,6 +2,7 @@ package auth
 
 import (
 	"back-rex-common/pkg/services"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -75,6 +76,10 @@ func Login(w http.ResponseWriter, r *http.Request,
 
 	// 🆕 Génération des tokens JWT + réponse
 	if err := issueSession(w, r, jwtCfg, userId, roles); err != nil {
+		if errors.Is(err, ErrUserBlamed) {
+			services.AuthorizationError(w, r, "Utilisateur banni", services.NO_INFORMATION, nil)
+			return
+		}
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}
