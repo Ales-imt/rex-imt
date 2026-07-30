@@ -15,17 +15,9 @@ export function EvaluationsPage() {
     const {
         annees, anneesLoading, annee, setSelectedAnnee,
         tree, treeLoading, selectedPromoId, setSelectedPromoId, selectedPromo,
-    } = useAnneePromo();
-
-    const [selectedPeriodeId, setSelectedPeriodeId] = useState<number | null>(null);
-    useEffect(() => {
-        setSelectedPeriodeId(selectedPromo?.periodes?.[0]?.id ?? null);
-    }, [selectedPromo]);
-
-    const selectedPeriode = selectedPromo?.periodes?.find(p => p.id === selectedPeriodeId);
-
-    const [selectedMatiereId, setSelectedMatiereId] = useState<number | null>(null);
-    useEffect(() => { setSelectedMatiereId(null); }, [selectedPeriodeId]);
+        selectedPeriodeId, setSelectedPeriodeId, selectedPeriode,
+        selectedMatiereId, setSelectedMatiereId,
+    } = useAnneePromo('evaluation');
 
     const [selectedMatiere, setSelectedMatiere] = useState<SelectedMatiere | null>(null);
     useEffect(() => {

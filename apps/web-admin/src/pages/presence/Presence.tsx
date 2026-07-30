@@ -123,17 +123,9 @@ export function Presence() {
     const {
         annees, anneesLoading, annee, setSelectedAnnee,
         tree, treeLoading, selectedPromoId, setSelectedPromoId, selectedPromo,
-    } = useAnneePromo();
-
-    const [selectedPeriodeId, setSelectedPeriodeId] = useState<number | null>(null);
-    useEffect(() => {
-        setSelectedPeriodeId(selectedPromo?.periodes?.[0]?.id ?? null);
-    }, [selectedPromo]);
-
-    const selectedPeriode = selectedPromo?.periodes?.find(p => p.id === selectedPeriodeId);
-
-    const [selectedMatiereId, setSelectedMatiereId] = useState<number | null>(null);
-    useEffect(() => { setSelectedMatiereId(null); }, [selectedPeriodeId]);
+        selectedPeriodeId, setSelectedPeriodeId, selectedPeriode,
+        selectedMatiereId, setSelectedMatiereId,
+    } = useAnneePromo('presence');
 
     // Planning de la matière sélectionnée
     const { data: planning, isLoading: planningLoading } = useQuery<SeanceCreneau[]>({
@@ -149,8 +141,24 @@ export function Presence() {
         .slice()
         .sort((a, b) => seanceKey(a).localeCompare(seanceKey(b)));
 
-    const [selectedSeanceKey, setSelectedSeanceKey] = useState<string | null>(null);
-    useEffect(() => { setSelectedSeanceKey(null); }, [selectedMatiereId]);
+    const [selectedSeanceKey, setSelectedSeanceKeyState] = useState<string | null>(
+        () => sessionStorage.getItem('presence.seanceKey')
+    );
+    const setSelectedSeanceKey = useCallback((k: string | null) => {
+        setSelectedSeanceKeyState(k);
+        if (k == null) sessionStorage.removeItem('presence.seanceKey');
+        else sessionStorage.setItem('presence.seanceKey', k);
+    }, []);
+
+    // Valide la séance mémorisée contre le planning chargé de la matière courante ;
+    // si elle n'y figure plus (changement de matière), on réinitialise. On ignore un
+    // planning vide / en cours de chargement pour ne pas perdre le choix au montage.
+    useEffect(() => {
+        if (!planning || planning.length === 0) return;
+        if (selectedSeanceKey != null && !planning.some(s => seanceKey(s) === selectedSeanceKey)) {
+            setSelectedSeanceKey(null);
+        }
+    }, [planning, selectedSeanceKey, setSelectedSeanceKey]);
 
     const selectedSeance = sortedPlanning.find(s => seanceKey(s) === selectedSeanceKey) ?? null;
 
