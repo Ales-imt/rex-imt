@@ -188,7 +188,7 @@ export default function SignInScreen() {
             </View>
 
             <Text style={[styles.title, { color: colors.textPrimary }]}>Connexion</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>pour continuer sur Mon App</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>pour continuer sur REX</Text>
 
             {error ? (
               <View style={styles.alert}>

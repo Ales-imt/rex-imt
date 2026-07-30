@@ -256,6 +256,16 @@ func UpdateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 		return
 	}
 
+	// Bannir un utilisateur doit couper ses sessions immédiatement : on
+	// supprime tous ses refresh tokens dans la même transaction. Sans cela le
+	// ban n'agirait qu'au prochain rafraîchissement (contrôle jwt.go).
+	if input.Blame {
+		if err := auth.New(tx).DeleteRefreshTokensByUser(ctx, user.ID); err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+	}
+
 	etudiant := slices.Contains(input.Roles, auth.RoleEleve)
 
 	if etudiant {

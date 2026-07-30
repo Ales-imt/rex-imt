@@ -5,6 +5,7 @@ import (
 	"back-rex-common/pkg/services"
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -180,6 +181,10 @@ func VerifyEmailCode(w http.ResponseWriter, r *http.Request, jwtCfg services.JWT
 	}
 
 	if err := issueSession(w, r, jwtCfg, int(userID), roles); err != nil {
+		if errors.Is(err, ErrUserBlamed) {
+			services.AuthorizationError(w, r, "Utilisateur banni", services.NO_INFORMATION, nil)
+			return
+		}
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}

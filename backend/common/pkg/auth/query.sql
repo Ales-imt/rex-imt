@@ -19,6 +19,9 @@ SELECT *
 -- name: DeleteRefreshTokenBySession :exec
 DELETE FROM refresh_tokens WHERE session = @session;
 
+-- name: DeleteRefreshTokensByUser :exec
+DELETE FROM refresh_tokens WHERE user_id = @user_id;
+
 -- name: CleanUpTokens :exec
 DELETE FROM refresh_tokens WHERE expires_at < NOW();
 
