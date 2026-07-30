@@ -154,6 +154,7 @@ func GetSeancesJourHandler(w http.ResponseWriter, r *http.Request) {
 	q := presencedata.New(services.GetPgCtx(r.Context()).Db)
 	ctx := context.Background()
 	dayStart, dayEnd := dayWindow()
+
 	tsStart := pgtype.Timestamptz{Time: dayStart, Valid: true}
 	tsEnd := pgtype.Timestamptz{Time: dayEnd, Valid: true}
 

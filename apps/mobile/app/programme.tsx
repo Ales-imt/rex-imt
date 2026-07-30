@@ -28,6 +28,9 @@ type Event = {
 type EventMap = Record<string, Event[]>;
 
 let _lastSelected: string | null = null;
+// Promo choisie, mémorisée entre les visites de l'écran (comme _lastSelected).
+// null = toutes les promos. Réinitialisée au redémarrage de l'app.
+let _lastPromo: string | null = null;
 
 function toEventMap(data: ApiCours[]): EventMap {
   const map: EventMap = {};
@@ -224,6 +227,47 @@ function MonthPicker({ visible, onClose, onSelect, selectedYear, selectedMonth }
   );
 }
 
+function PromoRow({ label, actif, colors, onPress }: {
+  label: string;
+  actif: boolean;
+  colors: ReturnType<typeof useTheme>;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.promoRow} onPress={onPress} activeOpacity={0.7}>
+      <Text style={[styles.promoRowText, { color: actif ? colors.tint : colors.textPrimary }]} numberOfLines={1}>
+        {label}
+      </Text>
+      {actif && <Text style={[styles.promoRowCheck, { color: colors.tint }]}>✓</Text>}
+    </TouchableOpacity>
+  );
+}
+
+// PromoPicker : menu défilant des promotions (peut en contenir beaucoup).
+function PromoPicker({ visible, promos, active, onClose, onSelect }: {
+  visible: boolean;
+  promos: string[];
+  active: string | null;
+  onClose: () => void;
+  onSelect: (p: string | null) => void;
+}) {
+  const colors = useTheme();
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable style={[styles.promoPickerBox, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+          <ScrollView style={styles.promoList} contentContainerStyle={styles.promoListContent} showsVerticalScrollIndicator>
+            <PromoRow label="Toutes les promos" actif={active === null} colors={colors} onPress={() => onSelect(null)} />
+            {promos.map(p => (
+              <PromoRow key={p} label={p} actif={active === p} colors={colors} onPress={() => onSelect(p)} />
+            ))}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 function TodayButton({ onPress }: { readonly onPress: () => void }) {
   const colors = useTheme();
   return (
@@ -242,13 +286,24 @@ export const ProgrammeScreen = () => {
   const today = localToday();
   const [selected, setSelected] = useState(() => _lastSelected ?? today);
   const [weekStart, setWeekStart] = useState(() => getMonday(_lastSelected ?? today));
-  const [events, setEvents] = useState<EventMap>({});
-  const eventsRef = useRef(events);
+  // On conserve les cours bruts (avec la promo) pour pouvoir filtrer par promo
+  // côté client ; l'EventMap affiché en découle.
+  const [cours, setCours] = useState<ApiCours[]>([]);
+  const coursRef = useRef<ApiCours[]>([]);
+  const [promo, setPromo] = useState<string | null>(_lastPromo);
+  const [promoPickerVisible, setPromoPickerVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [monthPickerVisible, setMonthPickerVisible] = useState(false);
   const weekStartRef = useRef(weekStart);
+
+  // Mémorise le choix pour le restaurer si l'utilisateur quitte puis revient.
+  const choisirPromo = useCallback((p: string | null) => {
+    _lastPromo = p;
+    setPromo(p);
+    setPromoPickerVisible(false);
+  }, []);
 
   const selDate = parseLocal(selected);
   const displayMonth = (() => {
@@ -292,10 +347,10 @@ export const ProgrammeScreen = () => {
       .get<ApiCours[]>(`/programme?start=${start}&end=${end}`)
       .then(res => {
         if (!active) return;
-        const newMap = toEventMap(res.data ?? []);
-        if (JSON.stringify(newMap) !== JSON.stringify(eventsRef.current)) {
-          eventsRef.current = newMap;
-          setEvents(newMap);
+        const data = res.data ?? [];
+        if (JSON.stringify(data) !== JSON.stringify(coursRef.current)) {
+          coursRef.current = data;
+          setCours(data);
         }
       })
       .catch(() => { if (active) setError('Impossible de charger le programme.'); })
@@ -303,6 +358,18 @@ export const ProgrammeScreen = () => {
     return () => { active = false; };
   }, [weekStart, refreshKey]);
 
+  // Promotions distinctes présentes dans les cours chargés, triées.
+  const promos = useMemo(
+    () => Array.from(new Set(cours.map(c => c.promo).filter(Boolean))).sort(),
+    [cours]
+  );
+  // Retombe sur « Toutes » si la promo mémorisée n'est plus présente.
+  const promoActive = promo && promos.includes(promo) ? promo : null;
+
+  const events = useMemo(
+    () => toEventMap(promoActive ? cours.filter(c => c.promo === promoActive) : cours),
+    [cours, promoActive]
+  );
   const eventDates = useMemo(() => new Set(Object.keys(events)), [events]);
 
   const dayEvents = events[selected] ?? [];
@@ -345,7 +412,20 @@ export const ProgrammeScreen = () => {
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
               {selected === today ? "Aujourd'hui" : selected}
             </Text>
-            {selected !== today && <TodayButton onPress={() => setSelected(today)} />}
+            <View style={styles.sectionActions}>
+              {promos.length > 1 && (
+                <TouchableOpacity
+                  style={[styles.filterBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
+                  onPress={() => setPromoPickerVisible(true)}
+                >
+                  <Text style={[styles.filterBtnText, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {promoActive ?? 'Toutes les promos'}
+                  </Text>
+                  <Text style={[styles.filterCaret, { color: colors.textSecondary }]}>▾</Text>
+                </TouchableOpacity>
+              )}
+              {selected !== today && <TodayButton onPress={() => setSelected(today)} />}
+            </View>
           </View>
 
           {loading ? (
@@ -380,6 +460,13 @@ export const ProgrammeScreen = () => {
           selectedYear={selDate.getFullYear()}
           selectedMonth={selDate.getMonth()}
         />
+        <PromoPicker
+          visible={promoPickerVisible}
+          promos={promos}
+          active={promoActive}
+          onClose={() => setPromoPickerVisible(false)}
+          onSelect={choisirPromo}
+        />
       </View>
     </>
   );
@@ -411,6 +498,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 4,
+    gap: 8,
+  },
+  sectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
+  },
+  promoPickerBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    width: 280,
+    maxHeight: 360,
+    overflow: 'hidden',
+  },
+  promoList: {
+    maxHeight: 360,
+  },
+  promoListContent: {
+    paddingVertical: 4,
+  },
+  promoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  promoRowText: {
+    fontSize: 15,
+    flexShrink: 1,
+  },
+  promoRowCheck: {
+    fontSize: 15,
+    fontWeight: '700',
   },
   todayBtn: {
     paddingHorizontal: 10,

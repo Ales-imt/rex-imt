@@ -4,8 +4,11 @@ import "context"
 
 // ProgrammeConnector est l'interface que tout connecteur de programme doit implémenter.
 type ProgrammeConnector interface {
-	// GetProgramme retourne les cours d'un étudiant pour la plage start–end (format YYYYMMDD).
-	GetProgramme(ctx context.Context, email, start, end string) ([]Cours, error)
+	// GetProgramme retourne les cours pour la plage start–end (format YYYYMMDD).
+	// Pour un utilisateur normal, le planning est filtré sur son email ; pour un
+	// gestionnaire (gestionnaire=true), toutes les séances de la période sont
+	// retournées, sans filtrage par utilisateur.
+	GetProgramme(ctx context.Context, email, start, end string, gestionnaire bool) ([]Cours, error)
 }
 
 // Cours est une séance planifiée. Cocle identifie la matière dans webdfd.

@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/text/encoding/charmap"
 )
 
 // Connector récupère le planning depuis le serveur Cybema (webdfd.mines-ales.fr).
@@ -78,14 +79,21 @@ func (c *Connector) lookupWebdfdID(ctx context.Context, email string) (extID, ty
 	return "", "", fmt.Errorf("webdfd: résolution prof %s: %w", email, err)
 }
 
-func (c *Connector) GetProgramme(ctx context.Context, email, start, end string) ([]programme.Cours, error) {
-	valcle, typecle, err := c.lookupWebdfdID(ctx, email)
-	if err != nil {
-		return nil, err
+func (c *Connector) GetProgramme(ctx context.Context, email, start, end string, gestionnaire bool) ([]programme.Cours, error) {
+	// Gestionnaire : toutes les séances de la période, sans TYPECLE/VALCLE (pas
+	// de filtrage par utilisateur, donc pas de résolution d'ID à faire).
+	var url string
+	if gestionnaire {
+		url = fmt.Sprintf("%s?TYPE=planning_txt&DATEDEBUT=%s&DATEFIN=%s",
+			c.PlanningURL, start, end)
+	} else {
+		valcle, typecle, err := c.lookupWebdfdID(ctx, email)
+		if err != nil {
+			return nil, err
+		}
+		url = fmt.Sprintf("%s?TYPE=planning_txt&DATEDEBUT=%s&DATEFIN=%s&TYPECLE=%s&VALCLE=%s",
+			c.PlanningURL, start, end, typecle, valcle)
 	}
-
-	url := fmt.Sprintf("%s?TYPE=planning_txt&DATEDEBUT=%s&DATEFIN=%s&TYPECLE=%s&VALCLE=%s",
-		c.PlanningURL, start, end, typecle, valcle)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -95,6 +103,12 @@ func (c *Connector) GetProgramme(ctx context.Context, email, start, end string) 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
+	}
+	// Cybema renvoie du texte en Windows-1252 (Latin-1 étendu) : sans conversion
+	// vers UTF-8, les accents (é, è, à…) ressortent en � côté client.
+	body, err = charmap.Windows1252.NewDecoder().Bytes(body)
+	if err != nil {
+		return nil, fmt.Errorf("webdfd: décodage Windows-1252: %w", err)
 	}
 
 	var cours []programme.Cours

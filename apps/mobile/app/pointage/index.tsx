@@ -1,11 +1,14 @@
 import { useTheme } from '@/hooks/use-theme';
 import { apiInstance, setupAxiosInterceptors } from '@/services/api';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
+  Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -30,6 +33,11 @@ export type SeanceJour = {
 
 type Etat = 'loading' | 'ok' | 'erreur';
 
+// Promo choisie, conservée au niveau module pour survivre au démontage de
+// l'écran quand l'utilisateur change de page (restauration synchrone au retour,
+// sans flash). Réinitialisée au redémarrage de l'app, comme un filtre de session.
+let promoMemorisee: string | null = null;
+
 function heure(iso: string): string {
   if (!iso) return '';
   return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -45,11 +53,57 @@ function StatutBadge({ seance }: { seance: SeanceJour }) {
   return null;
 }
 
+function PromoOption({
+  label,
+  actif,
+  colors,
+  onPress,
+}: {
+  label: string;
+  actif: boolean;
+  colors: ReturnType<typeof useTheme>;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.option} onPress={onPress} activeOpacity={0.7}>
+      <Text style={[styles.optionLabel, { color: actif ? colors.tint : colors.textPrimary }]} numberOfLines={1}>
+        {label}
+      </Text>
+      {actif && <Text style={[styles.optionCheck, { color: colors.tint }]}>✓</Text>}
+    </TouchableOpacity>
+  );
+}
+
 export default function PointageScreen() {
   const colors = useTheme();
   const [etat, setEtat] = useState<Etat>('loading');
   const [seances, setSeances] = useState<SeanceJour[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  // null = toutes les promotions (matières de toutes les promos confondues).
+  const [promo, setPromo] = useState<string | null>(promoMemorisee);
+  const [pickerOuvert, setPickerOuvert] = useState(false);
+
+  // Mémorise le choix pour le restaurer si l'utilisateur quitte puis revient.
+  const choisirPromo = useCallback((p: string | null) => {
+    promoMemorisee = p;
+    setPromo(p);
+    setPickerOuvert(false);
+  }, []);
+
+  // Promotions distinctes présentes dans les séances du jour, triées.
+  const promos = useMemo(
+    () => Array.from(new Set(seances.map(s => s.promo).filter(Boolean))).sort(),
+    [seances]
+  );
+
+  // Si la promo sélectionnée n'existe plus après un rechargement, on revient à
+  // « Toutes » pour ne pas afficher une liste vide sans raison visible.
+  const promoActive = promo && promos.includes(promo) ? promo : null;
+
+  const seancesAffichees = useMemo(
+    () => (promoActive ? seances.filter(s => s.promo === promoActive) : seances),
+    [seances, promoActive]
+  );
 
   const charger = useCallback((viaRefresh = false) => {
     if (viaRefresh) setRefreshing(true); else setEtat('loading');
@@ -85,7 +139,53 @@ export default function PointageScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.pageBg }]}>
-      <Text style={[styles.title, { color: colors.textPrimary }]}>Cours du jour</Text>
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Cours du jour</Text>
+        <TouchableOpacity
+          style={[styles.promoBtn, { borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
+          onPress={() => setPickerOuvert(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.promoBtnText, { color: colors.textPrimary }]} numberOfLines={1}>
+            {promoActive ?? 'Toutes les promos'}
+          </Text>
+          <Text style={[styles.promoBtnChevron, { color: colors.textSecondary }]}>▾</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Modal
+        visible={pickerOuvert}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickerOuvert(false)}
+      >
+        <Pressable style={styles.overlay} onPress={() => setPickerOuvert(false)}>
+          <View style={[styles.menu, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+            <ScrollView
+              style={styles.menuScroll}
+              contentContainerStyle={styles.menuScrollContent}
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+            >
+              <PromoOption
+                label="Toutes les promos"
+                actif={promoActive === null}
+                colors={colors}
+                onPress={() => choisirPromo(null)}
+              />
+              {promos.map(p => (
+                <PromoOption
+                  key={p}
+                  label={p}
+                  actif={promoActive === p}
+                  colors={colors}
+                  onPress={() => choisirPromo(p)}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
 
       {etat === 'loading' && (
         <View style={styles.centerBox}>
@@ -102,17 +202,17 @@ export default function PointageScreen() {
         </View>
       )}
 
-      {etat === 'ok' && seances.length === 0 && (
+      {etat === 'ok' && seancesAffichees.length === 0 && (
         <View style={styles.centerBox}>
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-            Aucun cours aujourd’hui.
+            {promoActive ? `Aucun cours pour ${promoActive} aujourd’hui.` : 'Aucun cours aujourd’hui.'}
           </Text>
         </View>
       )}
 
-      {etat === 'ok' && seances.length > 0 && (
+      {etat === 'ok' && seancesAffichees.length > 0 && (
         <FlatList
-          data={seances}
+          data={seancesAffichees}
           keyExtractor={s => String(s.id)}
           contentContainerStyle={styles.list}
           refreshControl={
@@ -146,12 +246,76 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 8,
+    gap: 12,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  promoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    maxWidth: 200,
+  },
+  promoBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  promoBtnChevron: {
+    fontSize: 12,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    alignItems: 'flex-end',
+    paddingTop: 56,
+    paddingRight: 16,
+  },
+  menu: {
+    borderWidth: 1,
+    borderRadius: 8,
+    minWidth: 200,
+    maxWidth: 280,
+    boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  menuScroll: {
+    // Défilement au-delà de ~7 entrées ; la hauteur reste bornée à l'écran.
+    maxHeight: 320,
+  },
+  menuScrollContent: {
+    flexGrow: 1,
+  },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  optionLabel: {
+    fontSize: 15,
+    flexShrink: 1,
+  },
+  optionCheck: {
+    fontSize: 15,
+    fontWeight: '700',
   },
   list: {
     padding: 16,
