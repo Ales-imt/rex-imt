@@ -31,7 +31,6 @@ import (
 	_ "time/tzdata"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 )
 
 // Ces variables seront injectées au moment de la compilation
@@ -49,7 +48,7 @@ func main() {
 	log.Printf("Compilation time: %s", buildTime)
 
 	r := chi.NewRouter()
-	r.Use(middleware.Logger) // Log HTTP requests
+	r.Use(services.LogOnError) // ne logge que les requêtes en erreur (>= 400)
 
 	configPath := "config.yaml"
 	if len(os.Args) > 1 {
