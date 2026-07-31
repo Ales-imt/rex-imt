@@ -29,16 +29,13 @@ ldap:
 ia:
   provider: rack # "ollama" ou "ragarenn" ou "rack"
 
+  # IA local sur le host si present. Dans ce cas, le host doit être accessible depuis le container admin (docker-compose.yml).
 ollama:
   baseURL: http://${OLLAMA_HOST}:11434
   model: mistral-nemo
 
-ragarenn:
-  baseURL: https://ragarenn.eskemm-numerique.fr/sso/ch@t
-  apiKey: ${RAGARENN_API_KEY} 
-  model: RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic # ilaas/gemma-4-31b  RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic
-
 rack:
+  # IA gerer par le rack de l'IMT Mines Alès.
   # Même logiciel que ragarenn (API compatible OpenAI), mais adresse et clé
   # propres au rack, et certificat HTTPS auto-signé (voir rack.go: InsecureSkipVerify).
   baseURL: https://rag.159.31.247.5.nip.io

@@ -8,6 +8,9 @@ ContainerName={{ gotenberg_container_name }}
 # Publié sur l'hôte : l'app admin le joint via host.containers.internal:3000
 # (voir GOTENBERG_URL dans secrets.env). Exposition contenue par le firewall VM.
 PublishPort={{ gotenberg_port | default(3000) }}:3000
+# Rotation des logs par taille (driver k8s-file, lisible via `podman logs`).
+LogDriver=k8s-file
+LogOpt=max-size={{ log_max_size | default('10mb') }}
 AutoUpdate=registry
 
 [Service]

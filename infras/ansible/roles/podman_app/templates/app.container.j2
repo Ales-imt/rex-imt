@@ -5,6 +5,9 @@ After=network-online.target
 [Container]
 Image={{ container_image }}
 ContainerName={{ container_name }}
+# Rotation des logs par taille (driver k8s-file, lisible via `podman logs`).
+LogDriver=k8s-file
+LogOpt=max-size={{ log_max_size | default('10mb') }}
 PublishPort={{ container_port }}:{{ container_port }}
 AddHost=host.containers.internal:host-gateway
 Environment=HOST={{ ansible_default_ipv4.address }}
