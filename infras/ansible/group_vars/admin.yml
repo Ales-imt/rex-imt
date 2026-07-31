@@ -9,6 +9,13 @@ app_dir: /home/userdfx/rex-admin
 config_dest_in_container: /opt/rex-admin/conf/config.yaml
 freetsa_cert_container_path: /opt/rex-admin/conf/x509/freetsa/cacert.pem
 
+# Génération des bulletins en PDF : sidecar Gotenberg (conversion docx -> PDF).
+# Activé par défaut (voir templates). Gotenberg publie son port sur l'hôte ;
+# l'app admin le joint via host.containers.internal:3000 (GOTENBERG_URL).
+gotenberg_container_name: gotenberg
+gotenberg_image: docker.io/gotenberg/gotenberg:8
+gotenberg_port: 3000
+
 postgres_host: "{{ postgres_host }}"
 postgres_port: "{{ postgres_port }}"
 postgres_db: "{{ postgres_db }}"

@@ -19,3 +19,7 @@ ldap_host: "{{ ldap_host }}"
 jwt_secret: "{{ jwt_secret_eleve }}"
 
 age_public_key: "{{ age_public_key }}"
+
+# Pas de génération de bulletins côté élève : Gotenberg désactivé (opt-out du
+# défaut activé), pour ne pas déployer un conteneur inutile sur la VM élève.
+gotenberg_enabled: false

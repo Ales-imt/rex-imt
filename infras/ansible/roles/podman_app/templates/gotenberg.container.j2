@@ -1,0 +1,18 @@
+[Unit]
+Description={{ gotenberg_container_name }} container (conversion docx -> PDF)
+After=network-online.target
+
+[Container]
+Image={{ gotenberg_image }}
+ContainerName={{ gotenberg_container_name }}
+# Publié sur l'hôte : l'app admin le joint via host.containers.internal:3000
+# (voir GOTENBERG_URL dans secrets.env). Exposition contenue par le firewall VM.
+PublishPort={{ gotenberg_port | default(3000) }}:3000
+AutoUpdate=registry
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

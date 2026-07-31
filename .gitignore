@@ -40,3 +40,5 @@ infras/liquibase/liquibase_libs
 **/*.docx
 **/testconfig.yaml
 **/cmd
+data
+

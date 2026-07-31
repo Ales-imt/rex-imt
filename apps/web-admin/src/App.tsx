@@ -26,6 +26,8 @@ import { ANNEE_WORKFLOW } from './pages/annee/def';
 import EventIcon from '@mui/icons-material/Event';
 import { PROGRAMME_WORKFLOW } from './pages/programme/def';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import { BULLETTIN_WORKFLOW } from './pages/bullettin/def';
+import ArticleIcon from '@mui/icons-material/Article';
 
 
 type NavigationItemWithRoles = NavigationItem & {
@@ -93,6 +95,12 @@ const NAVIGATION: NavigationItemWithRoles[] = [
     segment: PROGRAMME_WORKFLOW,
     title: 'Programme',
     icon: <CalendarMonthIcon />,
+    requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+  },
+  {
+    segment: BULLETTIN_WORKFLOW,
+    title: 'Bulletins',
+    icon: <ArticleIcon />,
     requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
   },
 
