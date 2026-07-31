@@ -28,6 +28,8 @@ import { createAnneeRoutes } from './pages/annee/routes.tsx';
 import { PROGRAMME_WORKFLOW } from './pages/programme/def.ts';
 import { ProgrammeSelect, ProgrammeIndex } from './pages/programme/ProgrammeSelect.tsx';
 import { Planning } from './pages/programme/Planning.tsx';
+import { BULLETTIN_WORKFLOW } from './pages/bullettin/def.ts';
+import { Bullettin } from './pages/bullettin/Bullettin.tsx';
 
 const RoleGuard = ({ children, roles }: { children: React.ReactNode, roles: string[] }) => {
   const { session } = useContext(SessionContext);
@@ -106,6 +108,10 @@ const routes = [
               { path: 'select', Component: ProgrammeSelect },
               { path: ':periodeId', Component: Planning },
             ]
+          },
+          {
+            path: BULLETTIN_WORKFLOW,
+            element: <RoleGuard roles={[Role.ADMIN, Role.GESTIONNAIRE]}><Bullettin /></RoleGuard>,
           }
         ]
       },

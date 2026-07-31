@@ -8,19 +8,26 @@ import (
 )
 
 type Config struct {
-	Database      DatabaseConfig `yaml:"database"`
-	MariaDBConfig MariaDBConfig  `yaml:"mariaDB"`
-	Server        ServerConfig   `yaml:"server"`
-	JWT           JWTConfig      `yaml:"jwt"`
-	LDAP          LDAPConfig     `yaml:"ldap"`
-	IA            IAConfig       `yaml:"ia"`
-	Ollama        OllamaConfig   `yaml:"ollama"`
-	RAGaRenn      RAGaRennConfig `yaml:"ragarenn"`
-	Age           AgeConfig      `yaml:"age"`
-	Rack          RackConfig     `yaml:"rack"`
-	Presence      PresenceConfig `yaml:"presence"`
-	Webdfd        WebdfdConfig   `yaml:"webdfd"`
-	SMTP          SMTPConfig     `yaml:"smtp"`
+	Database      DatabaseConfig  `yaml:"database"`
+	MariaDBConfig MariaDBConfig   `yaml:"mariaDB"`
+	Server        ServerConfig    `yaml:"server"`
+	JWT           JWTConfig       `yaml:"jwt"`
+	LDAP          LDAPConfig      `yaml:"ldap"`
+	IA            IAConfig        `yaml:"ia"`
+	Ollama        OllamaConfig    `yaml:"ollama"`
+	RAGaRenn      RAGaRennConfig  `yaml:"ragarenn"`
+	Age           AgeConfig       `yaml:"age"`
+	Rack          RackConfig      `yaml:"rack"`
+	Presence      PresenceConfig  `yaml:"presence"`
+	Webdfd        WebdfdConfig    `yaml:"webdfd"`
+	SMTP          SMTPConfig      `yaml:"smtp"`
+	Bullettin     BullettinConfig `yaml:"bullettin"`
+}
+
+// BullettinConfig configure la génération des bulletins. La conversion
+// docx -> PDF est déléguée à un service Gotenberg (sidecar).
+type BullettinConfig struct {
+	GotenbergURL string `yaml:"gotenbergURL"` // ex: http://gotenberg:3000
 }
 
 type WebdfdConfig struct {

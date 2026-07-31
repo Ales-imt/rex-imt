@@ -3,6 +3,7 @@ package main
 import (
 	"back-rex-admin/pkg/annee"
 	"back-rex-admin/pkg/authentification"
+	"back-rex-admin/pkg/bullettin"
 	"back-rex-admin/pkg/curriculum"
 	"back-rex-admin/pkg/evaluation"
 	"back-rex-admin/pkg/feedback"
@@ -171,6 +172,10 @@ func main() {
 			Route("/reponse", reponse.RouteReponse)
 		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/postit", postit.RoutePostit)
+		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
+			Route("/bullettin", func(r chi.Router) {
+				bullettin.RouteBullettin(r, cfg.Bullettin)
+			})
 		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/evaluation", func(r chi.Router) {
 				evaluation.RouteEvaluation(r, iaConnector)

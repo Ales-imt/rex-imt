@@ -75,6 +75,24 @@
   changed_when: "'Copying' in pull_result.stderr"
   notify: Restart container
 
+- name: Pré-télécharger l'image Gotenberg
+  ansible.builtin.command:
+    cmd: "podman pull {{ gotenberg_image }}"
+  become_user: "{{ app_user }}"
+  register: gotenberg_pull
+  changed_when: "'Copying' in gotenberg_pull.stderr"
+  when: gotenberg_enabled | default(true)
+
+- name: Déployer le fichier Quadlet {{ gotenberg_container_name }}.container
+  ansible.builtin.template:
+    src: gotenberg.container.j2
+    dest: "/home/{{ app_user }}/.config/containers/systemd/{{ gotenberg_container_name }}.container"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0644"
+  when: gotenberg_enabled | default(true)
+  notify: Reload user daemon
+
 - name: Déployer le fichier Quadlet {{ container_name }}.container
   ansible.builtin.template:
     src: app.container.j2
@@ -91,6 +109,17 @@
   become_user: "{{ app_user }}"
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[app_user][1] }}"
+
+- name: Activer et démarrer le service {{ gotenberg_container_name }}
+  ansible.builtin.systemd:
+    name: "{{ gotenberg_container_name }}"
+    enabled: true
+    state: started
+    scope: user
+  become_user: "{{ app_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[app_user][1] }}"
+  when: gotenberg_enabled | default(true)
 
 - name: Activer et démarrer le service {{ container_name }}
   ansible.builtin.systemd:
