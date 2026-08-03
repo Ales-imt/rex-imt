@@ -30,6 +30,8 @@ import { ProgrammeSelect, ProgrammeIndex } from './pages/programme/ProgrammeSele
 import { Planning } from './pages/programme/Planning.tsx';
 import { BULLETTIN_WORKFLOW } from './pages/bullettin/def.ts';
 import { Bullettin } from './pages/bullettin/Bullettin.tsx';
+import { MODERATION } from './pages/moderation/def.ts';
+import { Moderation } from './pages/moderation/Moderation.tsx';
 
 const RoleGuard = ({ children, roles }: { children: React.ReactNode, roles: string[] }) => {
   const { session } = useContext(SessionContext);
@@ -79,6 +81,10 @@ const routes = [
               { index: true, Component: FeedbackIndex },
               ...createFeedbackRoutes()
             ]
+          },
+          {
+            path: MODERATION,
+            element: <RoleGuard roles={[Role.ADMIN, Role.MODERATEUR]}><Moderation /></RoleGuard>,
           },
           {
             path: ANALYSE,

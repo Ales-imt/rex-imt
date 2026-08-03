@@ -28,6 +28,8 @@ import { PROGRAMME_WORKFLOW } from './pages/programme/def';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import { BULLETTIN_WORKFLOW } from './pages/bullettin/def';
 import ArticleIcon from '@mui/icons-material/Article';
+import { MODERATION } from './pages/moderation/def';
+import GavelIcon from '@mui/icons-material/Gavel';
 
 
 type NavigationItemWithRoles = NavigationItem & {
@@ -66,6 +68,12 @@ const NAVIGATION: NavigationItemWithRoles[] = [
         requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
       },
     ],
+  },
+  {
+    segment: MODERATION,
+    title: 'Modération',
+    icon: <GavelIcon />,
+    requiredRoles: [Role.ADMIN, Role.MODERATEUR],
   },
   {
     segment: ANALYSE,

@@ -26,6 +26,12 @@ ldap:
   url: ldap://${LDAP_HOST}:389
   baseDN: dc=ema,dc=fr
 
+age:
+  # Clef publique age (X25519) : sert à chiffrer le strongbox des feedbacks et
+  # le contenu des messages refusés (voir pkg/moderation). Même clef que le
+  # service étudiant.
+  publicKey: ${AGE_PUBLIC_KEY}
+
 ia:
   provider: rack # "ollama" ou "ragarenn" ou "rack"
 

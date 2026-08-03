@@ -61,7 +61,35 @@ type MatiereSummary struct {
 	Prof      string `json:"prof"`
 	Formation string `json:"formation"`
 	Fait      bool   `json:"fait"`
+	// ModerationStatus agrège l'état des verbatims de l'évaluation :
+	// PENDING (au moins un verbatim en attente de relecture) > REJECTED (au
+	// moins un refusé) > PUBLISHED (tous relus et publiés). Vide quand
+	// l'évaluation ne comporte aucun verbatim, ou n'a pas été soumise.
+	ModerationStatus string `json:"moderation_status,omitempty"`
 }
+
+// aggregateModerationStatus retient l'état le plus « bloquant » des verbatims
+// d'une même évaluation : tant qu'un seul est en attente, l'évaluation entière
+// est en modération.
+func aggregateModerationStatus(current, incoming string) string {
+	if current == statusPending || incoming == statusPending {
+		return statusPending
+	}
+	if current == statusRejected || incoming == statusRejected {
+		return statusRejected
+	}
+	return incoming
+}
+
+const (
+	statusPending  = "PENDING"
+	statusRejected = "REJECTED"
+
+	// rejectedPlaceholder remplace le texte d'un verbatim refusé : au refus,
+	// raw_texte est écrasé par sa version chiffrée (age), qui ne doit pas
+	// sortir du serveur.
+	rejectedPlaceholder = "[verbatim refusé par la modération]"
+)
 
 func getMatiere() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -97,6 +125,17 @@ func getMatiere() http.HandlerFunc {
 				for _, id := range submittedIDs {
 					if m, ok := eligible[id]; ok {
 						m.Fait = true
+					}
+				}
+			}
+
+			// État de modération des verbatims, pour distinguer « évaluation
+			// envoyée et publiée » de « envoyée, en attente de relecture ».
+			statuses, err := queries.GetVerbatimStatusesByPseudo(ctx, pseudo)
+			if err == nil {
+				for _, row := range statuses {
+					if m, ok := eligible[row.MatiereID]; ok {
+						m.ModerationStatus = aggregateModerationStatus(m.ModerationStatus, row.ModerationStatus)
 					}
 				}
 			}
@@ -232,7 +271,7 @@ func SubmitEvaluation(agePublicKey string) http.HandlerFunc {
 			if err := qtx.InsertEvalVerbatim(ctx, gen.InsertEvalVerbatimParams{
 				SessionID: sessionID,
 				Dimension: v.dimension,
-				Texte:     v.texte,
+				Texte:     services.ToPgText(v.texte),
 				Strongbox: services.ToPgText(strongbox),
 			}); err != nil {
 				services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
@@ -348,6 +387,18 @@ type SessionDetailResponse struct {
 	ScoreSupports          int16  `json:"score_supports"`
 	ScoreAmbiance          int16  `json:"score_ambiance"`
 	Nps                    int16  `json:"nps"`
+
+	Verbatims []VerbatimDetail `json:"verbatims"`
+}
+
+// VerbatimDetail : un commentaire libre laissé par l'étudiant, avec l'état de
+// sa relecture. Texte vaut le placeholder de refus quand le verbatim a été
+// rejeté — le texte chiffré (age) ne sort jamais du serveur.
+type VerbatimDetail struct {
+	Dimension        string `json:"dimension"`
+	ModerationStatus string `json:"moderation_status"`
+	RejectionReason  string `json:"rejection_reason,omitempty"`
+	Texte            string `json:"texte"`
 }
 
 func getSessionDetail() http.HandlerFunc {
@@ -388,6 +439,25 @@ func getSessionDetail() http.HandlerFunc {
 			return
 		}
 
+		// Verbatims de la session avec leur état de relecture. Une erreur ici ne
+		// doit pas priver l'étudiant de son évaluation : la liste reste vide.
+		verbatims := []VerbatimDetail{}
+		verbRows, err := queries.GetVerbatimsBySessionAndPseudo(ctx, gen.GetVerbatimsBySessionAndPseudoParams{
+			RejectedPlaceholder: rejectedPlaceholder,
+			SessionID:           row.ID,
+			Pseudo:              pseudo,
+		})
+		if err == nil {
+			for _, v := range verbRows {
+				verbatims = append(verbatims, VerbatimDetail{
+					Dimension:        v.Dimension,
+					ModerationStatus: v.ModerationStatus,
+					RejectionReason:  v.RejectionReason.String,
+					Texte:            v.Texte,
+				})
+			}
+		}
+
 		render.JSON(w, r, SessionDetailResponse{
 			SessionID:              row.ID.String(),
 			FormatSuivi:            row.FormatSuivi,
@@ -402,6 +472,7 @@ func getSessionDetail() http.HandlerFunc {
 			ScoreSupports:          row.ScoreSupports.Int16,
 			ScoreAmbiance:          row.ScoreAmbiance.Int16,
 			Nps:                    row.Nps.Int16,
+			Verbatims:              verbatims,
 		})
 	}
 }

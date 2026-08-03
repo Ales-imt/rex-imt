@@ -1,32 +1,37 @@
 -- name: ListFeedbacks :many
-SELECT id, content, created_at
+-- content est devenu NULLABLE (renseigné seulement à la publication) ; on le
+-- coalesce pour conserver le type string côté Go et la forme JSON existante.
+SELECT id, COALESCE(content, '')::text AS content, created_at
 FROM feedback f
 ORDER BY f.created_at DESC;
 
 -- name: ListFeedbacksWithClassification :many
-SELECT f.id, f.content, f.created_at,
+SELECT f.id, COALESCE(f.content, '')::text AS content, f.created_at,
        c.promotion, c.groupe,
        c.categorie, c.sous_categorie, c.sentiment, c.urgence, c.resume,
        f.strongbox, f.pseudo, f.message_id
 FROM feedback f
 LEFT JOIN feedback_classification c ON c.feedback_id = f.id
+WHERE f.moderation_status = 'PUBLISHED'
 ORDER BY f.created_at DESC;
 
 -- name: ListPendingFeedbacks :many
-SELECT f.id, f.content, f.promotion, f.groupe
+SELECT f.id, COALESCE(f.content, '')::text AS content, f.promotion, f.groupe
 FROM feedback f
 LEFT JOIN feedback_classification c ON c.feedback_id = f.id
 WHERE c.feedback_id IS NULL
+  AND f.moderation_status = 'PUBLISHED'
 ORDER BY f.created_at DESC;
 
 -- name: ListRecentFeedbacksWithClassification :many
-SELECT f.id, f.content, f.created_at,
+SELECT f.id, COALESCE(f.content, '')::text AS content, f.created_at,
        c.promotion, c.groupe,
        c.categorie, c.sous_categorie, c.sentiment, c.urgence, c.resume,
        f.strongbox, f.pseudo, f.message_id
 FROM feedback f
 LEFT JOIN feedback_classification c ON c.feedback_id = f.id
-WHERE f.created_at >= now() - ($1 * interval '1 month')
+WHERE f.moderation_status = 'PUBLISHED'
+  AND f.created_at >= now() - ($1 * interval '1 month')
 ORDER BY f.created_at DESC;
 
 -- name: InsertClassification :exec
@@ -41,3 +46,9 @@ ON CONFLICT (feedback_id) DO UPDATE SET
     promotion      = EXCLUDED.promotion,
     groupe         = EXCLUDED.groupe,
     classified_at  = now();
+
+-- name: ListenNewFeedback :exec
+-- Abonnement au canal alimenté par le trigger feedback_notify (déclenché au
+-- passage d'un feedback à PUBLISHED). À exécuter sur une connexion DÉDIÉE et
+-- persistante (pas sur le pool) : l'abonnement est lié à la session.
+LISTEN new_feedback;

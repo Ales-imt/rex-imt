@@ -151,6 +151,7 @@ var allowedRoles = map[string]struct{}{
 	auth.RoleEleve:        {},
 	auth.RoleGestionnaire: {},
 	auth.RoleProf:         {},
+	auth.RoleModerateur:   {},
 }
 
 func validateUser(user UserRequest, sr *ldap.SearchResult) []services.FormValidation {

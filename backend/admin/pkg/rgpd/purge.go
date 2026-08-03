@@ -17,8 +17,10 @@ import (
 // anonymizeAfter : délai au-delà duquel les champs PII sont mis à NULL.
 // deleteAfter    : délai au-delà duquel les enregistrements sont supprimés.
 const (
-	anonymizeAfter = 1 // an
-	deleteAfter    = 3 // ans
+	anonymizeAfter = 1  // an
+	deleteAfter    = 3  // ans
+	rejectedAfter  = 90 // jours : purge des feedbacks refusés (jamais publiés,
+	// contenu conservé chiffré le temps d'une éventuelle contestation)
 )
 
 // StartPurge lance la purge RGPD toutes les 24 h en arrière-plan.
@@ -55,6 +57,8 @@ func runPurge(pool *services.Postgres, mariaDb *sql.DB) {
 	anonymizeEvalVerbatim(ctx, q, anonymizeThreshold)
 	deleteClassification(ctx, q, deleteThreshold)
 	deleteFeedback(ctx, q, deleteThreshold)
+	purgeRejectedFeedback(ctx, q, now.AddDate(0, 0, -rejectedAfter))
+	purgeRejectedVerbatim(ctx, q, now.AddDate(0, 0, -rejectedAfter))
 
 	if mariaDb != nil {
 		purgeComptesSortis(ctx, q, mariaDb)
@@ -119,6 +123,28 @@ func deleteFeedback(ctx context.Context, q *gen.Queries, threshold time.Time) {
 	}
 	if n > 0 {
 		log.Printf("[rgpd] %d feedback(s) supprimé(s) (cascade reponse + postit)", n)
+	}
+}
+
+func purgeRejectedFeedback(ctx context.Context, q *gen.Queries, threshold time.Time) {
+	n, err := q.PurgeRejectedFeedback(ctx, ts(threshold))
+	if err != nil {
+		log.Printf("[rgpd] erreur purge feedback refusés: %v", err)
+		return
+	}
+	if n > 0 {
+		log.Printf("[rgpd] %d feedback(s) refusé(s) purgé(s)", n)
+	}
+}
+
+func purgeRejectedVerbatim(ctx context.Context, q *gen.Queries, threshold time.Time) {
+	n, err := q.PurgeRejectedVerbatim(ctx, ts(threshold))
+	if err != nil {
+		log.Printf("[rgpd] erreur purge verbatims refusés: %v", err)
+		return
+	}
+	if n > 0 {
+		log.Printf("[rgpd] %d verbatim(s) refusé(s) purgé(s)", n)
 	}
 }
 

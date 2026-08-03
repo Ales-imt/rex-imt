@@ -10,6 +10,7 @@ export const Role = {
     GESTIONNAIRE: 'GESTIONNAIRE',
     PROF: 'PROF',
     ELEVE: 'ELEVE',
+    MODERATEUR: 'MODERATEUR',
 } as const;
 
 export const AVAILABLE_ROLES = [
@@ -17,4 +18,5 @@ export const AVAILABLE_ROLES = [
     { id: Role.GESTIONNAIRE, label: 'Gestionnaire' },
     { id: Role.PROF, label: 'Professeur' },
     { id: Role.ELEVE, label: 'Élève' },
+    { id: Role.MODERATEUR, label: 'Modérateur' },
 ];

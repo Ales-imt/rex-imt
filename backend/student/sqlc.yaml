@@ -75,3 +75,14 @@ sql:
         sql_package: "pgx/v5"
         omit_unused_structs: true
         emit_json_tags: true
+
+  - engine: "postgresql"
+    queries: "pkg/programme/webdfd/query.sql"
+    schema: "../schema.sql"
+    gen:
+      go:
+        package: "gen"
+        out: "pkg/programme/webdfd/gen"
+        sql_package: "pgx/v5"
+        omit_unused_structs: true
+        emit_json_tags: true

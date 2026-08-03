@@ -48,6 +48,12 @@ export const Colors = {
     evalTodoBorder: '#A5B4FC',
     evalDoneBg: '#F0FDF4',
     evalDoneBorder: '#86EFAC',
+    // Évaluation envoyée, mais dont les verbatims attendent la relecture
+    evalModerationBg: '#FFF7ED',
+    evalModerationBorder: '#FDBA74',
+    // Évaluation envoyée, dont au moins un verbatim a été refusé
+    evalRejectedBg: '#FEF2F2',
+    evalRejectedBorder: '#FCA5A5',
     // Section accents
     sectionPeda: '#6366F1',
     sectionContent: '#0EA5E9',
@@ -101,6 +107,12 @@ export const Colors = {
     evalTodoBorder: '#6366F1',
     evalDoneBg: '#052e16',
     evalDoneBorder: '#16A34A',
+    // Évaluation envoyée, mais dont les verbatims attendent la relecture
+    evalModerationBg: '#431407',
+    evalModerationBorder: '#F97316',
+    // Évaluation envoyée, dont au moins un verbatim a été refusé
+    evalRejectedBg: '#450a0a',
+    evalRejectedBorder: '#EF4444',
     // Section accents
     sectionPeda: '#6366F1',
     sectionContent: '#0EA5E9',

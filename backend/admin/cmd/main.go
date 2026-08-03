@@ -12,6 +12,7 @@ import (
 	"back-rex-admin/pkg/ia/rack"
 	"back-rex-admin/pkg/ia/ragarenn"
 	"back-rex-admin/pkg/migration"
+	"back-rex-admin/pkg/moderation"
 	"back-rex-admin/pkg/planning"
 	"back-rex-admin/pkg/postit"
 	"back-rex-admin/pkg/presence"
@@ -157,6 +158,9 @@ func main() {
 
 		adminOnly := []string{auth.RoleAdmin}
 		adminAndGestionnaire := []string{auth.RoleAdmin, auth.RoleGestionnaire}
+		// Garde de modération : ADMIN + rôle dédié MODERATEUR. L'inclusion de
+		// GESTIONNAIRE reste à arbitrer avec le DPO (cf. résumé).
+		moderationRoles := []string{auth.RoleAdmin, auth.RoleModerateur}
 
 		r.With(auth.Security(cfg.JWT, &adminOnly)).
 			Route("/user", func(r chi.Router) {
@@ -166,6 +170,8 @@ func main() {
 			Route("/annee", annee.RouteAnnee)
 		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/feedback", feedback.RouteFeedback)
+		r.With(auth.Security(cfg.JWT, &moderationRoles)).
+			Route("/moderation", moderation.RouteModeration(cfg.Age.PublicKey))
 		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/reports", reports.RouteReports)
 		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).

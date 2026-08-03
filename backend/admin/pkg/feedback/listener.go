@@ -44,7 +44,7 @@ func listenLoop(dsn string, pool *services.Postgres, connector ia.IAConnector) e
 	}
 	defer conn.Close(ctx)
 
-	if _, err := conn.Exec(ctx, "LISTEN new_feedback"); err != nil {
+	if err := New(conn).ListenNewFeedback(ctx); err != nil {
 		return err
 	}
 	log.Println("[feedback listener] en écoute sur le canal 'new_feedback'")

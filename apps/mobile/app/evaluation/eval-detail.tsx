@@ -16,6 +16,13 @@ import { useTheme } from '@/hooks/use-theme';
 import { apiInstance } from '@/services/api';
 import { getOrCreatePseudo } from '@/services/tokens';
 
+type VerbatimDetail = {
+  dimension: string;
+  moderation_status: 'PENDING' | 'PUBLISHED' | 'REJECTED';
+  rejection_reason?: string;
+  texte: string;
+};
+
 type SessionDetail = {
   session_id: string;
   format_suivi: string;
@@ -30,6 +37,13 @@ type SessionDetail = {
   score_supports: number;
   score_ambiance: number;
   nps: number;
+  verbatims: VerbatimDetail[];
+};
+
+const VERBATIM_DIMENSION_LABEL: Record<string, string> = {
+  SUPPORTS: 'Supports',
+  AMBIANCE: 'Ambiance',
+  NPS: 'Recommandation',
 };
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -67,6 +81,7 @@ const SECTION_COLORS: Record<string, string> = {
   'Supports':             '#8B5CF6',
   'Ambiance':             '#22C55E',
   'Recommandation (NPS)': '#6366F1',
+  'Vos commentaires':     '#F97316',
 };
 
 function npsColor(nps: number): string {
@@ -225,6 +240,14 @@ export default function EvalDetailScreen() {
               <Section title="Recommandation (NPS)" colors={colors}>
                 <NpsGauge nps={session.nps} colors={colors} />
               </Section>
+
+              {session.verbatims?.length > 0 && (
+                <Section title="Vos commentaires" colors={colors}>
+                  {session.verbatims.map((v, i) => (
+                    <VerbatimRow key={`${v.dimension}-${i}`} verbatim={v} colors={colors} />
+                  ))}
+                </Section>
+              )}
             </ScrollView>
 
             <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
@@ -299,6 +322,48 @@ function Row({ label, value, colors }: { label: string; value: string; colors: a
   );
 }
 
+/** Un commentaire libre et l'état de sa relecture. Un verbatim refusé n'affiche
+ *  jamais son texte : celui-ci est chiffré au repos et ne sort pas du serveur. */
+function VerbatimRow({ verbatim, colors }: { verbatim: VerbatimDetail; colors: any }) {
+  const status = {
+    PENDING: { label: 'En relecture', color: '#F97316' },
+    PUBLISHED: { label: 'Publié', color: '#16A34A' },
+    REJECTED: { label: 'Refusé', color: '#EF4444' },
+  }[verbatim.moderation_status] ?? { label: verbatim.moderation_status, color: colors.textSecondary };
+
+  return (
+    <View style={styles.verbatim}>
+      <View style={styles.verbatimHeader}>
+        <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
+          {VERBATIM_DIMENSION_LABEL[verbatim.dimension] ?? verbatim.dimension}
+        </Text>
+        <View style={[styles.statusPill, { backgroundColor: status.color }]}>
+          <Text style={styles.statusPillText}>{status.label}</Text>
+        </View>
+      </View>
+      <Text
+        style={[
+          styles.verbatimText,
+          { color: verbatim.moderation_status === 'REJECTED' ? colors.textSecondary : colors.textPrimary },
+          verbatim.moderation_status === 'REJECTED' && styles.verbatimRejected,
+        ]}
+      >
+        {verbatim.texte}
+      </Text>
+      {verbatim.moderation_status === 'REJECTED' && verbatim.rejection_reason ? (
+        <Text style={[styles.verbatimReason, { color: '#EF4444' }]}>
+          Motif : {verbatim.rejection_reason}
+        </Text>
+      ) : null}
+      {verbatim.moderation_status === 'PENDING' && (
+        <Text style={[styles.verbatimReason, { color: colors.textSecondary }]}>
+          {"Ce commentaire n'est ni diffusé ni analysé tant qu'il n'a pas été relu."}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 function StarRowItem({ label, score, colors }: { label: string; score: number; colors: any }) {
   return (
     <View style={styles.row}>
@@ -333,6 +398,17 @@ const styles = StyleSheet.create({
   },
   rowLabel: { fontSize: 14 },
   rowValue: { fontSize: 14, fontWeight: '600' },
+  verbatim: { gap: 4, paddingVertical: 4 },
+  verbatimHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  verbatimText: { fontSize: 14, lineHeight: 20 },
+  verbatimRejected: { fontStyle: 'italic' },
+  verbatimReason: { fontSize: 12, fontStyle: 'italic' },
+  statusPill: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
+  statusPillText: { fontSize: 11, fontWeight: '700', color: '#ffffff' },
   footer: {
     paddingHorizontal: 16,
     paddingTop: 12,

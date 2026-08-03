@@ -86,8 +86,8 @@ export function AproposContent({ colors, children }: AproposContentProps) {
         <View style={styles.dataList}>
           {[
             { cat: 'Identité', detail: 'Nom, prénom, adresse e-mail institutionnelle — utilisés pour l\'authentification via le LDAP de l\'école.' },
-            { cat: 'Feedbacks', detail: 'Contenu textuel, pseudo choisi, promotion et groupe — collectés pour améliorer la qualité des enseignements.' },
-            { cat: 'Évaluations', detail: 'Scores par dimension pédagogique et verbatims optionnels — collectés de façon anonyme (aucun lien avec votre identité côté serveur).' },
+            { cat: 'Feedbacks', detail: 'Contenu textuel, pseudo choisi, promotion et groupe — collectés pour améliorer la qualité des enseignements. Chaque message est relu par un modérateur avant toute diffusion ou analyse (voir ci-dessous).' },
+            { cat: 'Évaluations', detail: 'Scores par dimension pédagogique et verbatims optionnels. Comme les feedbacks, chaque verbatim est relu par un modérateur avant toute diffusion ou analyse, et l\'évaluation est associée à une donnée d\'identification chiffrée (adresse IP et identifiant technique) conservée pour répondre aux obligations légales ; elle n\'est ni affichée ni accessible à l\'équipe pédagogique.' },
             { cat: 'Présences', detail: 'Identifiant de séance, statut (présent / retard) et heure de pointage — collectés par scan de QR code lors des séances. Un registre cryptographique d\'intégrité garantit l\'inaltérabilité de ces données. Base légale : obligation légale d\'assiduité (Art. L123-1 Code de l\'éducation).' },
             { cat: 'Données techniques', detail: 'Adresse IP et identifiant technique chiffrés — conservés pour répondre aux obligations légales (voir ci-dessous).' },
           ].map(item => (
@@ -107,10 +107,32 @@ export function AproposContent({ colors, children }: AproposContentProps) {
       <Section title="Durées de conservation" colors={colors}>
         <Row label="Votre compte" value="Durée de la scolarité + 1 an" colors={colors} />
         <Row label="Contenu de vos feedbacks" value="3 ans à compter de la publication" colors={colors} />
+        <Row label="Messages refusés" value="Chiffrés, puis supprimés après 90 jours" colors={colors} />
         <Row label="Données d'identification (IP chiffrée)" value="1 an à compter de la publication" colors={colors} />
-        <Row label="Évaluations anonymes" value="Conservées à des fins statistiques" colors={colors} />
+        <Row label="Évaluations" value="Conservées à des fins statistiques" colors={colors} />
         <Row label="Données de présence" value="Durée de la scolarité + 5 ans (obligation légale)" colors={colors} />
         <Row label="Tokens de session" value="3 mois puis suppression automatique" colors={colors} />
+      </Section>
+
+      {/* ── 3b. Modération avant diffusion ─────────────────────────────── */}
+      <Section title="Modération de vos messages" colors={colors}>
+        <InfoBox colors={colors}>
+          <Text style={[styles.infoTitle, { color: colors.tint }]}>
+            ℹ️  Une relecture humaine avant publication
+          </Text>
+          <Text style={[styles.infoText, { color: colors.textPrimary }]}>
+            Chaque feedback que vous envoyez est d'abord relu par un modérateur. Tant qu'il n'est pas publié, votre message n'est ni diffusé à l'équipe pédagogique ni analysé par le système de classification automatique.
+          </Text>
+          <Text style={[styles.infoText, { color: colors.textPrimary, marginTop: 8 }]}>
+            Le texte d'origine sert uniquement à cette relecture : il n'est jamais diffusé et il est effacé au moment de la publication. Le modérateur n'a accès à aucune donnée permettant de vous identifier. Vous pouvez suivre le statut de vos messages (en attente, publié ou refusé avec son motif) directement dans l'application.
+          </Text>
+          <Text style={[styles.infoText, { color: colors.textPrimary, marginTop: 8 }]}>
+            Si votre message est refusé, son texte d'origine est immédiatement chiffré (illisible au repos, y compris par nos équipes) et conservé au maximum 90 jours — le temps d'une éventuelle contestation — avant d'être supprimé définitivement. Un message refusé n'ayant jamais été publié, il n'est soumis à aucune obligation de conservation.
+          </Text>
+          <Text style={[styles.infoText, { color: colors.textPrimary, marginTop: 8 }]}>
+            Les verbatims que vous laissez dans une évaluation de cours suivent exactement le même parcours.
+          </Text>
+        </InfoBox>
       </Section>
 
       {/* ── 4. Obligation LCEN ─────────────────────────────────────────── */}
@@ -203,7 +225,7 @@ export function AproposContent({ colors, children }: AproposContentProps) {
       {/* ── Pied de page ───────────────────────────────────────────────── */}
       <View style={[styles.footer, { borderTopColor: colors.dividerLine }]}>
         <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-          Dernière mise à jour : juin 2026
+          Dernière mise à jour : juillet 2026
         </Text>
         <Text style={[styles.footerText, { color: colors.textSecondary }]}>
           IMT Mines Alès — Tous droits réservés

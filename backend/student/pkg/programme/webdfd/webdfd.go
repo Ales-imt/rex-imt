@@ -2,6 +2,7 @@ package webdfd
 
 import (
 	"back-rex-eleve/pkg/programme"
+	"back-rex-eleve/pkg/programme/webdfd/gen"
 	"context"
 	"errors"
 	"fmt"
@@ -51,12 +52,9 @@ func parseKV(line string) map[string]string {
 //
 // La table user_map est consultée en priorité, puis prof_map en repli.
 func (c *Connector) lookupWebdfdID(ctx context.Context, email string) (extID, typecle string, err error) {
-	err = c.DB.QueryRow(ctx,
-		`SELECT um.external_id
-		 FROM migration.user_map um
-		 JOIN public."user" u ON u.id = um.internal_id
-		 WHERE u.email = $1 AND um.source = 'webdfd'`,
-		email).Scan(&extID)
+	q := gen.New(c.DB)
+
+	extID, err = q.GetWebdfdStudentExternalID(ctx, email)
 	if err == nil {
 		return extID, "evcleunik", nil
 	}
@@ -64,12 +62,7 @@ func (c *Connector) lookupWebdfdID(ctx context.Context, email string) (extID, ty
 		return "", "", fmt.Errorf("webdfd: résolution étudiant %s: %w", email, err)
 	}
 
-	err = c.DB.QueryRow(ctx,
-		`SELECT pm.external_id
-		 FROM migration.prof_map pm
-		 JOIN public."user" u ON u.id = pm.internal_id
-		 WHERE u.email = $1 AND pm.source = 'webdfd'`,
-		email).Scan(&extID)
+	extID, err = q.GetWebdfdProfExternalID(ctx, email)
 	if err == nil {
 		return extID, "prcleunik", nil
 	}

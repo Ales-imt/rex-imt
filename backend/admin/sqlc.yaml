@@ -46,6 +46,17 @@ sql:
         emit_json_tags: true
 
   - engine: "postgresql"
+    queries: "pkg/moderation/query.sql"
+    schema: "../schema.sql"
+    gen:
+      go:
+        package: "moderation"
+        out: "pkg/moderation"
+        sql_package: "pgx/v5"
+        omit_unused_structs: true
+        emit_json_tags: true
+
+  - engine: "postgresql"
     queries: "pkg/reports/query.sql"
     schema: "../schema.sql"
     gen:

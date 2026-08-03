@@ -56,11 +56,15 @@ INSERT INTO eval_chip_reponse (
 
 
 -- name: InsertEvalVerbatim :exec
+-- Le texte est écrit dans raw_texte (pour la modération uniquement) ; texte
+-- reste NULL tant que le verbatim n'est pas publié (moderation_status vaut
+-- PENDING par défaut). Tant qu'il est PENDING, le verbatim n'est ni affiché
+-- dans l'admin, ni envoyé à l'IA.
 INSERT INTO eval_verbatim (
     id,
     session_id,
     dimension,
-    texte,
+    raw_texte,
     created_at,
     strongbox
 ) VALUES (
@@ -169,6 +173,42 @@ WHERE m.id = @matiere_id
 
 -- name: DeleteEvalSession :exec
 DELETE FROM eval_session WHERE id = @session_id AND pseudo = @pseudo;
+
+
+-- name: GetVerbatimStatusesByPseudo :many
+-- Statut de modération des verbatims de l'étudiant, agrégé par matière pour
+-- la liste des cours à évaluer. La preuve de possession est le pseudo, comme
+-- pour GetSubmittedMatiereIDs et DeleteEvalSession : le lien session→pseudo
+-- existe déjà dans eval_session, la jointure ne reconstruit aucune corrélation
+-- nouvelle. Le texte n'est PAS renvoyé ici (seul le statut est utile).
+SELECT es.matiere_id::text AS matiere_id,
+       ev.moderation_status
+FROM eval_verbatim ev
+JOIN eval_session es ON es.id = ev.session_id
+WHERE es.pseudo = @pseudo
+  AND es.submitted_at IS NOT NULL;
+
+
+-- name: GetVerbatimsBySessionAndPseudo :many
+-- Détail des verbatims d'une session, pour l'écran de détail de l'évaluation.
+--
+-- Cas REJECTED : raw_texte a été remplacé par sa version chiffrée (age) au
+-- moment du refus. On ne le renvoie donc JAMAIS — même règle que
+-- GetChatHistoryByPseudo pour les feedbacks. Tant que le verbatim est PENDING,
+-- l'étudiant revoit son propre texte d'origine (raw_texte) ; une fois publié,
+-- il voit la version éventuellement corrigée par le modérateur (texte).
+SELECT ev.dimension,
+       ev.moderation_status,
+       ev.rejection_reason,
+       (CASE WHEN ev.moderation_status = 'REJECTED'
+             THEN sqlc.arg(rejected_placeholder)::text
+             ELSE COALESCE(ev.texte, ev.raw_texte, '')
+        END)::text AS texte
+FROM eval_verbatim ev
+JOIN eval_session es ON es.id = ev.session_id
+WHERE es.id = sqlc.arg(session_id)
+  AND es.pseudo = sqlc.arg(pseudo)
+ORDER BY ev.dimension;
 
 
 -- name: GetUserNameSurname :one
