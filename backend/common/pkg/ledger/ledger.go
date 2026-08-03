@@ -36,12 +36,12 @@ const ledgerAdvisoryKey = 9_001_001
 // client) and is passed explicitly to the INSERT so its value is known before
 // hash computation.
 func AppendLedger(ctx context.Context, tx pgx.Tx, seanceID int64, userID int32, statut string, eventAt time.Time) (seq int64, h string, err error) {
+	q := gen.New(tx)
+
 	// 1. Serialise concurrent writers.
-	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", ledgerAdvisoryKey); err != nil {
+	if err = q.AcquireLedgerLock(ctx, ledgerAdvisoryKey); err != nil {
 		return 0, "", fmt.Errorf("ledger advisory lock: %w", err)
 	}
-
-	q := gen.New(tx)
 
 	// 2. Fetch the previous hash (genesis sentinel when the ledger is empty).
 	prevHash := GenesisHash

@@ -91,8 +91,8 @@ func InsertFeedbacks(r *http.Request, inputs []FeedbackRequest, agePublicKey str
 
 	for _, input := range inputs {
 		_, err := queries.InsertFeedbacks(context.Background(), InsertFeedbacksParams{
-			Content:   input.Content,
-			CreatedAt: services.ToPgTimestamptz(&now),
+			RawContent: services.ToPgText(input.Content),
+			CreatedAt:  services.ToPgTimestamptz(&now),
 			Strongbox: services.ToPgText(strongbox),
 			Pseudo:    services.ToPgText(input.Pseudo),
 			MessageID: services.ToPgText(input.MessageID),

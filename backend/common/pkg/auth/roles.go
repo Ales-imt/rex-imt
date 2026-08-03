@@ -5,4 +5,5 @@ const (
 	RoleGestionnaire = "GESTIONNAIRE"
 	RoleProf         = "PROF"
 	RoleEleve        = "ELEVE"
+	RoleModerateur   = "MODERATEUR"
 )

@@ -1,11 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-# dump de la bd V0, obligé de se logger avec le compte : userde@vecu-etudiant.mines-ales.fr
-#   ssh -L 5433:sql2.mines-ales.fr:5433 userde@vecu-etudiant.mines-ales.fr
-#   pg_dump -h localhost -p 5433  -U devedbuserext  -d devedb -F c -f devedb_backup.dump
+# Migre le contenu DÉJÀ PRÉSENT dans POSTGRES_DB : aucune donnée n'est importée ni supprimée,
+# le script se contente d'appliquer les migrations Liquibase et la migration des strongBox.
 #
-# pour migrer de la bd V0 dans la nouvelle bd, se conecter avec le compte : vecu-etudiant-eleves-2.mines-ales.fr
+# pour migrer la bd, se conecter avec le compte : vecu-etudiant-eleves-2.mines-ales.fr
 #   ssh -L 5433:sql2.mines-ales.fr:5433 userdfx@vecu-etudiant-eleves-2.mines-ales.fr
 #
 # Usage: migrate-v0-to-v1.sh <secrets-file>
@@ -37,49 +36,15 @@ psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_D
 }
 echo "✅ BD $POSTGRES_DB accessible"
 
-TABLE_COUNT=$(psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
-    "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public';")
-
-if [[ "$TABLE_COUNT" -gt 0 ]]; then
-    echo ""
-    echo "⚠️  ATTENTION — $TABLE_COUNT table(s) existent dans le schéma public de '$POSTGRES_DB'."
-    echo "    La suppression est DÉFINITIVE et irréversible."
-    echo "    Toutes les données seront perdues."
-    echo ""
-    read -r -p "    Tapez 'SUPPRIMER' pour confirmer : " CONFIRMATION
-    if [[ "$CONFIRMATION" != "SUPPRIMER" ]]; then
-        echo "❌ Annulé."
-        exit 1
-    fi
-fi
-
-echo "--- 🗑️ Suppression des tables existantes de $POSTGRES_DB ---"
-psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
-DROP SCHEMA IF EXISTS migration CASCADE;
-DROP TABLE IF EXISTS databasechangelog, databasechangeloglock CASCADE;
-DO $$ DECLARE
-    r RECORD;
-BEGIN
-    FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
-        EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
-    END LOOP;
-END $$;
-SQL
-echo "✅ Tables supprimées"
-
-echo "--- 📥 Restauration du dump V0 dans $POSTGRES_DB ---"
-pg_restore -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-    --no-owner --no-privileges \
-    "$INFRA_DIR/bd_data/devedb_backup.dump"
-echo "✅ Dump restauré"
-
 LIQUIBASE_OPTS="--changelog-file=db.changelog-master.yaml --url=jdbc:postgresql://$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB --username=$POSTGRES_USER --password=$POSTGRES_PASSWORD --driver=org.postgresql.Driver"
 
 echo "--- 🚀 Application des migrations Liquibase ---"
 mkdir -p "$INFRA_DIR/liquibase/liquibase_libs"
 cd "$INFRA_DIR/liquibase/liquibase_libs" && wget -nc https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.8/postgresql-42.7.8.jar || true
-echo "--- 🔄 Synchronisation Liquibase ---"
-cd "$INFRA_DIR/liquibase" && liquibase $LIQUIBASE_OPTS changelogSyncToTag v0.0.0
+echo "--- 🏗️ Création du schéma v0.0.0 ---"
+# Sans restauration du dump, le schéma V0 n'existe pas : on joue réellement les
+# changesets v0.0.0 (createTable) au lieu de les marquer comme appliqués.
+cd "$INFRA_DIR/liquibase" && liquibase $LIQUIBASE_OPTS updateToTag v0.0.0
 echo "--- 🏗️ Migrations pré-suppression user_id ---"
 cd "$INFRA_DIR/liquibase" && liquibase $LIQUIBASE_OPTS updateToTag pre-drop-user-id
 echo "--- 🚀 Mise à jour des strongBox ---"

@@ -2,6 +2,13 @@
 -- back-rex-admin (ancrage TSA, vérification) et back-rex-eleve (pointage).
 -- L'UNIQUE implémentation du chaînage est dans pkg/ledger/ledger.go.
 
+-- name: AcquireLedgerLock :exec
+-- Sérialise les écritures concurrentes du registre : sans ce verrou, deux
+-- insertions simultanées pourraient partager le même prev_hash et casser la
+-- chaîne. Verrou de niveau transaction, relâché automatiquement au COMMIT ou
+-- au ROLLBACK. À n'appeler que dans une transaction déjà ouverte.
+SELECT pg_advisory_xact_lock(@key);
+
 -- name: GetLastLedgerEntry :one
 -- Dernier maillon du registre (démarrage d'AppendLedger et ancrage TSA).
 SELECT seq, hash FROM presence_ledger ORDER BY seq DESC LIMIT 1;

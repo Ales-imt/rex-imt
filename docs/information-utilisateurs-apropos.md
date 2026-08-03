@@ -35,9 +35,9 @@ Cette application collecte les données suivantes dans le cadre de sa mission p�
 
 **Identité** — Nom, prénom, adresse e-mail institutionnelle — utilisés pour l'authentification via le LDAP de l'école.
 
-**Feedbacks** — Contenu textuel, pseudo choisi, promotion et groupe — collectés pour améliorer la qualité des enseignements.
+**Feedbacks** — Contenu textuel, pseudo choisi, promotion et groupe — collectés pour améliorer la qualité des enseignements. Chaque message est relu par un modérateur avant toute diffusion ou analyse (voir ci-dessous).
 
-**Évaluations** — Scores par dimension pédagogique et verbatims optionnels — collectés de façon anonyme (aucun lien avec votre identité côté serveur).
+**Évaluations** — Scores par dimension pédagogique et verbatims optionnels. Comme les feedbacks, chaque verbatim est relu par un modérateur avant toute diffusion ou analyse, et l'évaluation est associée à une donnée d'identification chiffrée (adresse IP et identifiant technique) conservée pour répondre aux obligations légales ; elle n'est ni affichée ni accessible à l'équipe pédagogique.
 
 **Présences** — Identifiant de séance, statut (présent / retard) et heure de pointage — collectés par scan de QR code lors des séances. Un registre cryptographique d'intégrité garantit l'inaltérabilité de ces données. Base légale : obligation légale d'assiduité (Art. L123-1 Code de l'éducation).
 
@@ -54,9 +54,24 @@ Cette application collecte les données suivantes dans le cadre de sa mission p�
 | Votre compte | Durée de la scolarité + 1 an |
 | Contenu de vos feedbacks | 3 ans à compter de la publication |
 | Données d'identification (IP chiffrée) | 1 an à compter de la publication |
+| Messages et verbatims refusés en modération | 90 jours à compter du refus, puis suppression définitive |
 | Évaluations anonymes | Conservées à des fins statistiques |
 | Données de présence | Durée de la scolarité + 5 ans (obligation légale) |
 | Tokens de session | 3 mois puis suppression automatique |
+
+---
+
+## Modération de vos messages
+
+> ℹ️ **Une relecture humaine avant publication**
+>
+> Chaque feedback que vous envoyez est d'abord relu par un modérateur. Tant qu'il n'est pas publié, votre message n'est ni diffusé à l'équipe pédagogique ni analysé par le système de classification automatique.
+>
+> Le texte d'origine sert uniquement à cette relecture : il n'est jamais diffusé et il est effacé au moment de la publication. Le modérateur n'a accès à aucune donnée permettant de vous identifier. Vous pouvez suivre le statut de vos messages (en attente, publié ou refusé avec son motif) directement dans l'application.
+>
+> Si votre message est refusé, son texte d'origine est immédiatement chiffré (illisible au repos, y compris par nos équipes) et conservé au maximum 90 jours — le temps d'une éventuelle contestation — avant d'être supprimé définitivement. Un message refusé n'ayant jamais été publié, il n'est soumis à aucune obligation de conservation.
+>
+> Les verbatims que vous laissez dans une évaluation de cours suivent exactement le même parcours.
 
 ---
 
@@ -116,4 +131,4 @@ Si vous estimez que le traitement de vos données ne respecte pas la réglementa
 
 ---
 
-*Dernière mise à jour : juin 2026 — IMT Mines Alès — Tous droits réservés*
+*Dernière mise à jour : août 2026 — IMT Mines Alès — Tous droits réservés*

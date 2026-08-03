@@ -17,7 +17,7 @@ databaseChangeLog:
                   valueDate: "2025-08-20"
               - column:
                   name: fin
-                  valueDate: "2026-07-31"
+                  valueDate: "2026-08-04"
       rollback:
         - delete:
             tableName: annee
@@ -37,7 +37,7 @@ databaseChangeLog:
                   value: "2026/2027"
               - column:
                   name: debut
-                  valueDate: "2026-08-01"
+                  valueDate: "2026-08-05"
               - column:
                   name: fin
                   valueDate: "2027-06-30"

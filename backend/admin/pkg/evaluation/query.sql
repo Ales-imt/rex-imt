@@ -44,21 +44,32 @@ HAVING COUNT(ecr.session_id) > 0
 ORDER BY cr.dimension, cr.polarite DESC, nb DESC;
 
 -- name: GetVerbatimsByMatiere :many
-SELECT ev.id, ev.session_id, ev.dimension, ev.texte, ev.created_at
+-- Seuls les verbatims PUBLISHED sont affichés : un verbatim PENDING n'a pas
+-- encore été relu, un REJECTED a son texte chiffré (age) dans raw_texte et ne
+-- doit jamais ressortir. texte est NULLABLE (renseigné à la publication) : on
+-- le coalesce pour conserver le type string côté Go.
+SELECT ev.id, ev.session_id, ev.dimension,
+       COALESCE(ev.texte, '')::text AS texte,
+       ev.created_at
 FROM eval_verbatim ev
 JOIN eval_session es ON es.id = ev.session_id
 WHERE es.matiere_id = $1
   AND es.submitted_at IS NOT NULL
+  AND ev.moderation_status = 'PUBLISHED'
 ORDER BY ev.dimension, ev.created_at DESC
 LIMIT $2 OFFSET $3;
 
 -- name: GetVerbatimsByMatiereFiltered :many
-SELECT ev.id, ev.session_id, ev.dimension, ev.texte, ev.created_at
+-- Idem GetVerbatimsByMatiere, restreint à une dimension.
+SELECT ev.id, ev.session_id, ev.dimension,
+       COALESCE(ev.texte, '')::text AS texte,
+       ev.created_at
 FROM eval_verbatim ev
 JOIN eval_session es ON es.id = ev.session_id
 WHERE es.matiere_id = $1
   AND es.submitted_at IS NOT NULL
   AND ev.dimension = $2
+  AND ev.moderation_status = 'PUBLISHED'
 ORDER BY ev.created_at DESC
 LIMIT $3 OFFSET $4;
 
@@ -112,10 +123,15 @@ GROUP BY cr.id, cr.libelle, cr.polarite
 ORDER BY cr.polarite DESC, nb DESC;
 
 -- name: GetVerbatimsForPrompt :many
-SELECT ev.dimension, ev.texte
+-- L'IA ne reçoit que des verbatims modérés/publiés — même règle que pour les
+-- feedbacks, où le déclenchement IA est câblé sur le passage à PUBLISHED
+-- (cf. trigger feedback_notify).
+SELECT ev.dimension, COALESCE(ev.texte, '')::text AS texte
 FROM eval_verbatim ev
 JOIN eval_session es ON es.id = ev.session_id
-WHERE es.matiere_id = $1 AND es.submitted_at IS NOT NULL
+WHERE es.matiere_id = $1
+  AND es.submitted_at IS NOT NULL
+  AND ev.moderation_status = 'PUBLISHED'
 ORDER BY ev.dimension, ev.created_at DESC
 LIMIT $2;
 

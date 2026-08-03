@@ -32,6 +32,24 @@ type Message = {
   time: string;
 };
 
+type ModerationStatus = 'PENDING' | 'PUBLISHED' | 'REJECTED';
+
+type StatusInfo = {
+  status: ModerationStatus;
+  reason?: string;
+};
+
+function statusLabel(info: StatusInfo): string {
+  switch (info.status) {
+    case 'PUBLISHED':
+      return '✓ Publié';
+    case 'REJECTED':
+      return info.reason ? `✕ Refusé : ${info.reason}` : '✕ Refusé';
+    default:
+      return '⏳ En attente de modération';
+  }
+}
+
 type ChatItem = {
   id: string;
   text: string;
@@ -172,9 +190,10 @@ function FullscreenComposer({ visible, value, onChangeText, onDone, onClose, col
   );
 }
 
-function Bubble({ message, colors, onRequestDelete }: {
+function Bubble({ message, colors, status, onRequestDelete }: {
   message: Message;
   colors: typeof Colors.light;
+  status?: StatusInfo;
   onRequestDelete: (id: string) => void;
 }) {
   const isMe = message.from === 'me';
@@ -217,6 +236,16 @@ function Bubble({ message, colors, onRequestDelete }: {
             {formatDate(message.time)}
           </Text>
         )}
+        {isMe && !deleted && status && (
+          <Text
+            style={[
+              styles.statusLine,
+              { color: status.status === 'REJECTED' ? '#dc2626' : colors.bubbleTime },
+            ]}
+          >
+            {statusLabel(status)}
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -233,6 +262,33 @@ export default function ChatScreen() {
   const errorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [statuses, setStatuses] = useState<Record<string, StatusInfo>>({});
+
+  // Récupère le statut de modération (en attente / publié / refusé) des
+  // messages dont on détient le message_id. La preuve de possession est le
+  // couple (X-Pseudo, message_id) : aucun lien auteur→feedback n'est reconstruit
+  // côté serveur.
+  const fetchStatuses = useCallback(async (ids: string[], pseudo: string | null) => {
+    if (ids.length === 0 || !pseudo) return;
+    try {
+      const res = await apiInstance.post<
+        { message_id: string; moderation_status: ModerationStatus; rejection_reason?: string }[]
+      >(
+        '/feedback/status',
+        { message_ids: ids },
+        { headers: { 'X-Pseudo': encodeURIComponent(pseudo) } },
+      );
+      setStatuses(prev => {
+        const next = { ...prev };
+        for (const item of res.data) {
+          next[item.message_id] = { status: item.moderation_status, reason: item.rejection_reason };
+        }
+        return next;
+      });
+    } catch {
+      // silencieux : le statut est une information secondaire.
+    }
+  }, []);
 
   function showError(msg: string) {
     setError(msg);
@@ -327,6 +383,8 @@ export default function ChatScreen() {
               from: item.source,
               time: item.ts,
             })));
+            const meIds = res.data.filter(item => item.source === 'me').map(item => item.id);
+            fetchStatuses(meIds, pseudo);
           }
         } catch (e) {
           showError('Impossible de charger les messages.');
@@ -337,7 +395,7 @@ export default function ChatScreen() {
       fetchHistory(true);
       const interval = setInterval(() => fetchHistory(false), 3 * 60_000);
       return () => { cancelled = true; clearInterval(interval); };
-    }, [months])
+    }, [months, fetchStatuses])
   );
 
   const dynamicStyles = useMemo(() => StyleSheet.create({
@@ -382,6 +440,8 @@ export default function ChatScreen() {
         ...prev,
         { id: message_id, text, from: 'me', time: now() },
       ]);
+      // Le message part en modération : on l'affiche immédiatement « en attente ».
+      setStatuses(prev => ({ ...prev, [message_id]: { status: 'PENDING' } }));
       // En portrait, garder le focus sur le champ pour ne pas fermer le
       // clavier. En paysage, ne pas refocus : cela rouvrirait le mode
       // plein écran natif du clavier.
@@ -461,7 +521,7 @@ export default function ChatScreen() {
                 data={messages}
                 extraData={messages}
                 keyExtractor={m => m.id}
-                renderItem={({ item }) => <Bubble message={item} colors={colors} onRequestDelete={setPendingDeleteId} />}
+                renderItem={({ item }) => <Bubble message={item} colors={colors} status={statuses[item.id]} onRequestDelete={setPendingDeleteId} />}
                 contentContainerStyle={styles.list}
                 onScroll={handleScroll}
                 scrollEventThrottle={16}
@@ -616,6 +676,13 @@ const styles = StyleSheet.create({
     opacity: 0.4,
     marginTop: 2,
     marginHorizontal: 4,
+  },
+  statusLine: {
+    fontSize: 10,
+    textAlign: 'right',
+    marginTop: 2,
+    marginHorizontal: 4,
+    fontStyle: 'italic',
   },
   inputBar: {
     flexDirection: 'row',

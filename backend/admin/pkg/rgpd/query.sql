@@ -31,6 +31,22 @@ WHERE feedback_id IN (
 -- name: DeleteFeedback :execrows
 DELETE FROM feedback WHERE created_at < $1;
 
+-- name: PurgeRejectedFeedback :execrows
+-- Un feedback REJECTED n'a jamais été publié : aucune conservation LCEN ne s'y
+-- applique. On supprime la ligne (raw_content + strongbox compris) passé un
+-- court délai après la décision de modération.
+DELETE FROM feedback
+WHERE moderation_status = 'REJECTED'
+  AND moderated_at < $1;
+
+-- name: PurgeRejectedVerbatim :execrows
+-- Un verbatim REJECTED n'a jamais été publié : aucune conservation LCEN ne s'y
+-- applique. On supprime la ligne (raw_texte chiffré + strongbox compris) passé
+-- un court délai après la décision de modération.
+DELETE FROM eval_verbatim
+WHERE moderation_status = 'REJECTED'
+  AND moderated_at < $1;
+
 -- name: GetUserIDByEmail :one
 SELECT id FROM "user" WHERE email = $1;
 

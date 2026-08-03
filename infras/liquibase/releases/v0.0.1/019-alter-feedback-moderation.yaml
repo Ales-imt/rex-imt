@@ -1,0 +1,142 @@
+databaseChangeLog:
+
+  # ---- 19a. Colonnes de modération avant diffusion -----------------------
+  # raw_content : texte brut d'origine, sert UNIQUEMENT à la modération, jamais
+  #   diffusé, effacé à la publication. Non soumis à la conservation LCEN.
+  # moderation_status : PENDING | PUBLISHED | REJECTED (PENDING par défaut).
+  # content devient NULLABLE : il n'est renseigné qu'à la publication.
+  - changeSet:
+      id: v0.0.1-019a-feedback-moderation-columns
+      author: vjo
+      changes:
+        - addColumn:
+            tableName: feedback
+            schemaName: public
+            columns:
+              - column:
+                  name: raw_content
+                  type: text
+              - column:
+                  name: moderation_status
+                  type: text
+                  defaultValue: PENDING
+                  constraints:
+                    nullable: false
+              - column:
+                  name: moderated_by
+                  type: int
+              - column:
+                  name: moderated_at
+                  type: timestamptz
+              - column:
+                  name: rejection_reason
+                  type: text
+        - dropNotNullConstraint:
+            tableName: feedback
+            schemaName: public
+            columnName: content
+            columnDataType: text
+        - createIndex:
+            tableName: feedback
+            schemaName: public
+            indexName: idx_feedback_moderation_status
+            columns:
+              - column:
+                  name: moderation_status
+      rollback:
+        - dropIndex:
+            tableName: feedback
+            schemaName: public
+            indexName: idx_feedback_moderation_status
+        - addNotNullConstraint:
+            tableName: feedback
+            schemaName: public
+            columnName: content
+            columnDataType: text
+        - dropColumn:
+            tableName: feedback
+            schemaName: public
+            columnName: rejection_reason
+        - dropColumn:
+            tableName: feedback
+            schemaName: public
+            columnName: moderated_at
+        - dropColumn:
+            tableName: feedback
+            schemaName: public
+            columnName: moderated_by
+        - dropColumn:
+            tableName: feedback
+            schemaName: public
+            columnName: moderation_status
+        - dropColumn:
+            tableName: feedback
+            schemaName: public
+            columnName: raw_content
+
+  # ---- 19c. Backfill : anciens feedbacks à modérer -----------------------
+  # Les feedbacks existants avaient leur texte dans content. On le déplace vers
+  # raw_content (et on met content à NULL) : ils repassent ainsi dans le
+  # pipeline de modération (moderation_status vaut déjà PENDING par défaut) et
+  # ne sont plus diffusés tant qu'un modérateur ne les a pas republiés.
+  - changeSet:
+      id: v0.0.1-019c-feedback-backfill-raw-content
+      author: vjo
+      changes:
+        - sql:
+            sql: >
+              UPDATE public.feedback
+              SET raw_content = content,
+                  content     = NULL
+              WHERE raw_content IS NULL
+                AND content IS NOT NULL;
+      rollback:
+        - sql:
+            sql: >
+              UPDATE public.feedback
+              SET content     = raw_content,
+                  raw_content = NULL
+              WHERE content IS NULL
+                AND raw_content IS NOT NULL;
+
+  # ---- 19b. Trigger de notification IA sur passage à PUBLISHED ------------
+  # Le déclenchement IA est déplacé de l'INSERT vers la transition vers
+  # PUBLISHED : l'IA ne reçoit ainsi que du contenu modéré/publié.
+  - changeSet:
+      id: v0.0.1-019b-feedback-trigger-on-publish
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE OR REPLACE FUNCTION public.notify_new_feedback() RETURNS trigger
+                  LANGUAGE plpgsql AS $$
+              BEGIN
+                PERFORM pg_notify(
+                  'new_feedback',
+                  json_build_object(
+                    'id',        NEW.id,
+                    'content',   NEW.content,
+                    'promotion', NEW.promotion,
+                    'groupe',    NEW.groupe
+                  )::text
+                );
+                RETURN NEW;
+              END;
+              $$;
+
+              DROP TRIGGER IF EXISTS feedback_notify ON public.feedback;
+              CREATE TRIGGER feedback_notify
+                AFTER UPDATE OF moderation_status ON public.feedback
+                FOR EACH ROW
+                WHEN (OLD.moderation_status IS DISTINCT FROM 'PUBLISHED'
+                      AND NEW.moderation_status = 'PUBLISHED')
+                EXECUTE FUNCTION public.notify_new_feedback();
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: |
+              DROP TRIGGER IF EXISTS feedback_notify ON public.feedback;
+              CREATE TRIGGER feedback_notify
+                AFTER INSERT ON public.feedback
+                FOR EACH ROW EXECUTE FUNCTION public.notify_new_feedback();

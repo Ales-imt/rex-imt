@@ -22,7 +22,24 @@ type MatiereSummary = {
   prof: string;
   formation: string;
   fait: boolean;
+  /** Agrégat de l'état des verbatims : PENDING tant qu'au moins un commentaire
+   *  attend la relecture d'un modérateur. Absent si l'évaluation n'en a aucun. */
+  moderation_status?: 'PENDING' | 'REJECTED' | 'PUBLISHED';
 };
+
+/** Quatre états visuels : à faire (violet), en relecture (orange), refusé
+ *  (rouge), fait (vert). L'orange et le rouge signalent une évaluation bien
+ *  envoyée, mais dont un commentaire libre n'est pas diffusé — en attente de
+ *  relecture pour l'un, écarté par un modérateur pour l'autre.
+ *
+ *  L'ordre de priorité suit celui de l'agrégat calculé côté serveur : tant
+ *  qu'un verbatim attend, l'attente prime sur un refus déjà prononcé. */
+function cardState(c: MatiereSummary): 'todo' | 'moderation' | 'rejected' | 'done' {
+  if (!c.fait) return 'todo';
+  if (c.moderation_status === 'PENDING') return 'moderation';
+  if (c.moderation_status === 'REJECTED') return 'rejected';
+  return 'done';
+}
 
 export default function CoursListScreen() {
   const colors = useTheme();
@@ -81,37 +98,55 @@ export default function CoursListScreen() {
             data={cours}
             keyExtractor={(item) => item.matiereId}
             contentContainerStyle={styles.list}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: item.fait ? colors.evalDoneBg : colors.evalTodoBg,
-                    borderColor: item.fait ? colors.evalDoneBorder : colors.evalTodoBorder,
-                  },
-                ]}
-                onPress={() => handlePress(item)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.cardBody}>
-                  <Text style={[styles.coursName, { color: colors.textPrimary }]} numberOfLines={2}>
-                    {item.nom}
-                  </Text>
-                  <Text style={[styles.coursMeta, { color: colors.textSecondary }]}>
-                    {[item.prof, item.formation].filter(Boolean).join(' · ')}
-                  </Text>
-                </View>
-                {item.fait ? (
-                  <View style={styles.badgeDone}>
-                    <Text style={styles.badgeDoneText}>Fait ✓</Text>
+            renderItem={({ item }) => {
+              const state = cardState(item);
+              const bg = {
+                todo: colors.evalTodoBg,
+                moderation: colors.evalModerationBg,
+                rejected: colors.evalRejectedBg,
+                done: colors.evalDoneBg,
+              }[state];
+              const border = {
+                todo: colors.evalTodoBorder,
+                moderation: colors.evalModerationBorder,
+                rejected: colors.evalRejectedBorder,
+                done: colors.evalDoneBorder,
+              }[state];
+
+              return (
+                <TouchableOpacity
+                  style={[styles.card, { backgroundColor: bg, borderColor: border }]}
+                  onPress={() => handlePress(item)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.cardBody}>
+                    <Text style={[styles.coursName, { color: colors.textPrimary }]} numberOfLines={2}>
+                      {item.nom}
+                    </Text>
+                    <Text style={[styles.coursMeta, { color: colors.textSecondary }]}>
+                      {[item.prof, item.formation].filter(Boolean).join(' · ')}
+                    </Text>
                   </View>
-                ) : (
-                  <View style={styles.badgeTodo}>
-                    <Text style={styles.badgeTodoText}>À faire →</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            )}
+                  {state === 'todo' ? (
+                    <View style={styles.badgeTodo}>
+                      <Text style={styles.badgeText}>À faire →</Text>
+                    </View>
+                  ) : state === 'moderation' ? (
+                    <View style={styles.badgeModeration}>
+                      <Text style={styles.badgeText}>En relecture ⏳</Text>
+                    </View>
+                  ) : state === 'rejected' ? (
+                    <View style={styles.badgeRejected}>
+                      <Text style={styles.badgeText}>Refusé ✕</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.badgeDone}>
+                      <Text style={styles.badgeText}>Fait ✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            }}
             ListEmptyComponent={
               <Text style={[styles.empty, { color: colors.textSecondary }]}>
                 Aucun cours sur cette année scolaire.
@@ -166,14 +201,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  badgeTodoText: { fontSize: 12, fontWeight: '600', color: '#ffffff' },
+  badgeModeration: {
+    backgroundColor: '#F97316',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  badgeRejected: {
+    backgroundColor: '#EF4444',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
   badgeDone: {
     backgroundColor: '#16A34A',
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  badgeDoneText: { fontSize: 12, fontWeight: '600', color: '#ffffff' },
+  badgeText: { fontSize: 12, fontWeight: '600', color: '#ffffff' },
   empty: { textAlign: 'center', marginTop: 40, fontSize: 14, fontStyle: 'italic' },
   footer: { padding: 16, borderTopWidth: 1, gap: 8 },
   progressTrack: {

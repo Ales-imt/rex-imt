@@ -1,0 +1,102 @@
+databaseChangeLog:
+
+  # ---- 20a. Colonnes de modération des verbatims -------------------------
+  # Décalque le pipeline des feedbacks (cf. 019) sur eval_verbatim :
+  # raw_texte : texte brut d'origine, sert UNIQUEMENT à la modération, jamais
+  #   diffusé ni envoyé à l'IA, effacé à la publication.
+  # moderation_status : PENDING | PUBLISHED | REJECTED (PENDING par défaut).
+  # texte devient NULLABLE : il n'est renseigné qu'à la publication.
+  - changeSet:
+      id: v0.0.1-020a-verbatim-moderation-columns
+      author: vjo
+      changes:
+        - addColumn:
+            tableName: eval_verbatim
+            schemaName: public
+            columns:
+              - column:
+                  name: raw_texte
+                  type: text
+              - column:
+                  name: moderation_status
+                  type: text
+                  defaultValue: PENDING
+                  constraints:
+                    nullable: false
+              - column:
+                  name: moderated_by
+                  type: int
+              - column:
+                  name: moderated_at
+                  type: timestamptz
+              - column:
+                  name: rejection_reason
+                  type: text
+        - dropNotNullConstraint:
+            tableName: eval_verbatim
+            schemaName: public
+            columnName: texte
+            columnDataType: text
+        - createIndex:
+            tableName: eval_verbatim
+            schemaName: public
+            indexName: idx_verbatim_moderation_status
+            columns:
+              - column:
+                  name: moderation_status
+      rollback:
+        - dropIndex:
+            tableName: eval_verbatim
+            schemaName: public
+            indexName: idx_verbatim_moderation_status
+        - addNotNullConstraint:
+            tableName: eval_verbatim
+            schemaName: public
+            columnName: texte
+            columnDataType: text
+        - dropColumn:
+            tableName: eval_verbatim
+            schemaName: public
+            columnName: rejection_reason
+        - dropColumn:
+            tableName: eval_verbatim
+            schemaName: public
+            columnName: moderated_at
+        - dropColumn:
+            tableName: eval_verbatim
+            schemaName: public
+            columnName: moderated_by
+        - dropColumn:
+            tableName: eval_verbatim
+            schemaName: public
+            columnName: moderation_status
+        - dropColumn:
+            tableName: eval_verbatim
+            schemaName: public
+            columnName: raw_texte
+
+  # ---- 20b. Backfill : verbatims existants à modérer ---------------------
+  # Les verbatims existants avaient leur texte dans texte. On le déplace vers
+  # raw_texte (et on met texte à NULL) : ils repassent ainsi dans le pipeline
+  # de modération (moderation_status vaut déjà PENDING par défaut) et ne sont
+  # plus ni affichés ni envoyés à l'IA tant qu'un modérateur ne les a pas
+  # publiés.
+  - changeSet:
+      id: v0.0.1-020b-verbatim-backfill-raw-texte
+      author: vjo
+      changes:
+        - sql:
+            sql: >
+              UPDATE public.eval_verbatim
+              SET raw_texte = texte,
+                  texte     = NULL
+              WHERE raw_texte IS NULL
+                AND texte IS NOT NULL;
+      rollback:
+        - sql:
+            sql: >
+              UPDATE public.eval_verbatim
+              SET texte     = raw_texte,
+                  raw_texte = NULL
+              WHERE texte IS NULL
+                AND raw_texte IS NOT NULL;
