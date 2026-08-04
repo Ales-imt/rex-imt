@@ -122,9 +122,9 @@ Sources : `backend/admin/pkg/moderation/`, `infras/liquibase/releases/v0.0.1/019
 
 ### ✅ Résolu — retrait du fournisseur IA externe ("ragarenn")
 
-La révision précédente de ce document (2026-07-01) signalait un **troisième fournisseur IA optionnel**, `ragarenn`, pointant vers `https://ragarenn.eskemm-numerique.fr`, service hébergé **hors de l'infrastructure de l'école**.
+La révision précédente de ce document (commit `dd77a45`) signalait un **troisième fournisseur IA optionnel**, `ragarenn`, pointant vers `https://ragarenn.eskemm-numerique.fr`, service hébergé **hors de l'infrastructure de l'école**.
 
-**Cette configuration a été retirée.** L'adresse externe n'existe plus dans le dépôt : le bloc `ragarenn:` a disparu des deux fichiers de configuration (`backend/admin/cmd/config.yaml` et `infras/run/config-admin.yaml`) au commit `cf073a3`, et aucune occurrence du domaine `eskemm-numerique.fr` ne subsiste nulle part dans le code, l'infrastructure ou les playbooks Ansible.
+**Cette configuration a été retirée.** L'adresse externe n'existe plus dans le dépôt : le bloc `ragarenn:` a disparu des deux fichiers de configuration (`backend/admin/cmd/config.yaml` et `infras/run/config-admin.yaml`) au commit `cf073a3` (2026-07-31), et aucune occurrence du domaine `eskemm-numerique.fr` ne subsiste nulle part dans le code, l'infrastructure ou les playbooks Ansible.
 
 **Conséquence pratique :** sélectionner `provider: ragarenn` aujourd'hui produirait une `baseURL` vide — le connecteur échouerait au premier appel sans joindre aucun tiers. Le rétablissement d'un transfert externe supposerait de **réintroduire délibérément une adresse** dans la configuration, ce qui ne peut pas résulter d'une simple bascule de paramètre.
 
@@ -275,4 +275,23 @@ Point connexe : aucune procédure de contestation n'est aujourd'hui outillée da
 
 ---
 
-*Document préparé pour la présentation au DPO — état du code au 2026-08-03 (branche `moerateur`). Révision précédente : 2026-07-01, avant l'introduction du pipeline de modération préalable (§4 bis).*
+## Version de référence de ce document
+
+| | |
+|---|---|
+| **Branche** | `main` |
+| **Commit décrit** | `0dde667` — « moderation feedback et verbatin » (2026-08-03) |
+| **Révision précédente** | `dd77a45` — « creation annee » (2026-07-02), antérieure au pipeline de modération préalable (§4 bis) |
+
+Les constats de ce document ont été vérifiés dans le code à ce commit. Toute modification ultérieure du pipeline de modération, des durées de conservation (§7) ou de la configuration des fournisseurs IA (§5) invalide potentiellement les affirmations ci-dessus et doit donner lieu à une nouvelle revue.
+
+Pour retrouver l'état exact du code décrit ici :
+
+```bash
+git show 0dde667 --stat
+git diff dd77a45..0dde667 -- backend/ infras/liquibase/
+```
+
+---
+
+*Document préparé pour la présentation au DPO — IMT Mines Alès.*

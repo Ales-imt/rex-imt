@@ -132,3 +132,7 @@ Si vous estimez que le traitement de vos données ne respecte pas la réglementa
 ---
 
 *Dernière mise à jour : août 2026 — IMT Mines Alès — Tous droits réservés*
+
+---
+
+*Copie conforme au composant source `apps/mobile/components/apropos-content.tsx` au commit `0dde667` (branche `main`, 2026-08-03).*
