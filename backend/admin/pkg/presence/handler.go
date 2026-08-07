@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -602,7 +603,22 @@ func PresencePdfHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := buildPdfData(seance, rows, horsGroupe)
+	lignes := make([]presenceLigne, 0, len(rows))
+	for _, r := range rows {
+		lignes = append(lignes, presenceLigne{
+			UserID: r.UserID, Name: r.Name, Surname: r.Surname,
+			Statut: r.Statut, PointeAt: r.PointeAt,
+		})
+	}
+	lignesHG := make([]presenceLigne, 0, len(horsGroupe))
+	for _, r := range horsGroupe {
+		lignesHG = append(lignesHG, presenceLigne{
+			UserID: r.UserID, Name: r.Name, Surname: r.Surname,
+			Statut: r.Statut, PointeAt: r.PointeAt,
+		})
+	}
+
+	data := buildPdfData(seanceInfoFromDetail(seance), lignes, lignesHG, time.Now().UTC())
 
 	filename := fmt.Sprintf("presence-seance-%d.pdf", seanceID)
 	w.Header().Set("Content-Type", "application/pdf")
@@ -613,6 +629,221 @@ func PresencePdfHandler(w http.ResponseWriter, r *http.Request) {
 		// Headers already sent; log only
 		_ = err
 	}
+}
+
+// ─── Export semestriel ────────────────────────────────────────────────────────
+
+// parseBool lit un booléen de query string, avec valeur par défaut lorsque le
+// paramètre est absent.
+func parseBool(r *http.Request, nom string, defaut bool) bool {
+	v := r.URL.Query().Get(nom)
+	if v == "" {
+		return defaut
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return defaut
+	}
+	return b
+}
+
+// parseIDs lit une liste d'identifiants en CSV. Une liste vide vaut « toutes
+// les matières » : le filtre SQL est alors désactivé.
+func parseIDs(csv string) ([]int64, error) {
+	if strings.TrimSpace(csv) == "" {
+		return nil, nil
+	}
+	champs := strings.Split(csv, ",")
+	ids := make([]int64, 0, len(champs))
+	for _, c := range champs {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(c, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("identifiant de matière invalide : %q", c)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// parseBorneJour accepte une date seule (AAAA-MM-JJ) ou un instant ISO complet.
+// Pour la borne haute, une date seule désigne la journée entière : elle est
+// avancée au lendemain, la requête comparant par « < ».
+func parseBorneJour(s string, finDeJournee bool) (pgtype.Timestamptz, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return pgtype.Timestamptz{}, nil
+	}
+	if t, ok := parseISO(s); ok {
+		return pgtype.Timestamptz{Time: t, Valid: true}, nil
+	}
+	t, err := time.ParseInLocation("2006-01-02", s, parisLoc)
+	if err != nil {
+		return pgtype.Timestamptz{}, fmt.Errorf("date invalide : %q", s)
+	}
+	if finDeJournee {
+		t = t.AddDate(0, 0, 1)
+	}
+	return pgtype.Timestamptz{Time: t, Valid: true}, nil
+}
+
+// PeriodePresencePdfHandler génère en un seul document toutes les feuilles de
+// présence d'une période. Génération synchrone en mémoire : de l'ordre de
+// 120 à 200 pages en quelques secondes, un traitement asynchrone coûterait
+// plus qu'il ne rapporterait.
+// GET /presence/periodes/{periodeId}/pdf
+func PeriodePresencePdfHandler(w http.ResponseWriter, r *http.Request) {
+	periodeID, err := strconv.ParseInt(chi.URLParam(r, "periodeId"), 10, 64)
+	if err != nil {
+		services.InvalidRequestError(w, r, "periodeId invalide", services.NO_INFORMATION, nil)
+		return
+	}
+
+	matiereIDs, err := parseIDs(r.URL.Query().Get("matiere_ids"))
+	if err != nil {
+		services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+	from, err := parseBorneJour(r.URL.Query().Get("from"), false)
+	if err != nil {
+		services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+	to, err := parseBorneJour(r.URL.Query().Get("to"), true)
+	if err != nil {
+		services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+
+	doc, header, err := buildSemestreDoc(context.Background(), services.GetPgCtx(r.Context()).Db, exportParams{
+		PeriodeID:  periodeID,
+		MatiereIDs: matiereIDs,
+		From:       from,
+		To:         to,
+		Options: pdfOptions{
+			Cover:     parseBool(r, "cover", true),
+			Recap:     parseBool(r, "recap", true),
+			Signature: parseBool(r, "signature", false),
+			Ledger:    parseBool(r, "ledger", true),
+		},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "période introuvable", http.StatusNotFound)
+			return
+		}
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+
+	// Contrairement au PDF unitaire, aucune séance ouverte ne fait échouer la
+	// requête : elles sont listées en page de garde (cf. buildSemestreDoc).
+	filename := exportFilename(header)
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	w.Header().Set("Cache-Control", "no-store")
+
+	if err := generateSemestrePDF(w, doc); err != nil {
+		// En-têtes déjà émis : impossible de basculer sur une réponse d'erreur.
+		_ = err
+	}
+}
+
+type exportMatiereItem struct {
+	ID             int64  `json:"id"`
+	Name           string `json:"name"`
+	NbSeances      int64  `json:"nb_seances"`
+	NbNonCloturees int64  `json:"nb_non_cloturees"`
+	Premiere       string `json:"premiere"`
+	Derniere       string `json:"derniere"`
+}
+
+type exportSummaryResponse struct {
+	PeriodeID int64               `json:"periode_id"`
+	Periode   string              `json:"periode"`
+	Promo     string              `json:"promo"`
+	Annee     int32               `json:"annee"`
+	NbEleves  int64               `json:"nb_eleves"`
+	Du        string              `json:"du"`
+	Au        string              `json:"au"`
+	Matieres  []exportMatiereItem `json:"matieres"`
+}
+
+// PeriodeExportSummaryHandler renseigne le dialogue d'export avant génération :
+// matières, volumétrie, séances encore ouvertes et étendue des dates. Sans lui,
+// le client devrait interroger le planning matière par matière.
+// GET /presence/periodes/{periodeId}/export-summary
+func PeriodeExportSummaryHandler(w http.ResponseWriter, r *http.Request) {
+	periodeID, err := strconv.ParseInt(chi.URLParam(r, "periodeId"), 10, 64)
+	if err != nil {
+		services.InvalidRequestError(w, r, "periodeId invalide", services.NO_INFORMATION, nil)
+		return
+	}
+
+	q := New(services.GetPgCtx(r.Context()).Db)
+	ctx := context.Background()
+
+	header, err := q.GetPeriodeHeader(ctx, periodeID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "période introuvable", http.StatusNotFound)
+			return
+		}
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+
+	matieres, err := q.ListMatieresPeriodeSummary(ctx, pgtype.Int8{Int64: periodeID, Valid: true})
+	if err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+	nbEleves, err := q.CountElevesPeriode(ctx, periodeID)
+	if err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+
+	resp := exportSummaryResponse{
+		PeriodeID: header.ID,
+		Periode:   header.PeriodeName,
+		Promo:     header.PromoName,
+		Annee:     header.Annee,
+		NbEleves:  nbEleves,
+		Matieres:  make([]exportMatiereItem, 0, len(matieres)),
+	}
+	for _, m := range matieres {
+		resp.Matieres = append(resp.Matieres, exportMatiereItem{
+			ID:             m.ID,
+			Name:           m.Name,
+			NbSeances:      m.NbSeances,
+			NbNonCloturees: m.NbNonCloturees,
+			Premiere:       fmtJour(m.Premiere),
+			Derniere:       fmtJour(m.Derniere),
+		})
+		// Étendue globale : bornes des matières, pour préremplir les champs de
+		// dates du dialogue.
+		if j := fmtJour(m.Premiere); j != "" && (resp.Du == "" || j < resp.Du) {
+			resp.Du = j
+		}
+		if j := fmtJour(m.Derniere); j != "" && (resp.Au == "" || j > resp.Au) {
+			resp.Au = j
+		}
+	}
+	render.JSON(w, r, resp)
+}
+
+// fmtJour rend une date au format AAAA-MM-JJ, directement exploitable par un
+// champ de saisie de date côté web. L'ordre lexicographique de ce format
+// coïncide avec l'ordre chronologique, d'où les comparaisons ci-dessus.
+func fmtJour(t pgtype.Timestamptz) string {
+	if !t.Valid {
+		return ""
+	}
+	return t.Time.In(parisLoc).Format("2006-01-02")
 }
 
 // timestampCfg regroupe la configuration TSA et témoin passée aux handlers.

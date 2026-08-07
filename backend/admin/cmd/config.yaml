@@ -44,7 +44,8 @@ rack:
   # IA gerer par le rack de l'IMT Mines Alès.
   # Même logiciel que ragarenn (API compatible OpenAI), mais adresse et clé
   # propres au rack, et certificat HTTPS auto-signé (voir rack.go: InsecureSkipVerify).
-  baseURL: https://rag.159.31.247.5.nip.io
+  # baseURL: https://rag.159.31.247.5.nip.io
+  baseURL: https://rag.159.31.247.10.nip.io
   model: mistral-small:latest
   apiKey: ${RACK_API_KEY}
 
