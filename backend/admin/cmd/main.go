@@ -105,6 +105,16 @@ func main() {
 
 	go feedback.ListenForNewFeedbacks(&cfg.Database, iaConnector)
 	rgpd.StartPurge(&cfg.Database, &cfg.MariaDBConfig)
+
+	// Auréga sert au CRUD utilisateur à dater les sorties, pour savoir si
+	// l'horizon de conservation des pièces de présence est échu. Une connexion
+	// indisponible n'est pas bloquante : sans date de sortie, aucun compte n'est
+	// anonymisé (comportement fail-safe, cf. pkg/user/aurega.go).
+	auregaDb, err := services.NewMariaDBConnection(cfg.MariaDBConfig)
+	if err != nil {
+		log.Printf("connexion Auréga indisponible, anonymisation sur demande admin désactivée: %v", err)
+		auregaDb = nil
+	}
 	presence.StartAnchorScheduler(&cfg.Database, cfg.Presence)
 
 	// permeet une analyse au lancement du programme.
@@ -164,7 +174,7 @@ func main() {
 
 		r.With(auth.Security(cfg.JWT, &adminOnly)).
 			Route("/user", func(r chi.Router) {
-				user.RouteUtilisateur(r, cfg.LDAP)
+				user.RouteUtilisateur(r, cfg.LDAP, auregaDb)
 			})
 		r.With(auth.Security(cfg.JWT, &adminOnly)).
 			Route("/annee", annee.RouteAnnee)

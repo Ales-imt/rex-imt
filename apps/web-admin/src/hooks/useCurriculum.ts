@@ -64,6 +64,18 @@ export function useAnnees() {
     );
 }
 
+/** Année académique à présélectionner : celle en cours au sens du calendrier
+ *  (table `annee`), et non la plus récente du référentiel — dès que le calendrier
+ *  de l'année suivante est chargé, `max(annee)` désigne une année à venir dont
+ *  les matières homonymes sont vides de toute évaluation. Vaut null si le
+ *  serveur ne sait pas trancher : on retombe alors sur la première de /annees. */
+export function useAnneeCourante() {
+    return useAsync<number | null>(
+        () => apiInstance.get<number | null>(`${ENDPOINT}/annee-courante`).then(r => r.data),
+        [],
+    );
+}
+
 export function usePromotionTree(annee: number | null) {
     return useAsync<PromotionTree[]>(
         () => annee != null
@@ -98,13 +110,20 @@ export function useAnneePromo(scope: string) {
     const kMatiere = `${scope}.matiereId`;
 
     const { data: annees, loading: anneesLoading } = useAnnees();
+    const { data: anneeCourante, loading: couranteLoading } = useAnneeCourante();
 
     const [selectedAnnee, setSelectedAnneeState] = useState<number | null>(() => readNum(kAnnee));
     const setSelectedAnnee = useCallback((a: number | null) => {
         setSelectedAnneeState(a);
         writeNum(kAnnee, a);
     }, [kAnnee]);
-    const annee = selectedAnnee ?? (annees?.[0] ?? null);
+
+    // Tant que les deux appels ne sont pas revenus, l'année reste indéterminée :
+    // sinon on partirait sur annees[0] puis on basculerait sur l'année courante,
+    // avec un arbre chargé pour rien et un clignotement de la sidebar.
+    const chargement = anneesLoading || couranteLoading;
+    const annee = selectedAnnee
+        ?? (chargement ? null : (anneeCourante ?? annees?.[0] ?? null));
 
     const { data: tree, loading: treeLoading } = usePromotionTree(annee);
 
@@ -174,7 +193,7 @@ export function useAnneePromo(scope: string) {
 
     return {
         annees,
-        anneesLoading,
+        anneesLoading: chargement,
         annee,
         setSelectedAnnee,
         tree,

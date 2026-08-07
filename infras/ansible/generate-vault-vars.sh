@@ -4,7 +4,9 @@ set -e
 SECRETS="$(dirname "$0")/../../.vscode/secrets-prod.env"
 OUTPUT="$(dirname "$0")/vault-vars.yml"
 
-get() { grep "^$1=" "$SECRETS" | cut -d= -f2; }
+# -f2- et non -f2 : une valeur contenant un « = » (padding base64 d'un secret
+# régénéré, par exemple) serait sinon tronquée silencieusement.
+get() { grep "^$1=" "$SECRETS" | cut -d= -f2-; }
 
 cat > "$OUTPUT" <<EOF
 ---
@@ -32,6 +34,13 @@ rack_api_key: "$(get RACK_API_KEY)"
 age_public_key: "$(get AGE_PUBLIC_KEY)"
 
 presence_token_secret: "$(get PRESENCE_TOKEN_SECRET)"
+
+# Témoin externe des ancrages de présence (config.yaml : presence.witness).
+# Sans ces trois variables, smtp.host arrive vide côté serveur et witnessEnabled()
+# désactive l'envoi en silence, alors que witness.enabled vaut true.
+witness_recipient: "$(get WITNESS_RECIPIENT)"
+smtp_host: "$(get SMTP_HOST)"
+smtp_port: $(get SMTP_PORT)
 
 EOF
 

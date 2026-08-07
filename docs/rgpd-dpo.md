@@ -165,17 +165,39 @@ Détail complet et plan d'action dans [`securite.md`](securite.md). Score de l'a
 
 | Donnée | Durée annoncée aux utilisateurs | Mécanisme technique | Vérifié dans |
 |---|---|---|---|
-| Compte utilisateur | Scolarité + 1 an | `purgeComptesSortis` : suppression si absent des promotions actives depuis > 1 an (requête Aurega `HAVING MAX(datefin) < NOW() - INTERVAL 1 YEAR`) | `backend/admin/pkg/rgpd/mariadb/query.sql`, `purge.go` — **voir réserve §10.4** |
+| **Compte — accès** | Coupé à départ + 1 an | `purgeComptesADesactiver` : `DisableUser` + révocation des sessions et codes de connexion. L'identité est **conservée** : elle reste nécessaire pour rattacher les pièces de présence à une personne | `backend/admin/pkg/account/`, `rgpd/purge.go` |
+| **Compte — identité** | Anonymisée à départ + 10 ans | `purgeComptesAAnonymiser` : `AnonymizeUser`, anonymisation **en place** (`name`/`surname` vidés, email remplacé par un placeholder unique, `auth_source = 'anonymized'`). L'id entier est conservé — il est scellé dans le registre | `backend/admin/pkg/account/`, `rgpd/purge.go` — voir §7 bis |
 | Contenu des feedbacks | 3 ans à compter de la publication | `deleteFeedback` (seuil `deleteAfter = 3` ans) | `backend/admin/pkg/rgpd/purge.go` |
 | Données techniques feedback (IP/id chiffrés — LCEN) | 1 an à compter de la publication | `anonymizeFeedback` (seuil `anonymizeAfter = 1` an, met `strongbox` à NULL) | `backend/admin/pkg/rgpd/purge.go` |
 | **Feedbacks refusés en modération** | 90 jours à compter de la décision de refus | `purgeRejectedFeedback` (seuil `rejectedAfter = 90` jours, sur `moderated_at`) — suppression de la ligne entière, texte chiffré et `strongbox` compris | `backend/admin/pkg/rgpd/purge.go` |
 | **Verbatims refusés en modération** | 90 jours à compter de la décision de refus | `purgeRejectedVerbatim` (même seuil et même logique) | `backend/admin/pkg/rgpd/purge.go` |
 | Verbatims d'évaluation publiés | Anonymisés à 1 an | `anonymizeEvalVerbatim` (met `strongbox` à NULL) | `backend/admin/pkg/rgpd/purge.go` |
 | Classification IA des feedbacks | Anonymisée à 1 an, supprimée à 3 ans | `anonymizeClassification` / `deleteClassification` | `backend/admin/pkg/rgpd/purge.go` |
-| Données de présence (`pointage`, `presence_ledger`, `presence_anchor`) | Scolarité + 5 ans (obligation légale) | Aucune purge automatique implémentée — cohérent avec l'obligation légale de conservation, mais la procédure d'anonymisation en fin de délai **n'est pas codée** (voir §10.5) | — |
+| Données de présence (`pointage`, `presence_ledger`, `presence_anchor`) | Conservées ; identité rattachée anonymisée à départ + 10 ans | Les pièces elles-mêmes ne sont **jamais** purgées (l'intégrité de la chaîne l'interdit). C'est l'identité qui les rattache à une personne qui est anonymisée à l'échéance, via le cycle ci-dessus. Base légale : voir §7 bis | `backend/admin/pkg/account/` |
 | Tokens de session (refresh token) | 3 mois puis suppression automatique | `CleanUpTokens`, `DELETE FROM refresh_tokens WHERE expires_at < NOW()`, exécuté toutes les 12 h | `backend/common/pkg/auth/jwt_services.go` |
 
 Purge exécutée automatiquement toutes les 24 h (`StartPurge`, `backend/admin/pkg/rgpd/purge.go`).
+
+### 7 bis. Base légale de la conservation des pièces de présence — et choix du plafond
+
+La révision précédente annonçait « scolarité + 5 ans » pour les données de présence. **Cette durée n'était adossée à aucune base identifiée.** Les obligations réellement applicables aux pièces justificatives d'une action de formation sont multiples et de durées différentes :
+
+| Fondement | Durée | Point de départ |
+|---|---|---|
+| Qualiopi / contrôle DREETS — justificatifs de réalisation (émargements) | 3 ans | Fin de l'action de formation |
+| Contrôle OPCO et obligation fiscale — art. **L102-B du LPF** | 6 ans | **Dernier versement** du financeur |
+| Cofinancement européen **FSE+** — pièces justificatives des opérations | 10 ans | Clôture du programme / dernier versement |
+
+L'école ne connaît pas, action par action, ses sources de financement. **Un plafond conservateur unique de 10 ans est donc appliqué à toutes les cohortes** : il couvre l'obligation la plus longue sans exiger de distinguer les financements.
+
+**Ancrage retenu — simplification à revalider.** Le décompte part de la **date de sortie** (`MAX(datefin)` lu dans Auréga), et non du dernier versement du financeur, information dont l'application ne dispose pas. Le dernier versement étant nécessairement postérieur à la sortie, cet ancrage produit une échéance **plus précoce** que l'ancrage rigoureux : dans les cas où un versement interviendrait plus de quelques mois après la sortie, l'anonymisation pourrait survenir avant la fin réelle de l'obligation de conservation.
+
+Deux points à arbitrer avec le DPO :
+
+1. **L'ancrage.** Faut-il rapatrier la date du dernier versement (depuis Auréga ou le SI financier) pour asseoir le décompte, ou assumer l'ancrage sur `datefin` en ajoutant une marge de sécurité ?
+2. **L'uniformité.** Appliquer 10 ans à toutes les cohortes est plus conservateur que nécessaire pour celles qui n'ont bénéficié d'aucun cofinancement européen : leur identité est conservée plus longtemps que le principe de minimisation ne l'exige. Affiner par cohorte selon le financement supposerait de tracer cette information, ce que l'application ne fait pas aujourd'hui.
+
+---
 
 **Justification du délai de 90 jours sur les contenus refusés :** un contenu refusé n'a jamais été publié, aucune obligation de conservation LCEN ne s'y applique. Le délai couvre uniquement une éventuelle contestation de la décision de modération par son auteur. Pendant cette fenêtre, le texte est conservé chiffré (`age`) et n'est lisible par personne — pas même par les administrateurs — sans la clé privée détenue hors application.
 
@@ -227,13 +249,23 @@ Fenêtre d'exploitation longue en cas de vol de token. Cf. `securite.md` HIGH-2.
 ### 10.3 Flux HTTP non chiffrés vers Cybema/Aurega
 Données étudiantes (identités, planning, notes) en clair sur le réseau lors de la synchronisation. Cf. `securite.md` MED-1.
 
-### 10.4 Purge des comptes sortis potentiellement inopérante ⚠️
+### 10.4 Purge des comptes sortis — ✅ résolu
 
-**Constat technique (non documenté ailleurs) :** `purgeComptesSortis` (`backend/admin/pkg/rgpd/purge.go`) exécute `DELETE FROM "user" WHERE id = $1` (suppression physique, pas d'anonymisation). Or la table `presence_ledger` porte une contrainte `FOREIGN KEY (user_id) REFERENCES "user"(id) ON DELETE RESTRICT` (`backend/schema.sql`).
+**Rappel de l'écart signalé à la révision précédente :** `purgeComptesSortis` exécutait `DELETE FROM "user"`, bloqué par la contrainte `ON DELETE RESTRICT` de `presence_ledger` dès qu'un étudiant avait été pointé une fois. Le compte n'était donc jamais purgé, malgré l'annonce « scolarité + 1 an » faite aux utilisateurs. L'analyse a par ailleurs mis au jour un risque symétrique et plus grave : les autres clés étrangères vers `user` — dont `pointage.user_id` — sont `ON DELETE CASCADE`. Un `DELETE` qui *aurait* abouti aurait **détruit les pointages** de l'étudiant.
 
-**Conséquence :** dès qu'un étudiant a été pointé au moins une fois en présence, la suppression de son compte échoue silencieusement (l'erreur est journalisée mais le traitement continue sur le compte suivant). Le compte **n'est donc jamais purgé** malgré l'annonce « Durée de la scolarité + 1 an » faite aux utilisateurs — en pratique, quasiment tous les étudiants ayant suivi au moins une séance de cours sont concernés.
+**Correction apportée.** Le cycle de vie des comptes est désormais porté par `backend/admin/pkg/account`, définition unique partagée par la purge automatique et par le CRUD admin :
 
-**Recommandation :** implémenter le mécanisme d'anonymisation décrit dans `presence.md` §4.5 (« anonymiser les données nominatives dans `users` et `pointage` sans supprimer les maillons du ledger ») au lieu d'une suppression physique bloquée par la contrainte, ou capturer l'erreur `RESTRICT` et basculer automatiquement vers une anonymisation. **À corriger avant présentation au DPO comme conforme, ou à annoncer explicitement comme écart en cours de résolution.**
+- **Aucun `DELETE` n'est jamais exécuté sur un compte porteur de présence.** La suppression physique est réservée aux comptes dont `HasPresenceLedger` est faux, avec un filet de sécurité : une violation de clé étrangère (SQLSTATE 23503) rebascule sur la branche de conservation.
+- **Anonymisation en place** à l'échéance : `name` et `surname` vidés, email remplacé par un placeholder unique par id, `auth_source = 'anonymized'`. **L'identifiant entier est conservé** — c'est lui que la fonction de hachage scelle (`backend/common/pkg/ledger/hash.go`). La FK `RESTRICT` reste satisfaite, tous les hachés restent recalculables.
+- **`presence_ledger`, `pointage.user_id` et la fonction de hachage ne sont jamais modifiés.** Aucune cascade n'est déclenchée puisqu'aucune ligne `user` n'est supprimée.
+- **Cycle en deux étapes** : accès coupé et sessions révoquées à départ + 1 an ; identité anonymisée à départ + 10 ans (§7 bis). Entre les deux, l'identité reste disponible pour rattacher les pièces de présence à une personne — ce qui est précisément l'objet de l'obligation de conservation.
+- **Garde-fou** : après chaque cycle ayant anonymisé au moins un compte, `ledger.VerifyChain` est rejoué et toute anomalie journalisée en ALERTE.
+- **CRUD admin aligné** : la suppression d'un utilisateur depuis l'interface applique la même règle et **répond honnêtement** — « supprimé », « anonymisé », ou « suppression impossible : conservation légale en cours (art. 17.3.b RGPD), le compte a été désactivé et sera anonymisé à l'échéance ». La suppression en lot traite chaque compte indépendamment et renvoie un récapitulatif par identifiant, au lieu de l'ancien `DELETE ... WHERE id = ANY(...)` qui échouait en bloc.
+- **Comportement fail-safe** : si Auréga est indisponible ou la date de sortie inconnue, aucun compte n'est anonymisé — il est seulement désactivé. Dans le doute, on conserve.
+
+**Vérification.** Des tests adossés à une base réelle (`backend/admin/pkg/account/account_test.go`) couvrent : anonymisation d'un compte porteur de maillons de registre → `VerifyChain` **OK** et plus aucune donnée nominative ; conservation des pointages après anonymisation ; idempotence de la désactivation et de l'anonymisation ; les trois branches du CRUD ; et un lot hétérogène où chaque compte reçoit son propre traitement.
+
+**Reste à arbitrer :** l'ancrage du décompte et l'uniformité du plafond de 10 ans (§7 bis).
 
 ### 10.5 Absence de procédure codée pour l'anonymisation post-5-ans du registre de présence
 `presence.md` décrit la procédure cible (anonymiser `user`/`pointage`, conserver les hash) mais aucun job n'implémente ce cycle à ce jour — seule la conservation initiale (scolarité + 5 ans) est respectée par absence de suppression. À planifier avant que les premières échéances de 5 ans n'arrivent.

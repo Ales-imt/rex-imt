@@ -51,12 +51,13 @@ Cette application collecte les données suivantes dans le cadre de sa mission p�
 
 | Donnée | Durée |
 |---|---|
-| Votre compte | Durée de la scolarité + 1 an |
+| Accès à votre compte | Coupé 1 an après votre départ |
+| Votre identité | Anonymisée 10 ans après votre départ |
 | Contenu de vos feedbacks | 3 ans à compter de la publication |
 | Données d'identification (IP chiffrée) | 1 an à compter de la publication |
 | Messages et verbatims refusés en modération | 90 jours à compter du refus, puis suppression définitive |
 | Évaluations anonymes | Conservées à des fins statistiques |
-| Données de présence | Durée de la scolarité + 5 ans (obligation légale) |
+| Données de présence | Conservées ; identité anonymisée après 10 ans |
 | Tokens de session | 3 mois puis suppression automatique |
 
 ---
@@ -92,6 +93,18 @@ Cette application collecte les données suivantes dans le cadre de sa mission p�
 > Chaque pointage est enregistré dans un registre cryptographique dont les entrées sont chaînées par empreinte SHA-256. Toute modification ou suppression rompt la chaîne et est immédiatement détectable. Ce mécanisme garantit l'authenticité des relevés d'assiduité conformément à l'obligation légale (Art. L123-1 Code de l'éducation).
 >
 > En application de l'Art. 17.3.b du RGPD, le droit à l'effacement ne s'applique pas à ces données pendant la durée de l'obligation légale. À l'issue de cette période, vos données nominatives sont anonymisées dans notre base ; les empreintes cryptographiques du registre sont conservées sans lien avec votre identité.
+
+---
+
+## Ce que devient votre compte après votre départ
+
+> ℹ️ **Deux étapes**
+>
+> Un an après votre départ de l'école, l'accès à votre compte est coupé et vos sessions sont fermées. Vous ne pouvez plus vous connecter.
+>
+> Votre nom, votre prénom et votre adresse e-mail sont en revanche conservés au-delà : ce sont eux qui permettent de rattacher vos relevés de présence à une personne. L'école doit pouvoir justifier la réalisation de votre formation auprès de ses financeurs — organismes de financement, administration fiscale, ou fonds européens selon les cas.
+>
+> **Dix ans** après votre départ, cette identité est effacée : nom et prénom vidés, adresse e-mail remplacée. Vos relevés de présence subsistent alors sans aucun lien avec vous. Ce délai correspond à la plus longue des obligations applicables ; il est appliqué à tous par prudence, faute de pouvoir distinguer au cas par cas le mode de financement de chaque formation.
 
 ---
 

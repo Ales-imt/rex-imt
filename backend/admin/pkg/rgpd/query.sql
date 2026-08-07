@@ -50,5 +50,8 @@ WHERE moderation_status = 'REJECTED'
 -- name: GetUserIDByEmail :one
 SELECT id FROM "user" WHERE email = $1;
 
--- name: DeleteUserByID :exec
-DELETE FROM "user" WHERE id = $1;
+-- DeleteUserByID a été retirée : elle exécutait un DELETE sur "user", bloqué par
+-- la FK RESTRICT de presence_ledger dès qu'un étudiant avait été pointé une fois
+-- (donc quasiment toujours), et destructeur pour les pointages via les FK
+-- CASCADE quand il passait. Le cycle de vie des comptes est désormais porté par
+-- backend/admin/pkg/account (désactivation puis anonymisation en place).
