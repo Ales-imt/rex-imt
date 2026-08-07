@@ -105,12 +105,13 @@ export function AproposContent({ colors, children }: AproposContentProps) {
 
       {/* ── 3. Durées de conservation ───────────────────────────────────── */}
       <Section title="Durées de conservation" colors={colors}>
-        <Row label="Votre compte" value="Durée de la scolarité + 1 an" colors={colors} />
+        <Row label="Accès à votre compte" value="Coupé 1 an après votre départ" colors={colors} />
+        <Row label="Votre identité" value="Anonymisée 10 ans après votre départ" colors={colors} />
         <Row label="Contenu de vos feedbacks" value="3 ans à compter de la publication" colors={colors} />
         <Row label="Messages refusés" value="Chiffrés, puis supprimés après 90 jours" colors={colors} />
         <Row label="Données d'identification (IP chiffrée)" value="1 an à compter de la publication" colors={colors} />
         <Row label="Évaluations" value="Conservées à des fins statistiques" colors={colors} />
-        <Row label="Données de présence" value="Durée de la scolarité + 5 ans (obligation légale)" colors={colors} />
+        <Row label="Données de présence" value="Conservées ; identité anonymisée après 10 ans" colors={colors} />
         <Row label="Tokens de session" value="3 mois puis suppression automatique" colors={colors} />
       </Section>
 
@@ -161,6 +162,25 @@ export function AproposContent({ colors, children }: AproposContentProps) {
           </Text>
           <Text style={[styles.infoText, { color: colors.textPrimary, marginTop: 8 }]}>
             En application de l'Art. 17.3.b du RGPD, le droit à l'effacement ne s'applique pas à ces données pendant la durée de l'obligation légale. À l'issue de cette période, vos données nominatives sont anonymisées dans notre base ; les empreintes cryptographiques du registre sont conservées sans lien avec votre identité.
+          </Text>
+        </InfoBox>
+      </Section>
+
+      {/* ── 4c. Cycle de vie du compte ─────────────────────────────────── */}
+      <Section title="Ce que devient votre compte après votre départ" colors={colors}>
+        <InfoBox colors={colors}>
+          <Text style={[styles.infoTitle, { color: colors.tint }]}>
+            ℹ️  Deux étapes
+          </Text>
+          <Text style={[styles.infoText, { color: colors.textPrimary }]}>
+            {"Un an après votre départ de l'école, l'accès à votre compte est coupé et vos sessions sont fermées. Vous ne pouvez plus vous connecter."}
+          </Text>
+          <Text style={[styles.infoText, { color: colors.textPrimary, marginTop: 8 }]}>
+            {"Votre nom, votre prénom et votre adresse e-mail sont en revanche conservés au-delà : ce sont eux qui permettent de rattacher vos relevés de présence à une personne. L'école doit pouvoir justifier la réalisation de votre formation auprès de ses financeurs — organismes de financement, administration fiscale, ou fonds européens selon les cas."}
+          </Text>
+          <Text style={[styles.infoText, { color: colors.textPrimary, marginTop: 8 }]}>
+            <Text style={{ fontWeight: '700' }}>Dix ans</Text>
+            {" après votre départ, cette identité est effacée : nom et prénom vidés, adresse e-mail remplacée. Vos relevés de présence subsistent alors sans aucun lien avec vous. Ce délai correspond à la plus longue des obligations applicables ; il est appliqué à tous par prudence, faute de pouvoir distinguer au cas par cas le mode de financement de chaque formation."}
           </Text>
         </InfoBox>
       </Section>

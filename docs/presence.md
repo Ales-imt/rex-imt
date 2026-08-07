@@ -145,13 +145,27 @@ En cas de contestation par un étudiant, le dispositif renverse la charge de la 
 
 | Donnée | Base légale | Durée |
 |---|---|---|
-| `pointage` (user_id, seance_id, statut, heure) | Obligation légale — assiduité (art. L123-1 Code Éducation) | Durée scolarité + 5 ans |
-| `presence_ledger` (hash, prev_hash) | Même obligation — intégrité du registre | Idem |
+| `pointage` (user_id, seance_id, statut, heure) | Obligation légale — assiduité (art. L123-1 Code Éducation) **et** conservation des pièces justificatives de l'action de formation | Conservées ; identité rattachée anonymisée à sortie + 10 ans |
+| `presence_ledger` (hash, prev_hash) | Même obligation — intégrité du registre | Idem — les maillons ne sont jamais supprimés |
 | `presence_anchor` (jeton RFC 3161) | Même obligation — opposabilité | Idem |
+
+L'horizon de **10 ans** est un plafond conservateur couvrant l'obligation la plus longue applicable aux pièces justificatives d'une action de formation : 3 ans pour le contrôle Qualiopi/DREETS, 6 ans pour le contrôle OPCO et l'obligation fiscale (art. L102-B du LPF, à compter du dernier versement), 10 ans en cas de cofinancement européen FSE+. L'école ne connaissant pas action par action ses financements, le plafond est appliqué uniformément. Le décompte part de la date de sortie lue dans Auréga — simplification documentée et à revalider dans [`rgpd-dpo.md`](rgpd-dpo.md) §7 bis.
 
 Seul le hash SHA-256 transite vers la TSA externe. Aucune donnée nominative ne quitte l'établissement lors de l'ancrage.
 
-La suppression d'un compte étudiant est bloquée par les FK `RESTRICT` sur `presence_ledger`. La procédure RGPD consiste à **anonymiser** les données nominatives dans `users` et `pointage` (pseudonymisation) sans supprimer les maillons du ledger, préservant ainsi l'intégrité de la chaîne.
+#### Mécanisme de fin de vie — anonymisation en place
+
+Un compte porteur de maillons de registre **n'est jamais supprimé** : la FK `fk_presence_ledger_user` est `ON DELETE RESTRICT`, et un `DELETE` qui aboutirait détruirait par ailleurs les pointages, la FK `pointage_user_id_fkey` étant `ON DELETE CASCADE`.
+
+À l'échéance, c'est l'**identité** qui est effacée, **en place**, dans la seule table `user` :
+
+- `name` et `surname` sont vidés, l'email remplacé par un placeholder unique par identifiant, `auth_source` passé à `anonymized` ;
+- **l'identifiant entier est conservé** — c'est lui que scelle la fonction de hachage ([`ledger/hash.go`](../backend/common/pkg/ledger/hash.go)) ;
+- **ni `presence_ledger`, ni `pointage.user_id`, ni la fonction de hachage ne sont modifiés.** Aucun maillon n'est retiré, aucun pointage n'est perdu, tous les hachés restent recalculables et `VerifyChain` continue de passer.
+
+Le terme employé est bien **anonymisation** et non pseudonymisation : aucune table de correspondance ne permet de retrouver l'identité à partir de l'identifiant conservé. Celui-ci ne survit que comme clé technique de chaînage, sans donnée nominative associée nulle part dans le système.
+
+Implémentation : [`backend/admin/pkg/account/`](../backend/admin/pkg/account/), appelée à la fois par la purge automatique et par le CRUD admin. Après chaque cycle ayant anonymisé au moins un compte, `VerifyChain` est rejoué en garde-fou et toute anomalie journalisée en ALERTE.
 
 ---
 

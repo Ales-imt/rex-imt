@@ -1,6 +1,6 @@
-.PHONY: first-deploy-prod release-prod release-prod-admin release-prod-eleve migration-prod db-to-code-prod build-container-admin-prod build-container-eleve-prod push deploy-vm-prod deploy-vm-admin-prod deploy-vm-eleve-prod
+.PHONY: first-deploy-prod release-prod release-prod-admin release-prod-eleve drop-db-prod init-db-prod db-to-code-prod build-container-admin-prod build-container-eleve-prod push deploy-vm-prod deploy-vm-admin-prod deploy-vm-eleve-prod
 
-first-deploy-prod: migration-prod release-prod
+first-deploy-prod: drop-db-prod init-db-prod release-prod
 
 release-prod: release-prod-admin release-prod-eleve
 
@@ -8,14 +8,23 @@ release-prod-admin: db-to-code-prod build-container-admin-prod push deploy-vm-ad
 
 release-prod-eleve: db-to-code-prod build-container-eleve-prod push deploy-vm-eleve-prod
 
-# ── MIGRATION ──────────────────────────────────────────────────────────────────────
+# ── SUPPRESSION BD ─────────────────────────────────────────────────────────────
 
-# ne se fait qu'un fois, A SUPPRIMER PAR LA SUITE DANGER DANGER !!!!
+# Vide la BD PostgreSQL de PROD (schéma public + schéma migration + tables Liquibase).
+# DANGER : perte de données définitive, réservé à first-deploy-prod.
+# La BD MariaDB (cybernotes) n'est pas touchée : base externe en lecture seule.
 
-migration-prod:
-	echo "A FAIRE UNE FOIS LORS DE LA MISE EN PLACE !!!", PUIS SUPPRIMER LA REGLE !!!!!!
-	sleep 3
-	$(INFRA_DIR)/migrate-v0-to-v1.sh $(SECRETS_FILE_PROD)
+drop-db-prod:
+	@echo "--- 🗑️ Suppression de la BD de PRODUCTION ---"
+	$(INFRA_DIR)/drop-db.sh $(SECRETS_FILE_PROD)
+
+# ── CREATION DU SCHEMA ──────────────────────────────────────────────────────────────────────
+
+# Aucune donnée de la V0.0.0 n'est reprise : le schéma est créé de zéro par Liquibase.
+
+init-db-prod:
+	@echo "--- 🏗️ Création du schéma de PRODUCTION ---"
+	$(INFRA_DIR)/init-db.sh $(SECRETS_FILE_PROD)
 
 # ── Code ──────────────────────────────────────────────────────────────────────
 

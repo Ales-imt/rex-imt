@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Tabs from '@mui/material/Tabs';
@@ -54,7 +55,7 @@ export function EvalDetail({ selected }: Props) {
     const [tab, setTab] = useState(0);
     const [localSynthese, setLocalSynthese] = useState<SyntheseIA | null>(null);
 
-    const { data: stats, loading } = useMatiereStats(selected?.id ?? null);
+    const { data: stats, loading, error } = useMatiereStats(selected?.id ?? null);
 
     useEffect(() => { setLocalSynthese(null); }, [selected?.id]);
 
@@ -102,7 +103,15 @@ export function EvalDetail({ selected }: Props) {
                 </Box>
             )}
 
-            {!loading && stats && (
+            {/* Même règle que pour les verbatims : une erreur d'API se dit, elle
+                ne se confond pas avec une matière sans réponse. */}
+            {!loading && error && (
+                <Alert severity="error">
+                    Impossible de charger les résultats de cette matière : {error}
+                </Alert>
+            )}
+
+            {!loading && !error && stats && (
                 <>
                     {/* Section 2 — Métriques */}
                     <MetricCards stats={stats} />

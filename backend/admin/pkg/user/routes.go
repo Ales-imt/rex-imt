@@ -3,6 +3,7 @@ package user
 import (
 	"back-rex-common/pkg/services"
 	"context"
+	"database/sql"
 	"net/http"
 	"strconv"
 
@@ -10,12 +11,17 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func RouteUtilisateur(r chi.Router, cfg services.LDAPConfig) {
+// RouteUtilisateur monte le CRUD utilisateur. mariaDb (Auréga) sert à dater les
+// sorties lors d'une demande de suppression ; il peut être nil — l'admin reste
+// alors utilisable, aucun compte n'étant anonymisé sans date de sortie connue.
+func RouteUtilisateur(r chi.Router, cfg services.LDAPConfig, mariaDb *sql.DB) {
+	aurega := NewAurega(mariaDb)
+
 	r.Post("/", func(w http.ResponseWriter, r *http.Request) {
 		CreateUser(w, r, cfg)
 	})
 
-	r.Delete("/bulk", DeleteUserBulk)
+	r.Delete("/bulk", makeDeleteUserBulk(aurega))
 
 	r.Route("/{userID}", func(r chi.Router) {
 		r.Use(UserUse)      // Load the *Article on the request context
@@ -23,7 +29,7 @@ func RouteUtilisateur(r chi.Router, cfg services.LDAPConfig) {
 		r.Put("/", func(w http.ResponseWriter, r *http.Request) {
 			UpdateUser(w, r, cfg)
 		}) // PUT /articles/123
-		r.Delete("/", DeleteUser) // DELETE /articles/123
+		r.Delete("/", makeDeleteUser(aurega)) // DELETE /articles/123
 	})
 
 	r.Get("/", ListUser)

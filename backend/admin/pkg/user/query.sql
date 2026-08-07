@@ -22,8 +22,12 @@ SET version = version + 1,
 WHERE id = @id AND version = @version
 RETURNING *;
 
--- name: DeleteUser :exec
-DELETE FROM public.user WHERE id = @id;
-
--- name: DeleteUserByIds :exec
-DELETE FROM public.user WHERE id = ANY(@ids::int[]);
+-- La suppression de comptes ne passe plus par ce fichier : elle est portée par
+-- backend/admin/pkg/account, seule définition du cycle de vie (supprimer /
+-- anonymiser / conserver), partagée avec la purge RGPD automatique.
+--
+-- DeleteUser et DeleteUserByIds ont été retirées :
+--   - un DELETE sur un compte porteur de présence est refusé par la FK RESTRICT
+--     de presence_ledger, et détruirait ses pointages via les FK CASCADE ;
+--   - DeleteUserByIds appliquait un DELETE ... WHERE id = ANY(...) global, qui
+--     échouait en bloc dès qu'UN seul identifiant portait de la présence.

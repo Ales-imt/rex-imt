@@ -67,7 +67,9 @@ export default function EvalStep6Screen() {
       reset();
       router.replace('/evaluation');
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? 'Une erreur est survenue. Réessayez.';
+      // L'API renvoie {"code":..,"message":..} : lire `error` masquait le motif
+      // du refus derrière le message générique (cf. notes.tsx, presence.tsx).
+      const msg = err?.response?.data?.message ?? 'Une erreur est survenue. Réessayez.';
       Alert.alert('Erreur', msg);
     } finally {
       setLoading(false);

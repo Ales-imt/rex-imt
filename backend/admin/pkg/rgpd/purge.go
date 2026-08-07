@@ -1,8 +1,10 @@
 package rgpd
 
 import (
+	"back-rex-admin/pkg/account"
 	"back-rex-admin/pkg/rgpd/gen"
 	mgen "back-rex-admin/pkg/rgpd/mariadb/gen"
+	"back-rex-common/pkg/ledger"
 	"back-rex-common/pkg/services"
 	"context"
 	"database/sql"
@@ -21,6 +23,21 @@ const (
 	deleteAfter    = 3  // ans
 	rejectedAfter  = 90 // jours : purge des feedbacks refusés (jamais publiés,
 	// contenu conservé chiffré le temps d'une éventuelle contestation)
+)
+
+// Cycle de vie des comptes, en deux étapes ancrées sur la date de sortie lue
+// dans Auréga. Distinct de anonymizeAfter ci-dessus, qui porte sur les
+// feedbacks et n'a rien à voir avec les comptes.
+const (
+	// comptesDisableAfterYears : accès coupé un an après le départ. L'identité
+	// est conservée — elle reste nécessaire pour rattacher les pièces de
+	// présence à une personne pendant tout l'horizon de conservation.
+	comptesDisableAfterYears = 1
+
+	// comptesAnonymizeAfterYears : plafond conservateur de 10 ans, couvrant
+	// l'obligation la plus longue applicable aux pièces justificatives de
+	// formation (cofinancement européen FSE+). Voir docs/rgpd-dpo.md §7.
+	comptesAnonymizeAfterYears = 10
 )
 
 // StartPurge lance la purge RGPD toutes les 24 h en arrière-plan.
@@ -61,7 +78,8 @@ func runPurge(pool *services.Postgres, mariaDb *sql.DB) {
 	purgeRejectedVerbatim(ctx, q, now.AddDate(0, 0, -rejectedAfter))
 
 	if mariaDb != nil {
-		purgeComptesSortis(ctx, q, mariaDb)
+		purgeComptesADesactiver(ctx, pool, mariaDb, now)
+		purgeComptesAAnonymiser(ctx, pool, mariaDb, now)
 	}
 
 	log.Println("[rgpd] purge terminée")
@@ -148,19 +166,23 @@ func purgeRejectedVerbatim(ctx context.Context, q *gen.Queries, threshold time.T
 	}
 }
 
-func purgeComptesSortis(ctx context.Context, q *gen.Queries, mariaDb *sql.DB) int {
-	entrees, err := mgen.New(mariaDb).GetElevesSortis(ctx)
+// comptesSortisAvant retourne les (userID, email, datefin) des comptes Postgres
+// correspondant à des étudiants sortis d'Auréga avant le seuil donné.
+type compteSorti struct {
+	userID  int32
+	email   string
+	datefin time.Time
+}
+
+func comptesSortisAvant(ctx context.Context, q *gen.Queries, mariaDb *sql.DB, seuil time.Time) []compteSorti {
+	entrees, err := mgen.New(mariaDb).GetElevesSortisAvant(ctx, sql.NullTime{Time: seuil, Valid: true})
 	if err != nil {
-		log.Printf("[rgpd] erreur requête MariaDB comptes sortis: %v", err)
-		return 0
+		log.Printf("[rgpd] erreur requête MariaDB comptes sortis (seuil %s): %v",
+			seuil.Format("2006-01-02"), err)
+		return nil
 	}
 
-	if len(entrees) == 0 {
-		log.Println("[rgpd] avertissement: aucun étudiant sorti trouvé dans Auréga (MariaDB vide ou base inaccessible ?)")
-		return 0
-	}
-
-	count := 0
+	out := make([]compteSorti, 0, len(entrees))
 	for _, e := range entrees {
 		datefin, ok := e.DerniereFin.(time.Time)
 		if !ok {
@@ -170,25 +192,92 @@ func purgeComptesSortis(ctx context.Context, q *gen.Queries, mariaDb *sql.DB) in
 
 		userID, err := q.GetUserIDByEmail(ctx, e.Mel.String)
 		if errors.Is(err, pgx.ErrNoRows) {
-			continue
+			continue // sorti d'Auréga mais sans compte REX : rien à faire
 		}
 		if err != nil {
 			log.Printf("[rgpd] erreur recherche compte: email=%s: %v", e.Mel.String, err)
 			continue
 		}
 
-		if err := q.DeleteUserByID(ctx, userID); err != nil {
-			log.Printf("[rgpd] erreur suppression compte: email=%s: %v", e.Mel.String, err)
+		out = append(out, compteSorti{userID: userID, email: e.Mel.String, datefin: datefin})
+	}
+	return out
+}
+
+// purgeComptesADesactiver — étape 1 du cycle de vie : un an après le départ,
+// l'accès est coupé et les sessions révoquées. L'identité n'est PAS touchée :
+// elle reste nécessaire pour rattacher les pièces de présence à une personne
+// pendant tout l'horizon de conservation.
+func purgeComptesADesactiver(ctx context.Context, pool *services.Postgres, mariaDb *sql.DB, now time.Time) int {
+	seuil := now.AddDate(-comptesDisableAfterYears, 0, 0)
+	comptes := comptesSortisAvant(ctx, gen.New(pool.Db), mariaDb, seuil)
+
+	if len(comptes) == 0 {
+		log.Println("[rgpd] aucun compte à désactiver (Auréga vide ou inaccessible ?)")
+		return 0
+	}
+
+	count := 0
+	for _, c := range comptes {
+		changed, err := account.Disable(ctx, pool.Db, c.userID)
+		if err != nil {
+			log.Printf("[rgpd] erreur désactivation compte: email=%s: %v", c.email, err)
 			continue
 		}
-
-		log.Printf("[rgpd] RGPD purge compte: email=%s datefin=%s", e.Mel.String, datefin.Format("2006-01-02"))
-		count++
+		if changed {
+			log.Printf("[rgpd] compte désactivé: email=%s datefin=%s", c.email, c.datefin.Format("2006-01-02"))
+			count++
+		}
 	}
 
 	if count > 0 {
-		log.Printf("[rgpd] %d compte(s) purgé(s)", count)
+		log.Printf("[rgpd] %d compte(s) désactivé(s)", count)
 	}
+	return count
+}
+
+// purgeComptesAAnonymiser — étape 2 du cycle de vie : à l'échéance de
+// conservation des pièces de présence, l'identité est effacée EN PLACE. L'id
+// entier est conservé, presence_ledger et pointage ne sont jamais touchés.
+//
+// Garde-fou : si au moins un compte a été anonymisé, la chaîne du registre est
+// revérifiée. Une anonymisation ne peut pas la casser (elle ne touche aucune
+// donnée hachée), mais le coût de la vérification est négligeable au regard de
+// ce qu'un faux négatif coûterait sur une preuve d'assiduité opposable.
+func purgeComptesAAnonymiser(ctx context.Context, pool *services.Postgres, mariaDb *sql.DB, now time.Time) int {
+	seuil := now.AddDate(-comptesAnonymizeAfterYears, 0, 0)
+	comptes := comptesSortisAvant(ctx, gen.New(pool.Db), mariaDb, seuil)
+
+	count := 0
+	for _, c := range comptes {
+		changed, err := account.Anonymize(ctx, pool.Db, c.userID)
+		if err != nil {
+			log.Printf("[rgpd] erreur anonymisation compte: id=%d: %v", c.userID, err)
+			continue
+		}
+		if changed {
+			// L'email n'est pas journalisé : il vient d'être effacé.
+			log.Printf("[rgpd] compte anonymisé: id=%d datefin=%s", c.userID, c.datefin.Format("2006-01-02"))
+			count++
+		}
+	}
+
+	if count == 0 {
+		return 0
+	}
+	log.Printf("[rgpd] %d compte(s) anonymisé(s)", count)
+
+	res, err := ledger.VerifyChain(ctx, pool.Db)
+	if err != nil {
+		log.Printf("[rgpd] ALERTE: vérification du registre de présence impossible après anonymisation: %v", err)
+		return count
+	}
+	if !res.OK {
+		log.Printf("[rgpd] ALERTE: registre de présence rompu après anonymisation (seq %d): %s",
+			res.BrokenAt, res.Error)
+		return count
+	}
+	log.Println("[rgpd] registre de présence vérifié après anonymisation: chaîne intacte")
 
 	return count
 }

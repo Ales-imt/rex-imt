@@ -39,6 +39,34 @@ func dotStatus(nb int) string {
 	}
 }
 
+// anneeParDefaut : année académique à présélectionner quand l'appelant n'en
+// impose aucune. C'est l'année en cours au sens du calendrier (table annee) ;
+// à défaut — hors année scolaire, ou table annee non renseignée — la plus
+// récente des matières. Renvoie 0 si le référentiel est vide.
+func anneeParDefaut(ctx context.Context, q *Queries) int32 {
+	if annee, err := q.GetAnneeCourante(ctx); err == nil {
+		return annee
+	}
+	annees, err := q.GetDistinctAnnees(ctx)
+	if err != nil || len(annees) == 0 {
+		return 0
+	}
+	return annees[0]
+}
+
+// GetAnneeCourante expose l'année à présélectionner dans les écrans admin.
+// Renvoie null quand aucune année n'est déterminable, le client retombant alors
+// sur la première de /annees.
+func GetAnneeCourante(w http.ResponseWriter, r *http.Request) {
+	q := New(services.GetPgCtx(r.Context()).Db)
+	annee := anneeParDefaut(context.Background(), q)
+	if annee == 0 {
+		render.JSON(w, r, nil)
+		return
+	}
+	render.JSON(w, r, annee)
+}
+
 func GetAnnees(w http.ResponseWriter, r *http.Request) {
 	q := New(services.GetPgCtx(r.Context()).Db)
 	annees, err := q.GetDistinctAnnees(context.Background())
@@ -68,12 +96,11 @@ func GetPromotionTree(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	if annee == 0 {
-		annees, err := q.GetDistinctAnnees(ctx)
-		if err != nil || len(annees) == 0 {
+		annee = anneeParDefaut(ctx, q)
+		if annee == 0 {
 			render.JSON(w, r, []promotionTree{})
 			return
 		}
-		annee = annees[0]
 	}
 
 	rows, err := q.GetAllPromotionTree(ctx, annee)

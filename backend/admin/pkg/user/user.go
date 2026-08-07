@@ -1,6 +1,7 @@
 package user
 
 import (
+	"back-rex-admin/pkg/account"
 	"back-rex-common/pkg/auth"
 	"back-rex-common/pkg/services"
 	usercommon "back-rex-common/pkg/user"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/go-chi/render"
 	"github.com/go-ldap/ldap/v3"
@@ -292,44 +294,72 @@ func UpdateUser(w http.ResponseWriter, r *http.Request, cfg services.LDAPConfig)
 
 }
 
-func DeleteUser(w http.ResponseWriter, r *http.Request) {
-	user := getUserFromCtx(r)
+// makeDeleteUser supprime, anonymise ou conserve un compte selon qu'il porte ou
+// non des données de présence soumises à conservation. La décision est prise par
+// account.Resolve, partagée avec la purge RGPD automatique.
+//
+// La réponse dit ce qui a réellement été fait : on n'annonce jamais une
+// suppression qui n'a pas eu lieu.
+func makeDeleteUser(aurega *auregaSortie) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := getUserFromCtx(r)
 
-	ctx := r.Context()
-	pgctx := services.GetPgCtx(ctx)
-	queries := New(pgctx.Db)
+		ctx := r.Context()
+		pool := services.GetPgCtx(ctx).Db
 
-	err := queries.DeleteUser(ctx, user.ID)
-	if err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
+		decision, err := account.Resolve(ctx, pool, pool, user.ID,
+			aurega.lookup(), time.Now(), comptesAnonymizeAfterYears)
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
 
+		if decision.Outcome == account.OutcomeDeleted {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		render.JSON(w, r, decision)
 	}
-
-	w.WriteHeader(http.StatusNoContent)
 }
 
 type deleteBulkRequest struct {
 	Ids []int32 `json:"ids"`
 }
 
-func DeleteUserBulk(w http.ResponseWriter, r *http.Request) {
-	var input deleteBulkRequest
-	if err := render.DecodeJSON(r.Body, &input); err != nil {
-		services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
+// makeDeleteUserBulk applique la même règle, compte par compte.
+//
+// Volontairement PAS de DELETE ... WHERE id = ANY(...) : un seul identifiant
+// porteur de présence ferait échouer tout le lot. Chaque compte est traité
+// indépendamment et le récapitulatif indique le sort de chacun.
+func makeDeleteUserBulk(aurega *auregaSortie) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input deleteBulkRequest
+		if err := render.DecodeJSON(r.Body, &input); err != nil {
+			services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+
+		ctx := r.Context()
+		pool := services.GetPgCtx(ctx).Db
+		lookup := aurega.lookup()
+		now := time.Now()
+
+		results := make([]account.Decision, 0, len(input.Ids))
+		for _, id := range input.Ids {
+			decision, err := account.Resolve(ctx, pool, pool, id, lookup, now, comptesAnonymizeAfterYears)
+			if err != nil {
+				results = append(results, account.Decision{
+					UserID:  id,
+					Outcome: "erreur",
+					Message: err.Error(),
+				})
+				continue
+			}
+			results = append(results, decision)
+		}
+
+		render.JSON(w, r, results)
 	}
-
-	ctx := r.Context()
-	pgctx := services.GetPgCtx(ctx)
-	queries := New(pgctx.Db)
-
-	if err := queries.DeleteUserByIds(ctx, input.Ids); err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
 }
 
 type MailCheck struct {

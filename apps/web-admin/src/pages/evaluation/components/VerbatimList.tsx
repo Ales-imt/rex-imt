@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Select from '@mui/material/Select';
@@ -25,7 +26,7 @@ export function VerbatimList({ matiereId }: Props) {
     const [dimension, setDimension] = useState('');
     const [page, setPage] = useState(1);
 
-    const { data, loading } = useVerbatims(matiereId, dimension || undefined, page);
+    const { data, loading, error } = useVerbatims(matiereId, dimension || undefined, page);
     const items = data?.data ?? [];
     const hasNext = items.length === (data?.limit ?? 10);
 
@@ -51,13 +52,22 @@ export function VerbatimList({ matiereId }: Props) {
                 </Box>
             )}
 
-            {!loading && items.length === 0 && (
+            {/* Un échec de l'appel ne doit pas se déguiser en « Aucun verbatim » :
+                sans ce message, une erreur d'API est indiscernable d'une liste
+                vide et fait chercher le problème du côté de la modération. */}
+            {!loading && error && (
+                <Alert severity="error">
+                    Impossible de charger les verbatims : {error}
+                </Alert>
+            )}
+
+            {!loading && !error && items.length === 0 && (
                 <Typography variant="body2" sx={{ color: '#94a3b8', textAlign: 'center', py: 4 }}>
                     Aucun verbatim
                 </Typography>
             )}
 
-            {!loading && items.map(v => {
+            {!loading && !error && items.map(v => {
                 const dim = DIMENSION_COLORS[v.dimension] ?? { bg: theme.palette.action.hover, color: 'text.primary', border: 'divider' };
                 const date = new Date(v.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
                 return (
