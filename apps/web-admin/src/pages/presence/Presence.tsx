@@ -25,6 +25,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { apiInstance } from '../../services/api';
 import { useAnneePromo } from '../../hooks/useCurriculum';
 import { AnneePromoSelect } from '../../components/AnneePromoSelect';
+import { ExportSemestreDialog } from './ExportSemestreDialog';
 import { ENDPOINT_PRESENCE } from './def';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -166,6 +167,7 @@ export function Presence() {
     const [activeSeance, setActiveSeance] = useState<OpenSeanceResponse | null>(null);
     const [seanceClosed, setSeanceClosed] = useState(false);
     const [downloading, setDownloading] = useState(false);
+    const [exportOpen, setExportOpen] = useState(false);
 
     const handleDownloadPdf = useCallback(async () => {
         if (!activeSeance) return;
@@ -329,7 +331,27 @@ export function Presence() {
                         )}
                     </FormControl>
                 )}
+
+                {/* L'export porte sur le semestre entier : il n'attend pas
+                    qu'une matière, ni une séance, soit sélectionnée. */}
+                {selectedPeriodeId != null && (
+                    <Button
+                        variant="outlined"
+                        onClick={() => setExportOpen(true)}
+                        sx={{ ml: 'auto', whiteSpace: 'nowrap' }}
+                    >
+                        Exporter le semestre
+                    </Button>
+                )}
             </Paper>
+
+            {selectedPeriodeId != null && (
+                <ExportSemestreDialog
+                    open={exportOpen}
+                    periodeId={selectedPeriodeId}
+                    onClose={() => setExportOpen(false)}
+                />
+            )}
 
             {/* Bouton ouvrir */}
             {!activeSeance && (
@@ -409,9 +431,13 @@ export function Presence() {
                         <MetricCard label="Présents" value={presenceData.presents} color="#16a34a" />
                         <MetricCard label="Retards" value={presenceData.retards} color="#d97706" />
                         <MetricCard label="Absents" value={presenceData.absents} color="#dc2626" />
+                        {/* Même convention que le PDF : un retard compte comme
+                            une présence, les hors-groupe sont hors du ratio. */}
                         <MetricCard
                             label="Taux de présence"
-                            value={presenceData.total > 0 ? Math.round((presenceData.presents / presenceData.total) * 100) : 0}
+                            value={presenceData.total > 0
+                                ? Math.round(((presenceData.presents + presenceData.retards) / presenceData.total) * 100)
+                                : 0}
                             color={theme.palette.text.primary}
                         />
                     </Box>

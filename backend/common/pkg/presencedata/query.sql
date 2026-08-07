@@ -40,6 +40,44 @@ WHERE p.seance_id = @seance_id
   )
 ORDER BY u.surname, u.name;
 
+-- name: ListPresenceBySeances :many
+-- Variante multi-séances de ListPresence, pour l'export d'un semestre entier :
+-- une seule requête, regroupement par seance_id côté Go. Un appel par séance
+-- ferait ici plus de cent allers-retours.
+SELECT DISTINCT s.id AS seance_id, u.id AS user_id, u.name, u.surname,
+       COALESCE(p.statut, 'ABSENT')::text AS statut, p.pointe_at
+FROM seance s
+JOIN matiere m       ON m.id = s.matiere_id
+JOIN periode pe      ON pe.id = m.periode_id
+JOIN promotion pr    ON pr.id = pe.promotion_id
+JOIN groupe g        ON g.promo_id = pr.id AND (s.groupe_id IS NULL OR g.id = s.groupe_id)
+JOIN eleve_groupe eg ON eg.id_groupe = g.id
+JOIN "user" u        ON u.id = eg.num_etudiant
+LEFT JOIN pointage p ON p.user_id = u.id AND p.seance_id = s.id
+WHERE s.id = ANY(@seance_ids::bigint[])
+ORDER BY seance_id, u.surname, u.name;
+
+-- name: ListPresenceHorsGroupeBySeances :many
+-- Pendant multi-séances de ListPresenceHorsGroupe. Le NOT IN de la version
+-- unitaire devient un NOT EXISTS corrélé sur p.seance_id : le sous-ensemble
+-- d'inscrits diffère d'une séance à l'autre (groupe_id propre à la séance).
+SELECT p.seance_id, u.id AS user_id, u.name, u.surname,
+       p.statut::text AS statut, p.pointe_at
+FROM pointage p
+JOIN "user" u ON u.id = p.user_id
+WHERE p.seance_id = ANY(@seance_ids::bigint[])
+  AND NOT EXISTS (
+    SELECT 1
+    FROM seance s
+    JOIN matiere m       ON m.id = s.matiere_id
+    JOIN periode pe      ON pe.id = m.periode_id
+    JOIN promotion pr    ON pr.id = pe.promotion_id
+    JOIN groupe g        ON g.promo_id = pr.id AND (s.groupe_id IS NULL OR g.id = s.groupe_id)
+    JOIN eleve_groupe eg ON eg.id_groupe = g.id
+    WHERE s.id = p.seance_id AND eg.num_etudiant = u.id
+  )
+ORDER BY p.seance_id, u.surname, u.name;
+
 -- name: ActivateSeance :one
 -- Ouvre le pointage d'une séance déjà planifiée : lui assigne un code court.
 -- Idempotence assurée par WHERE code IS NULL (0 ligne si déjà activée).

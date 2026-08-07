@@ -24,6 +24,8 @@ func RoutePresence(r chi.Router, cfg services.PresenceConfig) {
 	r.Get("/matieres/{matiereId}/seances", ListSeancesHandler)
 	r.Get("/matieres/{matiereId}/seance/slot", GetSlotHandler)
 	r.Get("/seance/{seanceId}/pdf", PresencePdfHandler)
+	r.Get("/periodes/{periodeId}/pdf", PeriodePresencePdfHandler)
+	r.Get("/periodes/{periodeId}/export-summary", PeriodeExportSummaryHandler)
 
 	r.Post("/ledger/anchor", LedgerAnchorHandler(tsCfg))
 	r.Get("/ledger/verify", LedgerVerifyHandler(tsCfg))
