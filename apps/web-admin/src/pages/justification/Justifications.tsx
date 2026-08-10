@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -71,6 +72,7 @@ function LigneSeances({ id }: { id: number }) {
 export function Justifications() {
     const theme = useTheme();
     const queryClient = useQueryClient();
+    const navigate = useNavigate();
 
     const {
         annees, anneesLoading, annee, setSelectedAnnee,
@@ -204,7 +206,9 @@ export function Justifications() {
                         Une excuse se saisit depuis la feuille de présence, sur la ligne de l'étudiant
                         concerné : le créneau de la séance y pré-remplit la plage.
                     </Typography>
-                    <Button variant="outlined" href={`/${PRESENCE_WORKFLOW}`} sx={{ mt: 2 }}>
+                    {/* navigate, et non href : un lien natif rechargerait tout
+                        le document — flash blanc et réamorçage de l'application. */}
+                    <Button variant="outlined" onClick={() => navigate(`/${PRESENCE_WORKFLOW}`)} sx={{ mt: 2 }}>
                         Aller au pointage de présence
                     </Button>
                 </Paper>
