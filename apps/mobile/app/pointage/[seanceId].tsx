@@ -20,8 +20,11 @@ type ElevePresence = {
   user_id: number;
   name: string;
   surname: string;
+  // Les trois statuts de FAIT du pointage. L'excuse est un booléen à part,
+  // cohérent avec le modèle backend : n'ajoutez pas 'EXCUSE' à cette union.
   statut: 'PRESENT' | 'RETARD' | 'ABSENT';
   pointe_at: string | null;
+  justifie: boolean;
   hors_groupe?: boolean;
 };
 
@@ -31,6 +34,7 @@ type PresenceResponse = {
   presents: number;
   retards: number;
   absents: number;
+  excuses: number;
   eleves: ElevePresence[];
 };
 
@@ -57,6 +61,18 @@ const STATUT_LABEL: Record<string, string> = {
   RETARD: 'Retard',
   ABSENT: 'Absent',
 };
+
+// Couleurs de l'excuse. Registres distincts à ne pas confondre : le retard
+// reste une pastille orange sur carte normale, l'excuse teinte le FOND de la
+// ligne — jamais les deux à la fois, un excusé étant par définition absent.
+const EXCUSE_FOND = '#fdf6e3';
+const EXCUSE_TEXTE = '#925a0a';
+
+// L'excuse est une surcouche appliquée APRÈS les trois statuts de fait, jamais
+// une quatrième entrée des maps ci-dessus.
+function estExcuse(e: ElevePresence): boolean {
+  return e.statut === 'ABSENT' && e.justifie;
+}
 
 function Metric({ label, value, color }: { label: string; value: number | string; color: string }) {
   const colors = useTheme();
@@ -172,8 +188,12 @@ export default function SeanceDetailScreen() {
       .finally(() => setActionEnCours(false));
   };
 
-  const taux = presence && presence.total > 0
-    ? Math.round((presence.presents / presence.total) * 100)
+  // Même convention que le PDF et le web admin : un retard compte comme une
+  // présence, et les excusés sortent du DÉNOMINATEUR — sinon un étudiant
+  // excusé ferait chuter le taux de sa promotion.
+  const inscrits = presence ? presence.total - presence.excuses : 0;
+  const taux = presence && inscrits > 0
+    ? Math.round(((presence.presents + presence.retards) / inscrits) * 100)
     : 0;
 
   if (accesRefuse) {
@@ -248,6 +268,7 @@ export default function SeanceDetailScreen() {
                 <Metric label="Présents" value={presence.presents} color="#16a34a" />
                 <Metric label="Retards" value={presence.retards} color="#d97706" />
                 <Metric label="Absents" value={presence.absents} color="#dc2626" />
+                <Metric label="Excusés" value={presence.excuses} color={EXCUSE_TEXTE} />
                 <Metric label="Présence" value={`${taux}%`} color={colors.textPrimary} />
               </View>
             ) : (
@@ -257,25 +278,46 @@ export default function SeanceDetailScreen() {
             )}
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={[styles.eleveRow, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
-            <View style={[styles.statutDot, { backgroundColor: STATUT_COLOR[item.statut] ?? '#6b7280' }]} />
-            <View style={styles.eleveInfo}>
-              <Text style={[styles.eleveNom, { color: colors.textPrimary }]}>
-                {item.surname} {item.name}
-                {item.hors_groupe ? (
-                  <Text style={[styles.horsGroupe, { color: colors.textSecondary }]}> (H.G.)</Text>
-                ) : null}
-              </Text>
-              <Text style={[styles.eleveStatut, { color: STATUT_COLOR[item.statut] ?? colors.textSecondary }]}>
-                {STATUT_LABEL[item.statut] ?? item.statut}
-                {item.pointe_at
-                  ? ` · ${new Date(item.pointe_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
-                  : ''}
-              </Text>
+        renderItem={({ item }) => {
+          const excuse = estExcuse(item);
+          return (
+            <View
+              style={[
+                styles.eleveRow,
+                {
+                  backgroundColor: excuse ? EXCUSE_FOND : colors.cardBg,
+                  borderColor: colors.cardBorder,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.statutDot,
+                  { backgroundColor: excuse ? EXCUSE_TEXTE : (STATUT_COLOR[item.statut] ?? '#6b7280') },
+                ]}
+              />
+              <View style={styles.eleveInfo}>
+                <Text style={[styles.eleveNom, { color: excuse ? '#1f2937' : colors.textPrimary }]}>
+                  {item.surname} {item.name}
+                  {item.hors_groupe ? (
+                    <Text style={[styles.horsGroupe, { color: colors.textSecondary }]}> (H.G.)</Text>
+                  ) : null}
+                </Text>
+                <Text
+                  style={[
+                    styles.eleveStatut,
+                    { color: excuse ? EXCUSE_TEXTE : (STATUT_COLOR[item.statut] ?? colors.textSecondary) },
+                  ]}
+                >
+                  {excuse ? 'Excusé' : (STATUT_LABEL[item.statut] ?? item.statut)}
+                  {item.pointe_at
+                    ? ` · ${new Date(item.pointe_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+                    : ''}
+                </Text>
+              </View>
             </View>
-          </View>
-        )}
+          );
+        }}
       />
     </View>
   );

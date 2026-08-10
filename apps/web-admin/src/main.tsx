@@ -22,6 +22,8 @@ import { Evaluation } from './pages/evaluation/Evaluation.tsx';
 import { PRESENCE_WORKFLOW, PRESENCE_WITNESS_WORKFLOW } from './pages/presence/def.ts';
 import { Presence } from './pages/presence/Presence.tsx';
 import { VerifyWitness } from './pages/presence/VerifyWitness.tsx';
+import { JUSTIFICATION_WORKFLOW } from './pages/justification/def.ts';
+import { Justifications } from './pages/justification/Justifications.tsx';
 import { ANNEE_WORKFLOW } from './pages/annee/def.ts';
 import { AnneeIndex } from './pages/annee/AnneeLayout.tsx';
 import { createAnneeRoutes } from './pages/annee/routes.tsx';
@@ -101,6 +103,10 @@ const routes = [
           {
             path: PRESENCE_WORKFLOW,
             element: <RoleGuard roles={[Role.ADMIN, Role.GESTIONNAIRE]}><Presence /></RoleGuard>,
+          },
+          {
+            path: JUSTIFICATION_WORKFLOW,
+            element: <RoleGuard roles={[Role.ADMIN, Role.GESTIONNAIRE]}><Justifications /></RoleGuard>,
           },
           {
             path: PRESENCE_WITNESS_WORKFLOW,

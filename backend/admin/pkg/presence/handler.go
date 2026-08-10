@@ -46,20 +46,28 @@ type tokenResponse struct {
 }
 
 type elevePresence struct {
-	UserID     int32   `json:"user_id"`
-	Name       string  `json:"name"`
-	Surname    string  `json:"surname"`
-	Statut     string  `json:"statut"`
-	PointeAt   *string `json:"pointe_at"`
-	HorsGroupe bool    `json:"hors_groupe,omitempty"`
+	UserID   int32   `json:"user_id"`
+	Name     string  `json:"name"`
+	Surname  string  `json:"surname"`
+	Statut   string  `json:"statut"`
+	PointeAt *string `json:"pointe_at"`
+	// Justifie : une excuse active couvre cette séance pour cet élève. Ce
+	// n'est PAS un statut — le pointage l'emporte toujours, et l'affichage
+	// n'en tient compte que lorsque le statut dérivé vaut ABSENT.
+	Justifie   bool `json:"justifie"`
+	HorsGroupe bool `json:"hors_groupe,omitempty"`
 }
 
+// presenceResponse : Absents et Excuses sont disjoints — un absent excusé est
+// compté dans Excuses seulement, de sorte que
+// Presents + Retards + Absents + Excuses = Total.
 type presenceResponse struct {
 	Matiere  string          `json:"matiere"`
 	Total    int             `json:"total"`
 	Presents int             `json:"presents"`
 	Retards  int             `json:"retards"`
 	Absents  int             `json:"absents"`
+	Excuses  int             `json:"excuses"`
 	Eleves   []elevePresence `json:"eleves"`
 }
 
@@ -343,14 +351,16 @@ func GetPresenceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var presents, retards, absents int
+	var presents, retards, absents, excuses int
 	eleves := make([]elevePresence, 0, len(rows))
 	for _, row := range rows {
-		switch row.Statut {
-		case "PRESENT":
+		switch {
+		case row.Statut == "PRESENT":
 			presents++
-		case "RETARD":
+		case row.Statut == "RETARD":
 			retards++
+		case row.Justifie:
+			excuses++
 		default:
 			absents++
 		}
@@ -360,6 +370,7 @@ func GetPresenceHandler(w http.ResponseWriter, r *http.Request) {
 			Surname:  row.Surname,
 			Statut:   row.Statut,
 			PointeAt: fmtTsPtr(row.PointeAt),
+			Justifie: row.Justifie,
 		})
 	}
 
@@ -375,6 +386,7 @@ func GetPresenceHandler(w http.ResponseWriter, r *http.Request) {
 			Surname:    row.Surname,
 			Statut:     row.Statut,
 			PointeAt:   fmtTsPtr(row.PointeAt),
+			Justifie:   row.Justifie,
 			HorsGroupe: true,
 		})
 	}
@@ -385,6 +397,7 @@ func GetPresenceHandler(w http.ResponseWriter, r *http.Request) {
 		Presents: presents,
 		Retards:  retards,
 		Absents:  absents,
+		Excuses:  excuses,
 		Eleves:   eleves,
 	})
 }
@@ -607,14 +620,14 @@ func PresencePdfHandler(w http.ResponseWriter, r *http.Request) {
 	for _, r := range rows {
 		lignes = append(lignes, presenceLigne{
 			UserID: r.UserID, Name: r.Name, Surname: r.Surname,
-			Statut: r.Statut, PointeAt: r.PointeAt,
+			Statut: r.Statut, PointeAt: r.PointeAt, Justifie: r.Justifie,
 		})
 	}
 	lignesHG := make([]presenceLigne, 0, len(horsGroupe))
 	for _, r := range horsGroupe {
 		lignesHG = append(lignesHG, presenceLigne{
 			UserID: r.UserID, Name: r.Name, Surname: r.Surname,
-			Statut: r.Statut, PointeAt: r.PointeAt,
+			Statut: r.Statut, PointeAt: r.PointeAt, Justifie: r.Justifie,
 		})
 	}
 

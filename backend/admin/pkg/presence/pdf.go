@@ -29,20 +29,31 @@ type pdfData struct {
 	Total       int
 	Presents    int
 	Retards     int
-	Absents     int
+	Absents     int // absents NON excusés : Absents et Excuses sont disjoints
+	Excuses     int
 	Taux        int
 	Eleves      []pdfEleveRow
 	GeneratedAt time.Time
 }
 
 type pdfEleveRow struct {
-	Rank       int
-	UserID     int32 // clé de rapprochement des lignes du récapitulatif
-	Surname    string
-	Name       string
-	Statut     string
-	PointeAt   string
+	Rank     int
+	UserID   int32 // clé de rapprochement des lignes du récapitulatif
+	Surname  string
+	Name     string
+	Statut   string
+	PointeAt string
+	// Justifie : une excuse couvre cette séance. Ce n'est pas un statut — le
+	// pointage l'emporte, et le libellé « Excusé » ne remplace « Absent » que
+	// lorsque le statut de fait vaut ABSENT.
+	Justifie   bool
 	HorsGroupe bool
+}
+
+// estExcuse : absent ET couvert par une excuse. Seul cas où la ligne change de
+// fond et de libellé.
+func (e pdfEleveRow) estExcuse() bool {
+	return e.Statut != "PRESENT" && e.Statut != "RETARD" && e.Justifie
 }
 
 // pdfOptions pilote les sections optionnelles du document. La feuille unitaire
@@ -121,17 +132,23 @@ func formatHeure(t time.Time) string {
 // tauxNote énonce la convention de calcul du taux de présence. Elle est
 // reproduite en note de bas de page du récapitulatif : cette statistique est
 // citée hors de son contexte, sa définition doit voyager avec elle.
-const tauxNote = "Taux de présence = (présents + retards) / effectif inscrit au groupe. " +
-	"Un retard compte comme une présence. Les élèves hors groupe (H.G.) sont exclus " +
-	"des deux termes et figurent séparément."
+const tauxNote = "Taux de présence = (présents + retards) / (effectif inscrit au groupe - excusés). " +
+	"Un retard compte comme une présence. Les élèves EXCUSÉS sont retirés du dénominateur : " +
+	"une absence excusée ne fait donc pas baisser le taux, elle réduit l'effectif de référence. " +
+	"Les élèves hors groupe (H.G.) sont exclus des deux termes et figurent séparément."
 
 // computeTaux applique la convention ci-dessus. Seule implémentation du calcul :
 // feuille unitaire, récapitulatif et totaux semestriels s'y réfèrent tous.
-func computeTaux(presents, retards, inscrits int) int {
-	if inscrits <= 0 {
+//
+// Les excusés sortent du dénominateur, sinon un étudiant excusé ferait chuter
+// le taux de sa promotion. Un effectif intégralement excusé donne 0 % faute de
+// référence — cas signalé par « — » dans le récapitulatif.
+func computeTaux(presents, retards, inscrits, excuses int) int {
+	reference := inscrits - excuses
+	if reference <= 0 {
 		return 0
 	}
-	return ((presents + retards) * 100) / inscrits
+	return ((presents + retards) * 100) / reference
 }
 
 func capitalize(s string) string {
@@ -335,17 +352,18 @@ func renderSeanceSheet(pdf *fpdf.Fpdf, tr func(string) string, d pdfData, opts p
 
 	// ── Stats bar ─────────────────────────────────────────────────────────────
 	statsY := gridY + 3*infoRowH + 5
-	statsW := pdfContentW / 4
+	statsW := pdfContentW / 5
 
 	type statBox struct {
 		label   string
 		value   string
 		r, g, b int
 	}
-	stats := [4]statBox{
+	stats := [5]statBox{
 		{"Présents", fmt.Sprintf("%d / %d", d.Presents, d.Total), 22, 163, 74},
 		{"Retards", fmt.Sprintf("%d", d.Retards), 200, 115, 10},
 		{"Absents", fmt.Sprintf("%d", d.Absents), 200, 35, 35},
+		{"Excusés", fmt.Sprintf("%d", d.Excuses), 146, 90, 10},
 		{"Taux", fmt.Sprintf("%d%%", d.Taux), 50, 45, 115},
 	}
 	for i, s := range stats {
@@ -413,9 +431,16 @@ func renderSeanceSheet(pdf *fpdf.Fpdf, tr func(string) string, d pdfData, opts p
 		}
 
 		rowY := pdf.GetY()
-		if i%2 == 0 {
+		// Le fond jaune pâle remplace le zébrage : c'est la LIGNE qui porte
+		// l'excuse. Le retard, lui, reste un simple libellé orange sur fond
+		// zébré normal — les deux registres ne se rencontrent jamais, un
+		// excusé étant par définition absent.
+		switch {
+		case e.estExcuse():
+			pdf.SetFillColor(255, 247, 214)
+		case i%2 == 0:
 			pdf.SetFillColor(251, 250, 255)
-		} else {
+		default:
 			pdf.SetFillColor(255, 255, 255)
 		}
 
@@ -431,13 +456,16 @@ func renderSeanceSheet(pdf *fpdf.Fpdf, tr func(string) string, d pdfData, opts p
 		// Statut with color
 		var sr, sg, sb int
 		var statutLabel string
-		switch e.Statut {
-		case "PRESENT":
+		switch {
+		case e.Statut == "PRESENT":
 			sr, sg, sb = 22, 163, 74
 			statutLabel = "Présent"
-		case "RETARD":
+		case e.Statut == "RETARD":
 			sr, sg, sb = 200, 115, 10
 			statutLabel = "Retard"
+		case e.Justifie:
+			sr, sg, sb = 146, 90, 10
+			statutLabel = "Excusé"
 		default:
 			sr, sg, sb = 200, 35, 35
 			statutLabel = "Absent"
@@ -509,6 +537,7 @@ type presenceLigne struct {
 	Surname  string
 	Statut   string
 	PointeAt pgtype.Timestamptz
+	Justifie bool
 }
 
 // buildPdfData assembles pdfData from DB rows.
@@ -518,15 +547,17 @@ type presenceLigne struct {
 // hors groupe sont exclus des deux termes — ils étaient auparavant comptés au
 // seul numérateur, ce qui pouvait produire un taux supérieur à 100 %.
 func buildPdfData(seance seanceInfo, rows, horsGroupe []presenceLigne, generatedAt time.Time) pdfData {
-	var presents, retards, absents int
+	var presents, retards, absents, excuses int
 	eleves := make([]pdfEleveRow, 0, len(rows)+len(horsGroupe))
 	rank := 1
 	for _, r := range rows {
-		switch r.Statut {
-		case "PRESENT":
+		switch {
+		case r.Statut == "PRESENT":
 			presents++
-		case "RETARD":
+		case r.Statut == "RETARD":
 			retards++
+		case r.Justifie:
+			excuses++
 		default:
 			absents++
 		}
@@ -541,6 +572,7 @@ func buildPdfData(seance seanceInfo, rows, horsGroupe []presenceLigne, generated
 			Name:     capitalize(r.Name),
 			Statut:   r.Statut,
 			PointeAt: pointeAt,
+			Justifie: r.Justifie,
 		})
 		rank++
 	}
@@ -558,13 +590,14 @@ func buildPdfData(seance seanceInfo, rows, horsGroupe []presenceLigne, generated
 			Name:       capitalize(r.Name),
 			Statut:     r.Statut,
 			PointeAt:   pointeAt,
+			Justifie:   r.Justifie,
 			HorsGroupe: true,
 		})
 		rank++
 	}
 
 	total := len(rows)
-	taux := computeTaux(presents, retards, total)
+	taux := computeTaux(presents, retards, total, excuses)
 
 	// Date + horaire
 	var dateStr, horaireStr string
@@ -603,6 +636,7 @@ func buildPdfData(seance seanceInfo, rows, horsGroupe []presenceLigne, generated
 		Presents:    presents,
 		Retards:     retards,
 		Absents:     absents,
+		Excuses:     excuses,
 		Taux:        taux,
 		Eleves:      eleves,
 		GeneratedAt: generatedAt,

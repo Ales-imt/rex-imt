@@ -1,0 +1,167 @@
+databaseChangeLog:
+
+  # ---- 21b. public.justification ------------------------------------------
+  # Excuse administrative posée par un gestionnaire d'année sur un intervalle de
+  # temps. C'est une COUCHE sur l'absence, jamais un pointage : aucune ligne
+  # n'est écrite dans `pointage`, dont le statut EXCUSE n'existe pas. Le
+  # pointage l'emporte toujours — un étudiant excusé qui a scanné reste PRESENT.
+  #
+  # Aucun motif, aucun justificatif, aucun commentaire libre : la raison de
+  # l'absence est traitée hors logiciel, par e-mail entre l'étudiant et le
+  # gestionnaire. C'est ce qui garantit qu'aucune donnée de santé n'entre en
+  # base, et donc aucune obligation au titre de l'article 9 RGPD.
+  #
+  # Modèle du journal comptable : on ne gomme jamais une écriture, on passe une
+  # écriture inverse. `replaces_id` chaîne les corrections successives ; la
+  # révocation vit dans sa propre table (21d) pour qu'aucun UPDATE ne soit
+  # jamais nécessaire. L'append-only devient ainsi une contrainte de base
+  # (triggers, 21f) et non une convention.
+  #
+  # FK en ON DELETE RESTRICT, cohérent avec presence_ledger : rien ne disparaît
+  # silencieusement. Corollaire assumé — un compte ayant saisi une excuse ne
+  # peut plus être supprimé, seulement anonymisé (docs/rgpd-dpo.md §5).
+  - changeSet:
+      id: v0.0.1-021b-create-table-justification
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE TABLE public.justification (
+                id          bigserial   PRIMARY KEY,
+                user_id     integer     NOT NULL REFERENCES public."user"(id) ON DELETE RESTRICT,
+                periode     tstzrange   NOT NULL,
+                replaces_id bigint      REFERENCES public.justification(id) ON DELETE RESTRICT,
+                created_by  integer     NOT NULL REFERENCES public."user"(id) ON DELETE RESTRICT,
+                created_at  timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT ck_justification_periode      CHECK (NOT isempty(periode)),
+                CONSTRAINT ck_justification_periode_sens CHECK (lower(periode) < upper(periode))
+              );
+
+              -- Pas d'index GiST en V1 : le volume attendu (quelques milliers de
+              -- lignes) ne le justifie pas, et l'éviter supprime une dépendance
+              -- à l'extension contrib btree_gist. À réévaluer sur
+              -- EXPLAIN ANALYZE si le volume croît.
+              CREATE INDEX idx_justification_user ON public.justification (user_id);
+
+              -- Une justification ne peut être remplacée qu'une seule fois :
+              -- deux corrections concurrentes de la même version produiraient
+              -- deux justifications actives là où l'on n'en veut qu'une.
+              CREATE UNIQUE INDEX uq_justification_replaces
+                ON public.justification (replaces_id)
+                WHERE replaces_id IS NOT NULL;
+      rollback:
+        - sql:
+            sql: DROP TABLE public.justification;
+
+  # ---- 21c. public.justification_seance -----------------------------------
+  # Couverture matérialisée à la création : la liste des séances effectivement
+  # excusées, éventuellement amputée des séances décochées par le gestionnaire
+  # dans le dialogue de saisie.
+  - changeSet:
+      id: v0.0.1-021c-create-table-justification-seance
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE TABLE public.justification_seance (
+                justification_id bigint NOT NULL REFERENCES public.justification(id) ON DELETE RESTRICT,
+                seance_id        bigint NOT NULL REFERENCES public.seance(id) ON DELETE RESTRICT,
+                PRIMARY KEY (justification_id, seance_id)
+              );
+
+              CREATE INDEX idx_justification_seance_seance
+                ON public.justification_seance (seance_id);
+      rollback:
+        - sql:
+            sql: DROP TABLE public.justification_seance;
+
+  # ---- 21d. public.justification_revocation -------------------------------
+  # Annulation ET correction passent par ici. La distinction ne tient pas à une
+  # colonne d'état mais à ce qui pointe vers la ligne révoquée : une révocation
+  # SANS justification portant replaces_id vers elle est une annulation ; une
+  # révocation AVEC est une correction.
+  - changeSet:
+      id: v0.0.1-021d-create-table-justification-revocation
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE TABLE public.justification_revocation (
+                justification_id bigint      PRIMARY KEY REFERENCES public.justification(id) ON DELETE RESTRICT,
+                revoked_by       integer     NOT NULL REFERENCES public."user"(id) ON DELETE RESTRICT,
+                revoked_at       timestamptz NOT NULL DEFAULT now()
+              );
+      rollback:
+        - sql:
+            sql: DROP TABLE public.justification_revocation;
+
+  # ---- 21e. public.justification_active -----------------------------------
+  # Les justifications non révoquées. Toute lecture de présence passe par cette
+  # VUE et jamais par la table : une justification révoquée ne doit plus jamais
+  # remonter sur une feuille de présence.
+  # Colonnes énumérées (et non j.*) : pg_dump les expanserait de toute façon, et
+  # sqlc infère mal les colonnes d'une vue déclarée par étoile.
+  - changeSet:
+      id: v0.0.1-021e-create-view-justification-active
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE VIEW public.justification_active AS
+              SELECT j.id, j.user_id, j.periode, j.replaces_id, j.created_by, j.created_at
+              FROM public.justification j
+              LEFT JOIN public.justification_revocation r ON r.justification_id = j.id
+              WHERE r.justification_id IS NULL;
+      rollback:
+        - sql:
+            sql: DROP VIEW public.justification_active;
+
+  # ---- 21f. Verrouillage append-only --------------------------------------
+  # Les trois tables sont strictement en insertion seule. Contrairement à un
+  # REVOKE, un trigger BEFORE s'applique AUSSI au propriétaire des tables et à
+  # un superutilisateur : le dépôt n'ayant pas de rôle applicatif restreint
+  # (liquibase et l'application partagent le même compte), c'est ici la seule
+  # garantie effective.
+  #
+  # Limite à connaître, documentée dans docs/rgpd-dpo.md §5 : le trigger est
+  # désactivable par qui a les droits (ALTER TABLE ... DISABLE TRIGGER,
+  # session_replication_role) et ces tables ne sont pas chaînées
+  # cryptographiquement — contrairement à presence_ledger, une altération par
+  # accès base direct ne serait pas détectable a posteriori.
+  - changeSet:
+      id: v0.0.1-021f-justification-append-only
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE FUNCTION public.deny_mutation() RETURNS trigger
+                  LANGUAGE plpgsql AS $$
+              BEGIN
+                RAISE EXCEPTION 'table append-only : % interdit sur %', TG_OP, TG_TABLE_NAME;
+              END;
+              $$;
+
+              CREATE TRIGGER trg_justification_append_only
+                BEFORE UPDATE OR DELETE ON public.justification
+                FOR EACH ROW EXECUTE FUNCTION public.deny_mutation();
+
+              CREATE TRIGGER trg_justification_seance_append_only
+                BEFORE UPDATE OR DELETE ON public.justification_seance
+                FOR EACH ROW EXECUTE FUNCTION public.deny_mutation();
+
+              CREATE TRIGGER trg_justification_revocation_append_only
+                BEFORE UPDATE OR DELETE ON public.justification_revocation
+                FOR EACH ROW EXECUTE FUNCTION public.deny_mutation();
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: |
+              DROP TRIGGER IF EXISTS trg_justification_revocation_append_only ON public.justification_revocation;
+              DROP TRIGGER IF EXISTS trg_justification_seance_append_only ON public.justification_seance;
+              DROP TRIGGER IF EXISTS trg_justification_append_only ON public.justification;
+              DROP FUNCTION IF EXISTS public.deny_mutation();

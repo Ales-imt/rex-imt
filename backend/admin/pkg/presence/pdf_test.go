@@ -110,7 +110,7 @@ func seanceFixture(id int64, code, matiere string, n int) pdfData {
 		Date: "Lundi 12 janvier 2026", Horaire: "08:00 – 10:00",
 		OpenedAt: "07:58", ClosedAt: "10:02", LateMin: 10,
 		Total: n, Presents: presents, Retards: retards, Absents: absents,
-		Taux:        computeTaux(presents, retards, n),
+		Taux:        computeTaux(presents, retards, n, 0),
 		Eleves:      eleves,
 		GeneratedAt: time.Date(2026, 2, 1, 9, 0, 0, 0, time.UTC),
 	}
@@ -530,23 +530,102 @@ func TestExportFilename(t *testing.T) {
 
 func TestComputeTaux(t *testing.T) {
 	for _, tc := range []struct {
-		nom                         string
-		presents, retards, inscrits int
-		attendu                     int
+		nom                                  string
+		presents, retards, inscrits, excuses int
+		attendu                              int
 	}{
-		{"un retard compte comme une présence", 18, 2, 25, 80},
-		{"effectif nul", 0, 0, 0, 0},
-		{"aucun présent", 0, 0, 30, 0},
-		{"tous présents", 30, 0, 30, 100},
+		{"un retard compte comme une présence", 18, 2, 25, 0, 80},
+		{"effectif nul", 0, 0, 0, 0, 0},
+		{"aucun présent", 0, 0, 30, 0, 0},
+		{"tous présents", 30, 0, 30, 0, 100},
 		// Le cas qui motivait la convention : des pointages hors groupe ne
 		// doivent jamais porter le taux au-delà de 100 %.
-		{"plafonné à l'effectif inscrit", 25, 0, 25, 100},
+		{"plafonné à l'effectif inscrit", 25, 0, 25, 0, 100},
+		// Les excusés sortent du DÉNOMINATEUR : sans cela, 24 présents sur 25
+		// inscrits dont un excusé donnerait 96 % et pénaliserait la promotion
+		// pour une absence pourtant justifiée.
+		{"un excusé ne fait pas baisser le taux", 24, 0, 25, 1, 100},
+		{"excusés et retard combinés", 20, 2, 25, 3, 100},
+		{"promotion intégralement excusée", 0, 0, 25, 25, 0},
 	} {
 		t.Run(tc.nom, func(t *testing.T) {
-			if got := computeTaux(tc.presents, tc.retards, tc.inscrits); got != tc.attendu {
-				t.Errorf("computeTaux(%d, %d, %d) = %d, attendu %d",
-					tc.presents, tc.retards, tc.inscrits, got, tc.attendu)
+			if got := computeTaux(tc.presents, tc.retards, tc.inscrits, tc.excuses); got != tc.attendu {
+				t.Errorf("computeTaux(%d, %d, %d, %d) = %d, attendu %d",
+					tc.presents, tc.retards, tc.inscrits, tc.excuses, got, tc.attendu)
 			}
 		})
+	}
+}
+
+// ─── Excuses ──────────────────────────────────────────────────────────────────
+
+// seanceAvecExcuse : trois élèves, un présent, un absent, un absent excusé.
+func seanceAvecExcuse() pdfData {
+	rows := []presenceLigne{
+		{UserID: 1, Surname: "Alpha", Name: "Anne", Statut: "PRESENT"},
+		{UserID: 2, Surname: "Beta", Name: "Bruno", Statut: "ABSENT"},
+		{UserID: 3, Surname: "Gamma", Name: "Gil", Statut: "ABSENT", Justifie: true},
+		// Un excusé QUI A POINTÉ reste présent : le pointage l'emporte.
+		{UserID: 4, Surname: "Delta", Name: "Dan", Statut: "PRESENT", Justifie: true},
+	}
+	d := buildPdfData(seanceInfo{ID: 1, Code: "AAA111", MatiereName: "Maths"}, rows, nil,
+		time.Date(2026, 2, 1, 9, 0, 0, 0, time.UTC))
+	d.MatiereID = matiereID("Maths")
+	d.StartsAt = time.Date(2026, 3, 30, 8, 0, 0, 0, time.UTC)
+	return d
+}
+
+func TestBuildPdfDataCompteLesExcuses(t *testing.T) {
+	d := seanceAvecExcuse()
+
+	if d.Presents != 2 {
+		t.Errorf("Presents = %d, attendu 2 (l'excuse n'écrase pas un pointage)", d.Presents)
+	}
+	if d.Absents != 1 {
+		t.Errorf("Absents = %d, attendu 1 : l'absent excusé est compté à part", d.Absents)
+	}
+	if d.Excuses != 1 {
+		t.Errorf("Excuses = %d, attendu 1", d.Excuses)
+	}
+	if d.Presents+d.Retards+d.Absents+d.Excuses != d.Total {
+		t.Errorf("les catégories ne partitionnent pas l'effectif : %d+%d+%d+%d != %d",
+			d.Presents, d.Retards, d.Absents, d.Excuses, d.Total)
+	}
+	// 2 présents sur 4 inscrits dont 1 excusé → 2/3.
+	if attendu := (2 * 100) / 3; d.Taux != attendu {
+		t.Errorf("Taux = %d%%, attendu %d%% (l'excusé sort du dénominateur)", d.Taux, attendu)
+	}
+}
+
+func TestGenerateSemestrePDF_LibelleExcuse(t *testing.T) {
+	doc := docFixture(seanceAvecExcuse())
+	raw := generate(t, doc)
+
+	feuille := strings.Join(pdfPages(t, raw), "\n")
+	if !strings.Contains(feuille, "Excus") {
+		t.Error("la feuille doit porter le libellé « Excusé » et la case de statistiques « Excusés »")
+	}
+	// Fond jaune pâle de la ligne excusée : 255,247,214 en composantes fpdf.
+	if !strings.Contains(feuille, "1.000 0.969 0.839 rg") {
+		t.Error("la ligne excusée doit être teintée en jaune pâle, à la place du zébrage")
+	}
+	// Libellé « Excusé » en 146,90,10.
+	if !strings.Contains(feuille, "0.573 0.353 0.039 rg") {
+		t.Error("le libellé « Excusé » doit être coloré (146,90,10)")
+	}
+}
+
+func TestGenerateSemestrePDF_RecapMarqueLesExcuses(t *testing.T) {
+	doc := docFixture(seanceAvecExcuse())
+	doc.Options.Recap = true
+	raw := generate(t, doc)
+
+	recap := pdfPages(t, raw)[0]
+	if !strings.Contains(recap, "capitulatif") {
+		t.Fatal("la première page doit être le récapitulatif")
+	}
+	// La matrice n'a qu'une lettre par case : l'excuse y devient « E ».
+	if !strings.Contains(recap, "(E)Tj") {
+		t.Error("le récapitulatif doit marquer la séance excusée d'un « E »")
 	}
 }

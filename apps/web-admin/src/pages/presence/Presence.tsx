@@ -20,13 +20,19 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Alert from '@mui/material/Alert';
-import { useTheme } from '@mui/material/styles';
+import IconButton from '@mui/material/IconButton';
+import Menu from '@mui/material/Menu';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import { alpha, useTheme } from '@mui/material/styles';
 import { QRCodeSVG } from 'qrcode.react';
 import { apiInstance } from '../../services/api';
 import { useAnneePromo } from '../../hooks/useCurriculum';
 import { AnneePromoSelect } from '../../components/AnneePromoSelect';
 import { ExportSemestreDialog } from './ExportSemestreDialog';
 import { ENDPOINT_PRESENCE } from './def';
+import { JustificationDialog } from '../justification/JustificationDialog';
+import { ENDPOINT_JUSTIFICATION } from '../justification/def';
+import type { Justification } from '../justification/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,8 +63,11 @@ interface ElevePresence {
     user_id: number;
     name: string;
     surname: string;
+    // Le statut reste celui des trois faits de pointage : l'excuse est un
+    // booléen à part, pas une quatrième valeur. N'ajoutez pas 'EXCUSE' ici.
     statut: 'PRESENT' | 'RETARD' | 'ABSENT';
     pointe_at: string | null;
+    justifie: boolean;
     hors_groupe?: boolean;
 }
 
@@ -68,6 +77,7 @@ interface PresenceResponse {
     presents: number;
     retards: number;
     absents: number;
+    excuses: number;
     eleves: ElevePresence[];
 }
 
@@ -83,6 +93,15 @@ const STATUT_LABEL: Record<string, string> = {
     RETARD: 'Retard',
     ABSENT: 'Absent',
 };
+
+// L'excuse est une surcouche appliquée APRÈS les trois statuts de fait, jamais
+// une quatrième entrée des maps ci-dessus.
+//
+// Registres visuels à ne pas confondre : le retard reste un chip orange sur
+// fond zébré normal, l'excuse teinte le FOND DE LIGNE et neutralise le chip.
+function estExcuse(e: ElevePresence): boolean {
+    return e.statut === 'ABSENT' && e.justifie;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -168,6 +187,31 @@ export function Presence() {
     const [seanceClosed, setSeanceClosed] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const [exportOpen, setExportOpen] = useState(false);
+
+    // Menu contextuel d'une ligne d'élève, et cible du dialogue d'excuse.
+    const [menu, setMenu] = useState<{ ancre: HTMLElement; eleve: ElevePresence } | null>(null);
+    const [cible, setCible] = useState<{ eleve: ElevePresence; justification: Justification | null } | null>(null);
+
+    // Depuis une ligne d'élève : créer une excuse, ou ouvrir celle qui la
+    // couvre déjà. Sans ce second chemin, un gestionnaire qui repère l'erreur
+    // depuis la feuille de présence n'aurait aucun moyen direct de la corriger.
+    const ouvrirDialogueExcuse = async (eleve: ElevePresence) => {
+        setMenu(null);
+        if (!estExcuse(eleve) || !selectedSeance) {
+            setCible({ eleve, justification: null });
+            return;
+        }
+        // La feuille de présence ne porte qu'un booléen : on retrouve l'excuse
+        // active de cet élève qui recouvre le créneau de la séance.
+        const { data } = await apiInstance.get<Justification[]>(
+            `${ENDPOINT_JUSTIFICATION}?user_id=${eleve.user_id}`,
+        );
+        const debut = new Date(selectedSeance.starts_at).getTime();
+        const fin = new Date(selectedSeance.ends_at).getTime();
+        const trouvee = data.find(j =>
+            new Date(j.starts_at).getTime() < fin && new Date(j.ends_at).getTime() > debut) ?? null;
+        setCible({ eleve, justification: trouvee });
+    };
 
     const handleDownloadPdf = useCallback(async () => {
         if (!activeSeance) return;
@@ -431,12 +475,16 @@ export function Presence() {
                         <MetricCard label="Présents" value={presenceData.presents} color="#16a34a" />
                         <MetricCard label="Retards" value={presenceData.retards} color="#d97706" />
                         <MetricCard label="Absents" value={presenceData.absents} color="#dc2626" />
+                        <MetricCard label="Excusés" value={presenceData.excuses} color="#925a0a" />
                         {/* Même convention que le PDF : un retard compte comme
-                            une présence, les hors-groupe sont hors du ratio. */}
+                            une présence, les hors-groupe sont hors du ratio, et
+                            les excusés sortent du DÉNOMINATEUR — sans quoi un
+                            étudiant excusé ferait chuter le taux de sa promo. */}
                         <MetricCard
                             label="Taux de présence"
-                            value={presenceData.total > 0
-                                ? Math.round(((presenceData.presents + presenceData.retards) / presenceData.total) * 100)
+                            value={presenceData.total - presenceData.excuses > 0
+                                ? Math.round(((presenceData.presents + presenceData.retards)
+                                    / (presenceData.total - presenceData.excuses)) * 100)
                                 : 0}
                             color={theme.palette.text.primary}
                         />
@@ -449,11 +497,18 @@ export function Presence() {
                                     <TableCell>Élève</TableCell>
                                     <TableCell>Statut</TableCell>
                                     <TableCell>Pointé à</TableCell>
+                                    <TableCell align="right" />
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {presenceData.eleves.map(eleve => (
-                                    <TableRow key={eleve.user_id} hover>
+                                    <TableRow
+                                        key={eleve.user_id}
+                                        hover
+                                        sx={estExcuse(eleve)
+                                            ? { bgcolor: alpha(theme.palette.warning.main, 0.15) }
+                                            : undefined}
+                                    >
                                         <TableCell>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                 <Avatar sx={{ width: 28, height: 28, fontSize: 11, bgcolor: eleve.hors_groupe ? '#9ca3af' : '#6366f1' }}>
@@ -470,9 +525,11 @@ export function Presence() {
                                             </Box>
                                         </TableCell>
                                         <TableCell>
+                                            {/* Chip neutre sur fond teinté : le orange reste
+                                                réservé au retard, qui est un fait de pointage. */}
                                             <Chip
-                                                label={STATUT_LABEL[eleve.statut] ?? eleve.statut}
-                                                color={STATUT_COLOR[eleve.statut] ?? 'default'}
+                                                label={estExcuse(eleve) ? 'Excusé' : (STATUT_LABEL[eleve.statut] ?? eleve.statut)}
+                                                color={estExcuse(eleve) ? 'default' : (STATUT_COLOR[eleve.statut] ?? 'default')}
                                                 size="small"
                                                 variant="outlined"
                                             />
@@ -484,12 +541,45 @@ export function Presence() {
                                                     : '—'}
                                             </Typography>
                                         </TableCell>
+                                        <TableCell align="right" padding="checkbox">
+                                            <IconButton
+                                                size="small"
+                                                aria-label="actions"
+                                                onClick={e => setMenu({ ancre: e.currentTarget, eleve })}
+                                            >
+                                                <MoreVertIcon fontSize="small" />
+                                            </IconButton>
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
                         </Table>
                     </TableContainer>
                 </>
+            )}
+
+            <Menu
+                open={menu != null}
+                anchorEl={menu?.ancre ?? null}
+                onClose={() => setMenu(null)}
+            >
+                <MenuItem onClick={() => menu && ouvrirDialogueExcuse(menu.eleve)}>
+                    {menu && estExcuse(menu.eleve) ? "Voir / modifier l'excuse" : 'Justifier une absence'}
+                </MenuItem>
+            </Menu>
+
+            {/* Monté seulement à l'ouverture : le dialogue lit ses valeurs
+                initiales à la construction. */}
+            {cible && (
+                <JustificationDialog
+                    userId={cible.eleve.user_id}
+                    eleve={`${cible.eleve.surname} ${cible.eleve.name}`}
+                    justification={cible.justification}
+                    creneau={selectedSeance
+                        ? { starts_at: selectedSeance.starts_at, ends_at: selectedSeance.ends_at }
+                        : null}
+                    onClose={() => setCible(null)}
+                />
             )}
         </Box>
     );
