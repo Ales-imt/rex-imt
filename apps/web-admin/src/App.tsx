@@ -20,7 +20,10 @@ import { ANALYSE } from './pages/analyse/def';
 import { DISCUSSION } from './pages/discussion/def';
 import { EVALUATION_WORKFLOW } from './pages/evaluation/def';
 import { PRESENCE_WORKFLOW, PRESENCE_WITNESS_WORKFLOW } from './pages/presence/def';
+import { JUSTIFICATION_WORKFLOW } from './pages/justification/def';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
+import EventBusyIcon from '@mui/icons-material/EventBusy';
+import QrCode2Icon from '@mui/icons-material/QrCode2';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import { ANNEE_WORKFLOW } from './pages/annee/def';
 import EventIcon from '@mui/icons-material/Event';
@@ -30,6 +33,7 @@ import { BULLETTIN_WORKFLOW } from './pages/bullettin/def';
 import ArticleIcon from '@mui/icons-material/Article';
 import { MODERATION } from './pages/moderation/def';
 import GavelIcon from '@mui/icons-material/Gavel';
+import RateReviewIcon from '@mui/icons-material/RateReview';
 
 
 type NavigationItemWithRoles = NavigationItem & {
@@ -70,22 +74,36 @@ const NAVIGATION: NavigationItemWithRoles[] = [
     ],
   },
   {
-    segment: MODERATION,
-    title: 'Modération',
-    icon: <GavelIcon />,
-    requiredRoles: [Role.ADMIN, Role.MODERATEUR],
-  },
-  {
-    segment: ANALYSE,
-    title: 'Analyse',
-    icon: <BarChartIcon />,
-    requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
-  },
-  {
-    segment: DISCUSSION,
-    title: 'Discussion',
-    icon: <ForumIcon />,
-    requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+    // Les trois écrans travaillent sur la même matière — les feedbacks
+    // étudiants : les relire avant diffusion, les analyser, y répondre.
+    // Groupe sans segment : les URL des enfants ne changent pas.
+    //
+    // Rôles du parent = union de ceux des enfants. filterNavigationByRoles
+    // descend ensuite dans les enfants : un modérateur ne voit que
+    // « Modération », et le groupe disparaît pour qui n'a accès à aucun.
+    title: 'Retours étudiants',
+    icon: <RateReviewIcon />,
+    requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE, Role.MODERATEUR],
+    children: [
+      {
+        segment: MODERATION,
+        title: 'Modération',
+        icon: <GavelIcon />,
+        requiredRoles: [Role.ADMIN, Role.MODERATEUR],
+      },
+      {
+        segment: ANALYSE,
+        title: 'Analyse',
+        icon: <BarChartIcon />,
+        requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+      },
+      {
+        segment: DISCUSSION,
+        title: 'Discussion',
+        icon: <ForumIcon />,
+        requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+      },
+    ],
   },
   {
     segment: EVALUATION_WORKFLOW,
@@ -94,10 +112,26 @@ const NAVIGATION: NavigationItemWithRoles[] = [
     requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
   },
   {
-    segment: PRESENCE_WORKFLOW,
+    // Groupe sans segment : les deux écrans gardent leurs URL de premier
+    // niveau (/presence_workflow, /justification_workflow), le regroupement
+    // est purement visuel. Même forme que le groupe « Admin » ci-dessus.
     title: 'Présence',
     icon: <HowToRegIcon />,
     requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+    children: [
+      {
+        segment: PRESENCE_WORKFLOW,
+        title: 'Pointage',
+        icon: <QrCode2Icon />,
+        requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+      },
+      {
+        segment: JUSTIFICATION_WORKFLOW,
+        title: 'Excuses',
+        icon: <EventBusyIcon />,
+        requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+      },
+    ],
   },
   {
     segment: PROGRAMME_WORKFLOW,

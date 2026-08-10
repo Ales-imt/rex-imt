@@ -92,14 +92,14 @@ func buildSemestreDoc(ctx context.Context, db DBTX, p exportParams) (pdfDoc, Get
 	for _, r := range presences {
 		parSeance[r.SeanceID] = append(parSeance[r.SeanceID], presenceLigne{
 			UserID: r.UserID, Name: r.Name, Surname: r.Surname,
-			Statut: r.Statut, PointeAt: r.PointeAt,
+			Statut: r.Statut, PointeAt: r.PointeAt, Justifie: r.Justifie,
 		})
 	}
 	hgParSeance := make(map[int64][]presenceLigne)
 	for _, r := range horsGroupe {
 		hgParSeance[r.SeanceID] = append(hgParSeance[r.SeanceID], presenceLigne{
 			UserID: r.UserID, Name: r.Name, Surname: r.Surname,
-			Statut: r.Statut, PointeAt: r.PointeAt,
+			Statut: r.Statut, PointeAt: r.PointeAt, Justifie: r.Justifie,
 		})
 	}
 

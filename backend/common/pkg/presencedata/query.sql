@@ -9,8 +9,20 @@ SELECT s.id, s.matiere_id, s.code, s.opened_at, s.closed_at,
 FROM seance s JOIN matiere m ON m.id = s.matiere_id WHERE s.id = @id;
 
 -- name: ListPresence :many
-SELECT DISTINCT u.id AS user_id, u.name, u.surname,
-       COALESCE(p.statut, 'ABSENT')::text AS statut, p.pointe_at
+-- `justifie` est une COUCHE posée sur l'absence, pas un statut : le pointage
+-- l'emporte toujours (un étudiant excusé qui a scanné reste PRESENT), les
+-- écrans n'affichent « Excusé » que lorsque le statut dérivé vaut ABSENT.
+-- Lecture par la VUE justification_active : une justification révoquée ne doit
+-- jamais remonter sur une feuille de présence.
+--
+-- GROUP BY plutôt que le DISTINCT d'origine : un élève inscrit à plusieurs
+-- groupes de la promotion produisait déjà des doublons, et deux justifications
+-- actives qui se chevauchent en produiraient d'autres que DISTINCT ne saurait
+-- pas fusionner (les lignes ne diffèrent que par j.id). bool_or les réduit sans
+-- toucher au tri alphabétique — DISTINCT ON aurait imposé ORDER BY u.id.
+SELECT u.id AS user_id, u.name, u.surname,
+       COALESCE(p.statut, 'ABSENT')::text AS statut, p.pointe_at,
+       bool_or(j.id IS NOT NULL) AS justifie
 FROM seance s
 JOIN matiere m       ON m.id = s.matiere_id
 JOIN periode pe      ON pe.id = m.periode_id
@@ -19,14 +31,24 @@ JOIN groupe g        ON g.promo_id = pr.id AND (s.groupe_id IS NULL OR g.id = s.
 JOIN eleve_groupe eg ON eg.id_groupe = g.id
 JOIN "user" u        ON u.id = eg.num_etudiant
 LEFT JOIN pointage p ON p.user_id = u.id AND p.seance_id = s.id
+LEFT JOIN justification_seance js ON js.seance_id = s.id
+LEFT JOIN justification_active j  ON j.id = js.justification_id AND j.user_id = u.id
 WHERE s.id = @seance_id
+GROUP BY u.id, u.name, u.surname, p.statut, p.pointe_at
 ORDER BY u.surname, u.name;
 
 -- name: ListPresenceHorsGroupe :many
+-- Un élève hors groupe a forcément pointé (la ligne vient de `pointage`) : son
+-- statut n'est jamais ABSENT et `justifie` ne s'affichera donc jamais. La
+-- colonne est portée malgré tout, pour que les quatre requêtes de présence
+-- exposent le même contrat aux appelants.
 SELECT u.id AS user_id, u.name, u.surname,
-       p.statut::text AS statut, p.pointe_at
+       p.statut::text AS statut, p.pointe_at,
+       bool_or(j.id IS NOT NULL) AS justifie
 FROM pointage p
 JOIN "user" u ON u.id = p.user_id
+LEFT JOIN justification_seance js ON js.seance_id = p.seance_id
+LEFT JOIN justification_active j  ON j.id = js.justification_id AND j.user_id = u.id
 WHERE p.seance_id = @seance_id
   AND u.id NOT IN (
     SELECT eg.num_etudiant
@@ -38,14 +60,18 @@ WHERE p.seance_id = @seance_id
     JOIN eleve_groupe eg ON eg.id_groupe = g.id
     WHERE s.id = @seance_id
   )
+GROUP BY u.id, u.name, u.surname, p.statut, p.pointe_at
 ORDER BY u.surname, u.name;
 
 -- name: ListPresenceBySeances :many
 -- Variante multi-séances de ListPresence, pour l'export d'un semestre entier :
 -- une seule requête, regroupement par seance_id côté Go. Un appel par séance
 -- ferait ici plus de cent allers-retours.
-SELECT DISTINCT s.id AS seance_id, u.id AS user_id, u.name, u.surname,
-       COALESCE(p.statut, 'ABSENT')::text AS statut, p.pointe_at
+-- `justifie` suit la même règle qu'en unitaire : sans elle, la même séance
+-- dirait « Excusé » sur sa feuille et « Absent » dans le PDF semestriel.
+SELECT s.id AS seance_id, u.id AS user_id, u.name, u.surname,
+       COALESCE(p.statut, 'ABSENT')::text AS statut, p.pointe_at,
+       bool_or(j.id IS NOT NULL) AS justifie
 FROM seance s
 JOIN matiere m       ON m.id = s.matiere_id
 JOIN periode pe      ON pe.id = m.periode_id
@@ -54,17 +80,23 @@ JOIN groupe g        ON g.promo_id = pr.id AND (s.groupe_id IS NULL OR g.id = s.
 JOIN eleve_groupe eg ON eg.id_groupe = g.id
 JOIN "user" u        ON u.id = eg.num_etudiant
 LEFT JOIN pointage p ON p.user_id = u.id AND p.seance_id = s.id
+LEFT JOIN justification_seance js ON js.seance_id = s.id
+LEFT JOIN justification_active j  ON j.id = js.justification_id AND j.user_id = u.id
 WHERE s.id = ANY(@seance_ids::bigint[])
-ORDER BY seance_id, u.surname, u.name;
+GROUP BY s.id, u.id, u.name, u.surname, p.statut, p.pointe_at
+ORDER BY s.id, u.surname, u.name;
 
 -- name: ListPresenceHorsGroupeBySeances :many
 -- Pendant multi-séances de ListPresenceHorsGroupe. Le NOT IN de la version
 -- unitaire devient un NOT EXISTS corrélé sur p.seance_id : le sous-ensemble
 -- d'inscrits diffère d'une séance à l'autre (groupe_id propre à la séance).
 SELECT p.seance_id, u.id AS user_id, u.name, u.surname,
-       p.statut::text AS statut, p.pointe_at
+       p.statut::text AS statut, p.pointe_at,
+       bool_or(j.id IS NOT NULL) AS justifie
 FROM pointage p
 JOIN "user" u ON u.id = p.user_id
+LEFT JOIN justification_seance js ON js.seance_id = p.seance_id
+LEFT JOIN justification_active j  ON j.id = js.justification_id AND j.user_id = u.id
 WHERE p.seance_id = ANY(@seance_ids::bigint[])
   AND NOT EXISTS (
     SELECT 1
@@ -76,6 +108,7 @@ WHERE p.seance_id = ANY(@seance_ids::bigint[])
     JOIN eleve_groupe eg ON eg.id_groupe = g.id
     WHERE s.id = p.seance_id AND eg.num_etudiant = u.id
   )
+GROUP BY p.seance_id, u.id, u.name, u.surname, p.statut, p.pointe_at
 ORDER BY p.seance_id, u.surname, u.name;
 
 -- name: ActivateSeance :one

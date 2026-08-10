@@ -53,9 +53,38 @@ Le point d'attention signalé dans la révision précédente sur le fournisseur 
 | 4 | Réponses aux feedbacks | Permettre à l'équipe pédagogique de répondre aux feedbacks publiés | Mission de service public (Art. 6.1.e) | Contenu de la réponse, auteur (enseignant/admin) | Enseignants / admins (auteurs), étudiants (destinataires) | Alignée sur le feedback parent |
 | 5 | Évaluations de cours | Mesurer la satisfaction et la charge perçue par matière, à des fins statistiques | Mission de service public (Art. 6.1.e) | Scores par dimension, pseudo, verbatims libres (`raw_texte` avant relecture, `texte` après publication), IP + identifiant technique chiffrés | Étudiants (déclaratif, non lié à l'identité côté lecture) | Verbatims publiés : anonymisés à 1 an · verbatims refusés : 90 jours · scores : conservés à des fins statistiques |
 | 6 | Pointage de présence | Établir la preuve d'assiduité aux séances (registre d'assiduité opposable) | **Obligation légale** (Art. 6.1.c — Art. L123-1 Code de l'éducation) | `user_id`, `seance_id`, statut (présent/retard), heure de pointage, maillon de hash SHA-256, jeton d'horodatage RFC 3161 | Étudiants | Durée de la scolarité + 5 ans |
+| 6 bis | **Justification d'absence (« excuses »)** | Permettre au gestionnaire d'année de marquer un étudiant excusé sur un intervalle, et conserver l'historique intégral des saisies, corrections et annulations | **Obligation légale** (Art. 6.1.c — Art. L123-1 Code de l'éducation), identique au traitement n°6 | `user_id` de l'étudiant, plage horaire (début, fin), identité du saisissant (`created_by`, `revoked_by`), horodatages, historique des corrections (`replaces_id`), liste des séances couvertes. **Aucun motif, aucun justificatif, aucun commentaire libre n'est collecté** — voir §3 bis | Étudiants (concernés), gestionnaires (traçabilité de la décision) | Durée de la scolarité + 5 ans, alignée sur `pointage` et `presence_ledger` |
 | 7 | Classification automatique des feedbacks | Catégoriser, évaluer l'urgence et résumer les feedbacks pour les équipes pédagogiques, via un modèle de langage | Mission de service public (Art. 6.1.e) — traitement instrumental du traitement n°3 | Contenu du feedback **publié uniquement** (transmis au modèle), catégorie, sous-catégorie, sentiment, urgence, résumé généré | Étudiants (auteurs des feedbacks classifiés) | Anonymisée à 1 an, supprimée à 3 ans (alignée sur le feedback) |
 | 8 | Gestion des comptes / purge RGPD | Anonymiser ou supprimer les données à l'expiration des durées de conservation ; purger les comptes des étudiants sortis | Obligation légale (RGPD, minimisation) | Toutes les tables ci-dessus | Étudiants sortis | Exécution automatique toutes les 24 h (voir §7 et §10.4) |
 | 9 | **Modération préalable des contenus libres** | Relire tout texte libre écrit par un étudiant (feedback, verbatim d'évaluation) avant sa diffusion à l'équipe pédagogique et avant tout traitement par IA | Mission de service public (Art. 6.1.e) — traitement instrumental des traitements n°3 et n°5 ; contribue également au respect de l'Art. 6-I LCEN | Texte brut à relire, horodatage, promotion de rattachement, dimension (verbatims) ; identité du modérateur (`moderated_by`), date de décision, motif de refus | Étudiants (auteurs), modérateurs (traçabilité de la décision) | Décision et motif alignés sur le contenu parent · texte refusé : 90 jours (chiffré) |
+
+---
+
+## 3 bis. Justifications d'absence — absence délibérée de motif (traitement n°6 bis)
+
+Le motif d'une absence est, dans l'immense majorité des cas, une **donnée de santé** au sens de l'article 9 RGPD (certificat médical, hospitalisation, état de l'étudiant). Son traitement supposerait une base légale renforcée, des mesures de sécurité spécifiques et une justification de nécessité.
+
+**REX-IMT ne collecte aucun motif.** Le choix est structurel, pas déclaratif :
+
+- La table `justification` porte exactement six colonnes : identifiant, étudiant, plage horaire, référence à la version qu'elle corrige, auteur, date de création. **Aucun champ de texte libre n'existe** — ni « motif », ni « commentaire », ni pièce jointe. Il n'existe donc aucun emplacement où un motif pourrait être saisi, même par erreur, même par un gestionnaire zélé.
+- Les écrans de saisie ne comportent aucun champ correspondant, et les DTO de l'API non plus.
+- La raison de l'absence se traite **hors logiciel**, par échange d'e-mails entre l'étudiant et le gestionnaire d'année. Ces échanges relèvent de la messagerie de l'établissement, hors du périmètre de ce traitement.
+
+**Conséquence :** aucune donnée relevant de l'article 9 RGPD n'entre en base du fait de ce traitement. Toute évolution ajoutant un champ libre à ces tables changerait cette qualification et devrait être soumise au DPO au préalable.
+
+**Traçabilité par journal append-only.** Les trois tables (`justification`, `justification_seance`, `justification_revocation`) sont en **insertion seule**, garanties par un trigger PostgreSQL qui refuse tout `UPDATE` et tout `DELETE`. Le modèle est celui du journal comptable : on ne gomme jamais une écriture, on passe une écriture inverse.
+
+- **Modifier** une excuse insère une révocation de l'ancienne version et une nouvelle version qui la référence (`replaces_id`) ;
+- **Annuler** une excuse insère une ligne de révocation, et rien d'autre ;
+- la révocation vit dans sa propre table précisément pour qu'aucun `UPDATE` ne soit jamais nécessaire.
+
+L'historique des décisions administratives est donc intégral et non réécrivable par l'application.
+
+**Limite à connaître — pas de chaînage cryptographique.** Contrairement à `presence_ledger`, ces tables ne sont **pas chaînées par hash** et ne sont pas ancrées par horodatage RFC 3161. Le verrou append-only est un trigger de base de données : il s'impose à l'application, au propriétaire des tables et même à un superutilisateur, mais il reste **désactivable** par qui dispose des droits d'administration de la base (`ALTER TABLE … DISABLE TRIGGER`, `session_replication_role`). Une altération de l'historique des excuses par accès direct à la base avec des droits suffisants **ne serait donc pas détectable a posteriori**, là où elle casserait immédiatement la chaîne du registre de présence.
+
+Ce niveau de garantie est assumé : l'excuse est un acte administratif interne, alors que le pointage est une pièce opposable à l'étudiant. Il est signalé ici pour que la différence ne soit pas supposée acquise. Le dépôt ne dispose par ailleurs d'aucun rôle applicatif restreint — liquibase et l'application partagent le même compte PostgreSQL — de sorte qu'un `REVOKE UPDATE, DELETE` n'apporterait rien de plus que le trigger.
+
+Sources : `infras/liquibase/releases/v0.0.1/021-create-justification.yaml`, `backend/admin/pkg/justification/`.
 
 ---
 
@@ -73,6 +102,9 @@ Le point d'attention signalé dans la révision précédente sur le fournisseur 
 | `pointage` | présence brute (mutable) | — |
 | `presence_ledger` | présence certifiée (append-only, chaînée SHA-256) | intégrité garantie par chaînage de hash |
 | `presence_anchor` | jeton RFC 3161 scellant le registre | seul un hash SHA-256 quitte le système (voir §5) |
+| `justification` | excuse d'absence : étudiant, plage horaire, auteur de la saisie. **Aucun motif** (voir §3 bis) | append-only par trigger ; **non chaînée cryptographiquement** (voir §3 bis) |
+| `justification_seance` | séances couvertes par une excuse | idem |
+| `justification_revocation` | annulation ou correction d'une excuse : auteur, date | idem |
 | `refresh_tokens` | jeton de session (hashé SHA-256), `user_id` | jamais stocké en clair |
 
 Schéma complet : [`backend/schema.sql`](../backend/schema.sql).
@@ -174,6 +206,7 @@ Détail complet et plan d'action dans [`securite.md`](securite.md). Score de l'a
 | Verbatims d'évaluation publiés | Anonymisés à 1 an | `anonymizeEvalVerbatim` (met `strongbox` à NULL) | `backend/admin/pkg/rgpd/purge.go` |
 | Classification IA des feedbacks | Anonymisée à 1 an, supprimée à 3 ans | `anonymizeClassification` / `deleteClassification` | `backend/admin/pkg/rgpd/purge.go` |
 | Données de présence (`pointage`, `presence_ledger`, `presence_anchor`) | Conservées ; identité rattachée anonymisée à départ + 10 ans | Les pièces elles-mêmes ne sont **jamais** purgées (l'intégrité de la chaîne l'interdit). C'est l'identité qui les rattache à une personne qui est anonymisée à l'échéance, via le cycle ci-dessus. Base légale : voir §7 bis | `backend/admin/pkg/account/` |
+| **Excuses d'absence** (`justification`, `justification_seance`, `justification_revocation`) | Scolarité + 5 ans, alignée sur `pointage` | Aucune purge : les tables sont append-only (trigger `deny_mutation`). Les FK `created_by`/`revoked_by` sont `ON DELETE RESTRICT` — le compte d'un gestionnaire ayant saisi une excuse ne peut plus être supprimé, seulement anonymisé, comme pour `presence_ledger` (§10.4) | `infras/liquibase/.../021-create-justification.yaml` |
 | Tokens de session (refresh token) | 3 mois puis suppression automatique | `CleanUpTokens`, `DELETE FROM refresh_tokens WHERE expires_at < NOW()`, exécuté toutes les 12 h | `backend/common/pkg/auth/jwt_services.go` |
 
 Purge exécutée automatiquement toutes les 24 h (`StartPurge`, `backend/admin/pkg/rgpd/purge.go`).
@@ -312,7 +345,7 @@ Point connexe : aucune procédure de contestation n'est aujourd'hui outillée da
 | | |
 |---|---|
 | **Branche** | `main` |
-| **Commit décrit** | `0dde667` — « moderation feedback et verbatin » (2026-08-03) |
+| **Commit décrit** | `0dde667` — « moderation feedback et verbatin » (2026-08-03), complété par la branche `excuse` — justifications d'absence (§3 bis, traitement n°6 bis) |
 | **Révision précédente** | `dd77a45` — « creation annee » (2026-07-02), antérieure au pipeline de modération préalable (§4 bis) |
 
 Les constats de ce document ont été vérifiés dans le code à ce commit. Toute modification ultérieure du pipeline de modération, des durées de conservation (§7) ou de la configuration des fournisseurs IA (§5) invalide potentiellement les affirmations ci-dessus et doit donner lieu à une nouvelle revue.

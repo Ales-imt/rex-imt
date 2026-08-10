@@ -11,6 +11,7 @@ import (
 	"back-rex-admin/pkg/ia/ollama"
 	"back-rex-admin/pkg/ia/rack"
 	"back-rex-admin/pkg/ia/ragarenn"
+	"back-rex-admin/pkg/justification"
 	"back-rex-admin/pkg/migration"
 	"back-rex-admin/pkg/moderation"
 	"back-rex-admin/pkg/planning"
@@ -200,6 +201,9 @@ func main() {
 			Route("/presence", func(r chi.Router) {
 				presence.RoutePresence(r, cfg.Presence)
 			})
+
+		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
+			Route("/justifications", justification.RouteJustification)
 
 		r.With(auth.Security(cfg.JWT, &adminAndGestionnaire)).
 			Route("/planning", planning.RoutePlanning)

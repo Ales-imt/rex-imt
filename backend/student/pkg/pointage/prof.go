@@ -61,20 +61,29 @@ type tokenResponse struct {
 }
 
 type elevePresence struct {
-	UserID     int32   `json:"user_id"`
-	Name       string  `json:"name"`
-	Surname    string  `json:"surname"`
-	Statut     string  `json:"statut"`
-	PointeAt   *string `json:"pointe_at"`
-	HorsGroupe bool    `json:"hors_groupe,omitempty"`
+	UserID   int32   `json:"user_id"`
+	Name     string  `json:"name"`
+	Surname  string  `json:"surname"`
+	Statut   string  `json:"statut"`
+	PointeAt *string `json:"pointe_at"`
+	// Justifie : une excuse active couvre cette séance pour cet élève. Même
+	// contrat que l'endpoint admin, au champ près — sans quoi un prof verrait
+	// « Absent » en rouge sur mobile pendant que le PDF officiel dit
+	// « Excusé ». Aucune route de ce service ne permet d'en créer une.
+	Justifie   bool `json:"justifie"`
+	HorsGroupe bool `json:"hors_groupe,omitempty"`
 }
 
+// presenceResponse : Absents et Excuses sont disjoints — un absent excusé est
+// compté dans Excuses seulement, de sorte que
+// Presents + Retards + Absents + Excuses = Total.
 type presenceResponse struct {
 	Matiere  string          `json:"matiere"`
 	Total    int             `json:"total"`
 	Presents int             `json:"presents"`
 	Retards  int             `json:"retards"`
 	Absents  int             `json:"absents"`
+	Excuses  int             `json:"excuses"`
 	Eleves   []elevePresence `json:"eleves"`
 }
 
@@ -222,14 +231,16 @@ func GetSeancePresenceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var presents, retards, absents int
+	var presents, retards, absents, excuses int
 	eleves := make([]elevePresence, 0, len(rows))
 	for _, row := range rows {
-		switch row.Statut {
-		case "PRESENT":
+		switch {
+		case row.Statut == "PRESENT":
 			presents++
-		case "RETARD":
+		case row.Statut == "RETARD":
 			retards++
+		case row.Justifie:
+			excuses++
 		default:
 			absents++
 		}
@@ -239,6 +250,7 @@ func GetSeancePresenceHandler(w http.ResponseWriter, r *http.Request) {
 			Surname:  row.Surname,
 			Statut:   row.Statut,
 			PointeAt: fmtTsPtr(row.PointeAt),
+			Justifie: row.Justifie,
 		})
 	}
 
@@ -254,6 +266,7 @@ func GetSeancePresenceHandler(w http.ResponseWriter, r *http.Request) {
 			Surname:    row.Surname,
 			Statut:     row.Statut,
 			PointeAt:   fmtTsPtr(row.PointeAt),
+			Justifie:   row.Justifie,
 			HorsGroupe: true,
 		})
 	}
@@ -264,6 +277,7 @@ func GetSeancePresenceHandler(w http.ResponseWriter, r *http.Request) {
 		Presents: presents,
 		Retards:  retards,
 		Absents:  absents,
+		Excuses:  excuses,
 		Eleves:   eleves,
 	})
 }

@@ -136,6 +136,34 @@ INSERT INTO public.seance
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $2)
 RETURNING id;
 
+-- name: AttacherJustificationsSeance :exec
+-- Rattrape la couverture des excuses pour une séance qui vient d'être créée par
+-- la synchronisation du planning.
+--
+-- justification_seance est matérialisée à la saisie de l'excuse : une séance
+-- apparue APRÈS, dans une plage déjà couverte, ne serait sinon jamais excusée,
+-- et silencieusement. La résolution de groupe et le test de chevauchement sont
+-- ceux de ListSeancesCouvertes (pkg/justification) — deux règles divergentes
+-- produiraient deux couvertures différentes selon le chemin d'arrivée.
+--
+-- DISTINCT : un élève inscrit à plusieurs groupes de la promotion produirait
+-- deux fois le même couple. Seules les justifications ACTIVES sont rattachées.
+INSERT INTO public.justification_seance (justification_id, seance_id)
+SELECT DISTINCT j.id, s.id
+FROM public.seance s
+JOIN public.matiere m       ON m.id = s.matiere_id
+JOIN public.periode pe      ON pe.id = m.periode_id
+JOIN public.promotion pr    ON pr.id = pe.promotion_id
+JOIN public.groupe g        ON g.promo_id = pr.id AND (s.groupe_id IS NULL OR g.id = s.groupe_id)
+JOIN public.eleve_groupe eg ON eg.id_groupe = g.id
+JOIN public.justification_active j ON j.user_id = eg.num_etudiant
+WHERE s.id = @seance_id
+  AND s.cancelled_at IS NULL
+  AND s.starts_at IS NOT NULL
+  AND s.ends_at IS NOT NULL
+  AND tstzrange(s.starts_at, s.ends_at) && j.periode
+ON CONFLICT DO NOTHING;
+
 -- name: UpdateSeance :exec
 UPDATE public.seance
 SET matiere_id   = $2,

@@ -52,6 +52,7 @@ type pdfTotaux struct {
 	NbSeances  int
 	Presents   int
 	Retards    int
+	Excuses    int
 	Inscrits   int // somme des effectifs séance par séance
 	Taux       int
 	Du, Au     time.Time
@@ -64,6 +65,7 @@ func computeTotaux(doc pdfDoc) pdfTotaux {
 		matieres[s.MatiereID] = struct{}{}
 		t.Presents += s.Presents
 		t.Retards += s.Retards
+		t.Excuses += s.Excuses
 		t.Inscrits += s.Total
 
 		// Les séances sont triées par matière puis date : les bornes
@@ -79,7 +81,7 @@ func computeTotaux(doc pdfDoc) pdfTotaux {
 		}
 	}
 	t.NbMatieres = len(matieres)
-	t.Taux = computeTaux(t.Presents, t.Retards, t.Inscrits)
+	t.Taux = computeTaux(t.Presents, t.Retards, t.Inscrits, t.Excuses)
 	return t
 }
 
@@ -290,7 +292,15 @@ func recapModele(seances []pdfData) ([]recapEleve, map[int32]map[int64]string) {
 			if statuts[e.UserID] == nil {
 				statuts[e.UserID] = make(map[int64]string, len(seances))
 			}
-			statuts[e.UserID][s.SeanceID] = e.Statut
+			// La matrice n'a qu'une lettre par case : l'excuse y devient une
+			// valeur à part entière. Commodité d'affichage propre au
+			// récapitulatif — le modèle de données, lui, garde le statut de
+			// fait et le booléen séparés.
+			if e.estExcuse() {
+				statuts[e.UserID][s.SeanceID] = "EXCUSE"
+			} else {
+				statuts[e.UserID][s.SeanceID] = e.Statut
+			}
 		}
 	}
 
@@ -403,7 +413,7 @@ func renderRecapBloc(
 		pdf.SetTextColor(20, 20, 20)
 		pdf.CellFormat(recapNomW, recapRowH, "  "+tr(tronque(e.Surname+" "+e.Name, 28)), "B", 0, "L", true, 0, "")
 
-		var presents, retards, inscrits int
+		var presents, retards, excuses, inscrits int
 		pdf.SetFont("Helvetica", "B", 6.5)
 		for _, s := range bloc {
 			lettre, r, g, b := celluleStatut(statuts[e.UserID][s.SeanceID])
@@ -416,6 +426,10 @@ func renderRecapBloc(
 				inscrits++
 			case "A":
 				inscrits++
+			case "E":
+				// Inscrit à la séance, mais retiré du dénominateur.
+				excuses++
+				inscrits++
 			}
 			pdf.SetTextColor(r, g, b)
 			pdf.CellFormat(recapColW, recapRowH, lettre, "B", 0, "C", true, 0, "")
@@ -424,8 +438,8 @@ func renderRecapBloc(
 		pdf.SetFont("Helvetica", "B", 7)
 		pdf.SetTextColor(50, 45, 115)
 		taux := "—"
-		if inscrits > 0 {
-			taux = fmt.Sprintf("%d%%", computeTaux(presents, retards, inscrits))
+		if inscrits-excuses > 0 {
+			taux = fmt.Sprintf("%d%%", computeTaux(presents, retards, inscrits, excuses))
 		}
 		pdf.CellFormat(recapTauxW, recapRowH, tr(taux), "B", 1, "C", true, 0, "")
 	}
@@ -436,7 +450,7 @@ func renderRecapBloc(
 	pdf.SetFont("Helvetica", "I", 6.5)
 	pdf.SetTextColor(120, 120, 135)
 	pdf.MultiCell(contentW, 3.2,
-		tr("P = présent · R = retard · A = absent · «  – » = séance hors du groupe de l'élève. "+tauxNote),
+		tr("P = présent · R = retard · A = absent · E = excusé · «  – » = séance hors du groupe de l'élève. "+tauxNote),
 		"", "L", false)
 }
 
@@ -449,6 +463,8 @@ func celluleStatut(statut string) (string, int, int, int) {
 		return "R", 190, 110, 10
 	case "ABSENT":
 		return "A", 195, 40, 40
+	case "EXCUSE":
+		return "E", 146, 90, 10
 	default:
 		// L'élève n'était pas inscrit au groupe de cette séance : la case reste
 		// neutre et sort du dénominateur de son taux individuel.

@@ -340,6 +340,17 @@ func syncSeances(
 		if err != nil {
 			return count, err
 		}
+		// Rattrapage de la couverture des excuses : une séance créée (ou
+		// déplacée) après la saisie d'une excuse tomberait sinon hors de sa
+		// couverture, silencieusement. Idempotent (ON CONFLICT DO NOTHING).
+		//
+		// L'inverse n'est pas traité : une séance déplacée HORS d'une plage
+		// couverte y reste rattachée — justification_seance est append-only, on
+		// ne retire jamais une ligne. Le cas est marginal et la correction
+		// passe par la modification de l'excuse, qui recalcule sa couverture.
+		if err = q.AttacherJustificationsSeance(ctx, seanceID); err != nil {
+			return count, fmt.Errorf("justification_seance: séance %d: %w", seanceID, err)
+		}
 		if err = q.UpsertSeanceMap(ctx, UpsertSeanceMapParams{
 			InternalID: seanceID,
 			Source:     "webdfd",
