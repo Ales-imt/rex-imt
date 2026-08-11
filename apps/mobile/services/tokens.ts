@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import { viderProgrammeCache } from './programmeCache';
 
 const ACCESS_KEY = 'access_token';
 const REFRESH_KEY = 'refresh_token';
@@ -124,6 +125,10 @@ export async function clearTokens(): Promise<void> {
   await storage.deleteItem(REFRESH_KEY);
   await storage.deleteItem(PSEUDO_KEY);
   await storage.deleteItem(ROLES_KEY);
+  // Point de passage unique de la fin de session (déconnexion explicite comme
+  // échec de rafraîchissement) : le cache du planning part avec elle, sans quoi
+  // le compte suivant sur l'appareil verrait le planning du précédent.
+  viderProgrammeCache();
 }
 
 export function isExpiringSoon(token: string, thresholdSec = 30): boolean {
