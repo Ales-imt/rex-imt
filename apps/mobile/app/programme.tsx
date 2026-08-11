@@ -27,6 +27,9 @@ type Event = {
 
 type EventMap = Record<string, Event[]>;
 
+// Cadence du sondage tant que l'écran reste affiché. Voir useFocusEffect.
+const PROGRAMME_POLL_MS = 5 * 60_000;
+
 let _lastSelected: string | null = null;
 // Promo choisie, mémorisée entre les visites de l'écran (comme _lastSelected).
 // null = toutes les promos. Réinitialisée au redémarrage de l'app.
@@ -297,6 +300,7 @@ export const ProgrammeScreen = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [monthPickerVisible, setMonthPickerVisible] = useState(false);
   const weekStartRef = useRef(weekStart);
+  const premierFocusRef = useRef(true);
 
   // Mémorise le choix pour le restaurer si l'utilisateur quitte puis revient.
   const choisirPromo = useCallback((p: string | null) => {
@@ -321,9 +325,29 @@ export const ProgrammeScreen = () => {
     setSelected(fmtLocal(d));
   };
 
+  // Rafraîchissement au retour sur l'écran, puis sondage lent.
+  //
+  // /programme interroge webdfd en direct (le service étudiant ne lit pas la
+  // base, synchronisée toutes les 2 h) : cet écran est le seul endroit où une
+  // salle changée il y a vingt minutes est visible. Mais « à jour » est une
+  // exigence sur le MOMENT OÙ L'ON REGARDE, pas un flux continu — d'où le
+  // rechargement à la prise de focus, qui porte l'essentiel de la fraîcheur.
+  // C'est l'écran d'accueil : on y revient sans le remonter, sans lui le
+  // planning resterait figé jusqu'au tick suivant.
+  //
+  // Le sondage ne couvre plus que le téléphone laissé ouvert sur l'écran ;
+  // 5 min y restent bien en deçà du délai utile avant un cours, pour 12
+  // requêtes/heure vers Cybema au lieu de 360.
   useFocusEffect(
     useCallback(() => {
-      const id = setInterval(() => setRefreshKey(k => k + 1), 10_000);
+      // Au tout premier focus, le chargement de montage vient de partir :
+      // le déclencher à nouveau ferait deux appels au démarrage.
+      if (premierFocusRef.current) {
+        premierFocusRef.current = false;
+      } else {
+        setRefreshKey(k => k + 1);
+      }
+      const id = setInterval(() => setRefreshKey(k => k + 1), PROGRAMME_POLL_MS);
       return () => clearInterval(id);
     }, [])
   );
