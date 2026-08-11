@@ -3,6 +3,7 @@ import { ZenBackground } from '@/components/zen-background';
 import { useNavMenu } from '@/hooks/use-nav-menu';
 import { useTheme } from '@/hooks/use-theme';
 import { apiInstance } from '@/services/api';
+import { ecrireProgrammeCache, lireProgrammeCache } from '@/services/programmeCache';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -29,6 +30,17 @@ type EventMap = Record<string, Event[]>;
 
 // Cadence du sondage tant que l'écran reste affiché. Voir useFocusEffect.
 const PROGRAMME_POLL_MS = 5 * 60_000;
+
+// Cours mis en cache, s'ils portent bien sur la semaine demandée — sinon la
+// grille reste vide le temps de la requête, ce qui est le comportement juste :
+// mieux vaut rien qu'un planning qui n'est pas celui affiché.
+//
+// Le cast est borné : lireProgrammeCache a déjà validé qu'il s'agit d'un
+// tableau écrit par la version courante du format.
+function coursEnCache(weekStart: string): ApiCours[] {
+  const cache = lireProgrammeCache();
+  return cache && cache.weekStart === weekStart ? (cache.cours as ApiCours[]) : [];
+}
 
 let _lastSelected: string | null = null;
 // Promo choisie, mémorisée entre les visites de l'écran (comme _lastSelected).
@@ -291,11 +303,17 @@ export const ProgrammeScreen = () => {
   const [weekStart, setWeekStart] = useState(() => getMonday(_lastSelected ?? today));
   // On conserve les cours bruts (avec la promo) pour pouvoir filtrer par promo
   // côté client ; l'EventMap affiché en découle.
-  const [cours, setCours] = useState<ApiCours[]>([]);
-  const coursRef = useRef<ApiCours[]>([]);
+  //
+  // L'état initial vient du cache local quand il porte sur la semaine demandée :
+  // le planning connu s'affiche dès le premier rendu, la requête le remplace
+  // ensuite. Sans cela, l'ouverture de l'application montre une grille vide le
+  // temps d'un aller-retour vers Cybema.
+  const [cours, setCours] = useState<ApiCours[]>(() => coursEnCache(getMonday(_lastSelected ?? today)));
+  const coursRef = useRef<ApiCours[]>(cours);
   const [promo, setPromo] = useState<string | null>(_lastPromo);
   const [promoPickerVisible, setPromoPickerVisible] = useState(false);
-  const [loading, setLoading] = useState(true);
+  // Pas de spinner si le cache a déjà rempli l'écran : il n'y a rien à attendre.
+  const [loading, setLoading] = useState(() => cours.length === 0);
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [monthPickerVisible, setMonthPickerVisible] = useState(false);
@@ -372,6 +390,7 @@ export const ProgrammeScreen = () => {
       .then(res => {
         if (!active) return;
         const data = res.data ?? [];
+        ecrireProgrammeCache(weekStart, data);
         if (JSON.stringify(data) !== JSON.stringify(coursRef.current)) {
           coursRef.current = data;
           setCours(data);
