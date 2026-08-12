@@ -3,7 +3,7 @@ package pointage
 // Parité du marquage « excusé » entre les deux services.
 //
 // GET /pointage/seance/{id}/presence (ici) et GET /presence/seance/{id}/presence
-// (back-rex-admin) lisent la MÊME requête, presencedata.ListPresence, mais
+// (back-rex-admin) lisent la MÊME requête, presencegen.ListPresence, mais
 // composent chacun leur JSON. Une divergence de mapping ferait voir « Absent »
 // en rouge au prof sur mobile pendant que le PDF officiel dirait « Excusé ».
 //
@@ -14,7 +14,7 @@ package pointage
 
 import (
 	"back-rex-common/pkg/auth"
-	presencedata "back-rex-common/pkg/presencedata/gen"
+	presencegen "back-rex-common/pkg/presencedata/gen"
 	"back-rex-common/pkg/services"
 	"context"
 	"encoding/json"
@@ -139,7 +139,7 @@ func TestPointageExposeJustifie(t *testing.T) {
 	seanceID, eleveID := fixtureExcuse(t, db)
 
 	// 1. Source partagée : la requête commune voit bien l'excuse.
-	rows, err := presencedata.New(db).ListPresence(context.Background(), seanceID)
+	rows, err := presencegen.New(db).ListPresence(context.Background(), seanceID)
 	if err != nil {
 		t.Fatalf("ListPresence: %v", err)
 	}

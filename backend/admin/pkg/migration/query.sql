@@ -142,21 +142,18 @@ RETURNING id;
 --
 -- justification_seance est matérialisée à la saisie de l'excuse : une séance
 -- apparue APRÈS, dans une plage déjà couverte, ne serait sinon jamais excusée,
--- et silencieusement. La résolution de groupe et le test de chevauchement sont
--- ceux de ListSeancesCouvertes (pkg/justification) — deux règles divergentes
+-- et silencieusement. L'effectif attendu vient de seance_effectif_resolu, comme
+-- pour ListSeancesCouvertes et ListPresence — deux règles divergentes
 -- produiraient deux couvertures différentes selon le chemin d'arrivée.
 --
--- DISTINCT : un élève inscrit à plusieurs groupes de la promotion produirait
--- deux fois le même couple. Seules les justifications ACTIVES sont rattachées.
+-- DISTINCT conservé : la vue est unique par couple, mais un même élève peut
+-- porter plusieurs justifications actives chevauchant la séance.
+-- Seules les justifications ACTIVES sont rattachées.
 INSERT INTO public.justification_seance (justification_id, seance_id)
 SELECT DISTINCT j.id, s.id
 FROM public.seance s
-JOIN public.matiere m       ON m.id = s.matiere_id
-JOIN public.periode pe      ON pe.id = m.periode_id
-JOIN public.promotion pr    ON pr.id = pe.promotion_id
-JOIN public.groupe g        ON g.promo_id = pr.id AND (s.groupe_id IS NULL OR g.id = s.groupe_id)
-JOIN public.eleve_groupe eg ON eg.id_groupe = g.id
-JOIN public.justification_active j ON j.user_id = eg.num_etudiant
+JOIN public.seance_effectif_resolu er ON er.seance_id = s.id
+JOIN public.justification_active j    ON j.user_id = er.user_id
 WHERE s.id = @seance_id
   AND s.cancelled_at IS NULL
   AND s.starts_at IS NOT NULL
@@ -164,17 +161,57 @@ WHERE s.id = @seance_id
   AND tstzrange(s.starts_at, s.ends_at) && j.periode
 ON CONFLICT DO NOTHING;
 
--- name: UpdateSeance :exec
+-- name: UpdateSeance :one
+-- cancelled_at = NULL : une séance annulée par MarkSeancesAnnulees puis
+-- rétablie dans le planning amont doit redevenir visible. Sans cette remise à
+-- zéro, une erreur de saisie corrigée en amont laisserait le cours invisible
+-- pour toujours.
+--
+-- Le CTE `avant` capte l'état précédent : RETURNING ne rend que les valeurs
+-- nouvelles, et le compteur de résurrections du journal a besoin de savoir si
+-- la séance était annulée avant cet UPDATE.
+WITH avant AS (
+  SELECT sa.id, sa.cancelled_at FROM public.seance sa WHERE sa.id = @seance_id
+)
+UPDATE public.seance s
+SET matiere_id   = @matiere_id,
+    starts_at    = @starts_at,
+    ends_at      = @ends_at,
+    salle        = @salle,
+    prof         = @prof,
+    promotion_id = @promotion_id,
+    groupe_id    = @groupe_id,
+    prof_id      = @prof_id,
+    cancelled_at = NULL
+FROM avant
+WHERE s.id = avant.id
+RETURNING (avant.cancelled_at IS NOT NULL)::bool AS ressuscitee;
+
+-- name: ListSeancesWebdfdNonVues :many
+-- Séances webdfd dont la correspondance n'a pas été rafraîchie pendant le cycle
+-- courant (UpsertSeanceMap remet last_seen_at à now() à chaque passage) : ce
+-- sont les CANDIDATES à l'annulation, pas les élues.
+--
+-- La décision finale se prend en Go (seancesPerimees) parce qu'elle dépend
+-- d'informations que la base ignore : quelles promos ont réellement été
+-- récupérées pendant ce cycle, et sur quelle plage de dates. Une promo dont le
+-- fetch a échoué verrait sinon tout son planning annulé par un simple incident
+-- réseau.
+SELECT sm.internal_id, sm.external_id, s.promotion_id, s.starts_at
+FROM migration.seance_map sm
+JOIN public.seance s ON s.id = sm.internal_id
+WHERE sm.source = 'webdfd'
+  AND sm.last_seen_at < @cycle_start
+  AND s.cancelled_at IS NULL;
+
+-- name: MarkSeancesAnnulees :execrows
+-- L'annulation est un MARQUAGE, jamais un DELETE : pointage,
+-- justification_seance et presence_ledger référencent seance, et les deux
+-- dernières en ON DELETE RESTRICT. Une feuille de présence déjà émise doit
+-- rester lisible même si le cours a disparu du planning amont.
 UPDATE public.seance
-SET matiere_id   = $2,
-    starts_at    = $3,
-    ends_at      = $4,
-    salle        = $5,
-    prof         = $6,
-    promotion_id = $7,
-    groupe_id    = $8,
-    prof_id      = $9
-WHERE id = $1;
+SET cancelled_at = now()
+WHERE id = ANY(@ids::bigint[]) AND cancelled_at IS NULL;
 
 -- name: UpsertSeanceMap :exec
 INSERT INTO migration.seance_map (internal_id, source, external_id, last_seen_at)

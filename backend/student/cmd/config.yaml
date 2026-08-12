@@ -32,6 +32,17 @@ age:
 presence:
   tokenSecret: ${PRESENCE_TOKEN_SECRET}
 
+# Source du planning : bd = public.seance, alimentée toutes les 2 h par la
+# synchronisation de back-rex-admin. webdfd et aurega interrogent le système
+# amont en direct et restent pleinement fonctionnels.
+programme:
+  source: webdfd
+  webdfd:
+    baseURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe
+  aurega:
+    baseURL: ${AUREGA_BASE_URL}
+    apiKey: ${AUREGA_API_KEY}
+
 smtp:
   host: ${SMTP_HOST}
   port: ${SMTP_PORT}

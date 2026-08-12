@@ -42,6 +42,10 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 	q := New(db)
 	annee := ac.Annee
 
+	// Relevé pris AVANT le premier UpsertSeanceMap : toute correspondance dont
+	// le last_seen_at lui est antérieur n'a pas été revue pendant ce cycle.
+	cycleStart := time.Now()
+
 	// --- 1. Noms complets depuis cours_txt ---
 	coursNoms, err := fetchCoursNoms(baseURL + "?TYPE=cours_txt")
 	if err != nil {
@@ -76,12 +80,18 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 	startAnnee := ac.Debut.Format("20060102")
 	endAnnee := ac.Fin.Format("20060102")
 
+	// promosOK : promos dont le flux a été récupéré SANS erreur. C'est la seule
+	// liste sur laquelle il est légitime d'annuler des séances — le `continue`
+	// ci-dessous laisse volontairement les autres de côté (cf. seancesPerimees).
+	promosOK := make(map[int64]bool, len(promos))
+
 	for _, promo := range promos {
 		entries, err := fetchPlanning(baseURL, promo.ExternalID, startAnnee, endAnnee)
 		if err != nil {
 			log.Printf("planning: promo P0=%s inaccessible: %v — ignorée", promo.ExternalID, err)
 			continue
 		}
+		promosOK[promo.InternalID] = true
 		for _, e := range entries {
 			if e.cocle != "" && e.cocle != "0" {
 				if _, seen := cocles[e.cocle]; !seen {
@@ -238,9 +248,27 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 	}
 
 	// --- 7. Upsert séances ---
-	sCount, sErr := syncSeances(ctx, q, seanceKeys, cocleToMatiereID, grcleToGroupeID, prcleToUserID, promos)
-	log.Printf("planning: %d séances synchronisées (annee=%d)", sCount, annee)
-	return sErr
+	sCount, ressuscitees, sErr := syncSeances(ctx, q, seanceKeys, cocleToMatiereID, grcleToGroupeID, prcleToUserID, promos)
+	log.Printf("planning: %d séances synchronisées, %d rétablies (annee=%d)", sCount, ressuscitees, annee)
+	if sErr != nil {
+		return sErr
+	}
+
+	// --- 8. Séances disparues du planning amont ---
+	// Après l'upsert : les créneaux encore présents viennent d'y rafraîchir leur
+	// last_seen_at. `vus` porte TOUS les PL du flux, y compris ceux que
+	// syncSeances a écartés (matière inconnue, horaire illisible) : ils existent
+	// en amont, les annuler serait faux.
+	vus := make(map[string]struct{}, len(seanceKeys))
+	for plcle := range seanceKeys {
+		vus[plcle] = struct{}{}
+	}
+	annulees, err := annulerSeancesDisparues(ctx, q, cycleStart, vus, promosOK, ac.Debut, ac.Fin)
+	if err != nil {
+		return fmt.Errorf("planning: annulation des séances disparues: %w", err)
+	}
+	log.Printf("planning: %d séances annulées (absentes du planning webdfd, annee=%d)", annulees, annee)
+	return nil
 }
 
 // parisLoc est chargé une fois ; l'UTC est utilisé en fallback si la timezone est indisponible.
@@ -265,6 +293,9 @@ func parseWebdfdTime(date, hhmm string) (time.Time, bool) {
 // syncSeances synchronise chaque créneau webdfd (identifié par PL = plcle stable)
 // dans public.seance + migration.seance_map.
 // Schéma : lookup seance_map par PL → trouvé : UPDATE ; absent : INSERT.
+//
+// Retourne le nombre de séances traitées et, parmi elles, celles qui étaient
+// annulées et que l'UPDATE vient de rétablir.
 func syncSeances(
 	ctx context.Context,
 	q *Queries,
@@ -273,13 +304,13 @@ func syncSeances(
 	grcleToGroupeID map[string]int64,
 	prcleToUserID map[string]int32,
 	promos []ListPromotionWebdfdIDsRow,
-) (int, error) {
+) (int, int, error) {
 	p0cleToPromoID := make(map[string]int64, len(promos))
 	for _, p := range promos {
 		p0cleToPromoID[p.ExternalID] = p.InternalID
 	}
 
-	var count int
+	var count, ressuscitees int
 	for plcle, e := range seanceKeys {
 		matiereID, ok := cocleToMatiereID[e.cocle]
 		if !ok {
@@ -311,7 +342,7 @@ func syncSeances(
 
 		seanceID, err := q.GetSeanceBySource(ctx, GetSeanceBySourceParams{Source: "webdfd", ExternalID: plcle})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return count, fmt.Errorf("seance_map: lookup PL=%s: %w", plcle, err)
+			return count, ressuscitees, fmt.Errorf("seance_map: lookup PL=%s: %w", plcle, err)
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			seanceID, err = q.CreateSeance(ctx, CreateSeanceParams{
@@ -325,8 +356,9 @@ func syncSeances(
 				ProfID:      profID,
 			})
 		} else {
-			err = q.UpdateSeance(ctx, UpdateSeanceParams{
-				ID:          seanceID,
+			var ressuscitee bool
+			ressuscitee, err = q.UpdateSeance(ctx, UpdateSeanceParams{
+				SeanceID:    seanceID,
 				MatiereID:   matiereID,
 				StartsAt:    startsAtPg,
 				EndsAt:      endsAt,
@@ -336,9 +368,12 @@ func syncSeances(
 				GroupeID:    groupeID,
 				ProfID:      profID,
 			})
+			if ressuscitee {
+				ressuscitees++
+			}
 		}
 		if err != nil {
-			return count, err
+			return count, ressuscitees, err
 		}
 		// Rattrapage de la couverture des excuses : une séance créée (ou
 		// déplacée) après la saisie d'une excuse tomberait sinon hors de sa
@@ -349,18 +384,18 @@ func syncSeances(
 		// ne retire jamais une ligne. Le cas est marginal et la correction
 		// passe par la modification de l'excuse, qui recalcule sa couverture.
 		if err = q.AttacherJustificationsSeance(ctx, seanceID); err != nil {
-			return count, fmt.Errorf("justification_seance: séance %d: %w", seanceID, err)
+			return count, ressuscitees, fmt.Errorf("justification_seance: séance %d: %w", seanceID, err)
 		}
 		if err = q.UpsertSeanceMap(ctx, UpsertSeanceMapParams{
 			InternalID: seanceID,
 			Source:     "webdfd",
 			ExternalID: plcle,
 		}); err != nil {
-			return count, err
+			return count, ressuscitees, err
 		}
 		count++
 	}
-	return count, nil
+	return count, ressuscitees, nil
 }
 
 // fetchCoursNoms récupère le flux cours_txt et retourne une map COCLE→NOM.

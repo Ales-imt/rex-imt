@@ -20,8 +20,33 @@ type Config struct {
 	Rack          RackConfig      `yaml:"rack"`
 	Presence      PresenceConfig  `yaml:"presence"`
 	Webdfd        WebdfdConfig    `yaml:"webdfd"`
+	Programme     ProgrammeConfig `yaml:"programme"`
 	SMTP          SMTPConfig      `yaml:"smtp"`
 	Bullettin     BullettinConfig `yaml:"bullettin"`
+}
+
+// ProgrammeConfig choisit la source du planning servi aux élèves et aux profs.
+//
+// `source` n'a volontairement pas de valeur par défaut : une source absente ou
+// inconnue doit faire échouer le démarrage. Retomber silencieusement sur une
+// source de repli servirait un planning venu d'ailleurs que celui attendu, sans
+// que personne ne s'en aperçoive.
+type ProgrammeConfig struct {
+	Source string                `yaml:"source"` // bd | webdfd | aurega
+	Webdfd ProgrammeWebdfdConfig `yaml:"webdfd"`
+	Aurega ProgrammeAuregaConfig `yaml:"aurega"`
+}
+
+// ProgrammeWebdfdConfig : cgiempt.exe, interrogé en direct (TYPE=planning_txt).
+// Distinct de WebdfdConfig, qui sert la synchronisation côté admin — les deux
+// services peuvent viser des instances différentes.
+type ProgrammeWebdfdConfig struct {
+	BaseURL string `yaml:"baseURL"`
+}
+
+type ProgrammeAuregaConfig struct {
+	BaseURL string `yaml:"baseURL"`
+	APIKey  string `yaml:"apiKey"`
 }
 
 // BullettinConfig configure la génération des bulletins. La conversion

@@ -5,7 +5,7 @@ package justification
 // remplace jamais un statut de fait, et rien n'est jamais modifié ni supprimé.
 
 import (
-	presencedata "back-rex-common/pkg/presencedata/gen"
+	presencegen "back-rex-common/pkg/presencedata/gen"
 	"context"
 	"testing"
 
@@ -16,7 +16,7 @@ import (
 // les lit la feuille de présence partagée par les deux services.
 func (f *fixture) presenceEleve(t *testing.T, seanceID int64) (string, bool) {
 	t.Helper()
-	rows, err := presencedata.New(f.db).ListPresence(context.Background(), seanceID)
+	rows, err := presencegen.New(f.db).ListPresence(context.Background(), seanceID)
 	if err != nil {
 		t.Fatalf("ListPresence: %v", err)
 	}
