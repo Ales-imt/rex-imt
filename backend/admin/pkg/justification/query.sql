@@ -11,10 +11,10 @@
 -- Séances recouvertes par une plage, pour l'aperçu du dialogue de saisie et
 -- pour la matérialisation de justification_seance.
 --
--- La résolution de groupe reprend EXACTEMENT celle de ListPresence
--- (seance → matiere → periode → promotion → groupe → eleve_groupe) : toute
--- divergence permettrait de justifier une séance absente de la feuille de
--- présence. Le GROUP BY absorbe les élèves inscrits à plusieurs groupes.
+-- L'effectif attendu vient de la vue seance_effectif_resolu, comme pour
+-- ListPresence : toute divergence permettrait de justifier une séance absente
+-- de la feuille de présence, ou l'inverse. La vue rend au plus une ligne par
+-- couple (séance, élève), le GROUP BY d'origine n'a donc plus d'objet.
 --
 -- `&&` (chevauchement) et non `<@` : un étudiant souffrant à partir de 10 h a
 -- bien manqué le cours commencé à 9 h 45.
@@ -26,18 +26,13 @@ SELECT s.id, s.starts_at, s.ends_at,
        COALESCE(s.salle, '') AS salle,
        COALESCE(p.statut, 'ABSENT')::text AS statut
 FROM seance s
-JOIN matiere m       ON m.id = s.matiere_id
-JOIN periode pe      ON pe.id = m.periode_id
-JOIN promotion pr    ON pr.id = pe.promotion_id
-JOIN groupe g        ON g.promo_id = pr.id AND (s.groupe_id IS NULL OR g.id = s.groupe_id)
-JOIN eleve_groupe eg ON eg.id_groupe = g.id
+JOIN matiere m ON m.id = s.matiere_id
+JOIN seance_effectif_resolu er ON er.seance_id = s.id AND er.user_id = @user_id
 LEFT JOIN pointage p ON p.seance_id = s.id AND p.user_id = @user_id
-WHERE eg.num_etudiant = @user_id
-  AND s.cancelled_at IS NULL
+WHERE s.cancelled_at IS NULL
   AND s.starts_at IS NOT NULL
   AND s.ends_at IS NOT NULL
   AND tstzrange(s.starts_at, s.ends_at) && @periode::tstzrange
-GROUP BY s.id, s.starts_at, s.ends_at, m.name, s.salle, p.statut
 ORDER BY s.starts_at;
 
 -- name: ListJustificationsChevauchantes :many

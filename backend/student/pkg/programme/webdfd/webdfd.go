@@ -1,6 +1,7 @@
 package webdfd
 
 import (
+	"back-rex-common/pkg/auth"
 	"back-rex-eleve/pkg/programme"
 	"back-rex-eleve/pkg/programme/webdfd/gen"
 	"context"
@@ -8,12 +9,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/text/encoding/charmap"
 )
+
+// jourFmt : format des paramètres DATEDEBUT/DATEFIN de cgiempt.exe.
+const jourFmt = "20060102"
 
 // Connector récupère le planning depuis le serveur Cybema (webdfd.mines-ales.fr).
 // La résolution email→EV se fait via migration.user_map (plus de cache mémoire).
@@ -72,15 +78,21 @@ func (c *Connector) lookupWebdfdID(ctx context.Context, email string) (extID, ty
 	return "", "", fmt.Errorf("webdfd: résolution prof %s: %w", email, err)
 }
 
-func (c *Connector) GetProgramme(ctx context.Context, email, start, end string, gestionnaire bool) ([]programme.Cours, error) {
+func (c *Connector) GetProgramme(ctx context.Context, d programme.Demandeur, debut, fin time.Time) ([]programme.Cours, error) {
+	start := debut.Format(jourFmt)
+	// DATEFIN est INCLUSIVE côté Cybema, alors que la borne de l'interface est
+	// exclusive : sans ce recul d'un jour, la journée suivant la plage demandée
+	// serait ajoutée au planning.
+	end := fin.AddDate(0, 0, -1).Format(jourFmt)
+
 	// Gestionnaire : toutes les séances de la période, sans TYPECLE/VALCLE (pas
 	// de filtrage par utilisateur, donc pas de résolution d'ID à faire).
 	var url string
-	if gestionnaire {
+	if slices.Contains(d.Roles, auth.RoleGestionnaire) {
 		url = fmt.Sprintf("%s?TYPE=planning_txt&DATEDEBUT=%s&DATEFIN=%s",
 			c.PlanningURL, start, end)
 	} else {
-		valcle, typecle, err := c.lookupWebdfdID(ctx, email)
+		valcle, typecle, err := c.lookupWebdfdID(ctx, d.Email)
 		if err != nil {
 			return nil, err
 		}

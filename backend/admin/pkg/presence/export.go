@@ -8,7 +8,7 @@ package presence
 // par séance se fait ici, en mémoire.
 
 import (
-	presencedata "back-rex-common/pkg/presencedata/gen"
+	presencegen "back-rex-common/pkg/presencedata/gen"
 	"context"
 	"fmt"
 	"sort"
@@ -37,7 +37,7 @@ type exportParams struct {
 // ouverte, mais son absence ne doit pas non plus passer inaperçue.
 func buildSemestreDoc(ctx context.Context, db DBTX, p exportParams) (pdfDoc, GetPeriodeHeaderRow, error) {
 	q := New(db)
-	qd := presencedata.New(db)
+	qd := presencegen.New(db)
 
 	header, err := q.GetPeriodeHeader(ctx, p.PeriodeID)
 	if err != nil {

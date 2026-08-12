@@ -13,7 +13,7 @@ import (
 	"back-rex-eleve/pkg/pointage"
 	"back-rex-eleve/pkg/postit"
 	"back-rex-eleve/pkg/programme"
-	webdfdprog "back-rex-eleve/pkg/programme/webdfd"
+	"back-rex-eleve/pkg/programme/connect"
 	"back-rex-eleve/pkg/reponse"
 	"back-rex-eleve/pkg/user"
 	"context"
@@ -76,9 +76,17 @@ func main() {
 		return err
 	})
 	noteConnector := &mariadbnote.Connector{DB: mariaDB}
-	progConnector := &webdfdprog.Connector{
-		PlanningURL: "http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe",
-		DB:          pg.Db,
+	progConnector, err := connect.NewConnector(cfg, pg.Db)
+	if err != nil {
+		log.Fatal("Erreur configuration programme : ", err)
+	}
+
+	// Le contrôle HTTP de webdfd n'a de sens que si le planning en vient : avec
+	// la source `bd`, il signalerait une panne sans aucun effet sur le service.
+	statusCheckers := []health.Checker{health.LDAPChecker("ldap", cfg.LDAP.URL)}
+	if cfg.Programme.Source == connect.SourceWebdfd {
+		statusCheckers = append(statusCheckers,
+			health.HTTPChecker("webdfd", cfg.Programme.Webdfd.BaseURL))
 	}
 
 	// version api0
@@ -106,8 +114,7 @@ func main() {
 		})
 		r.Get("/status", health.MakeStatusHandler(
 			version, buildTime, startTime,
-			health.HTTPChecker("webdfd", progConnector.PlanningURL),
-			health.LDAPChecker("ldap", cfg.LDAP.URL),
+			statusCheckers...,
 		))
 
 		r.Route("/auth", func(r chi.Router) {

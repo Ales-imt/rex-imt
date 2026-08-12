@@ -2,7 +2,8 @@ package presence
 
 import (
 	"back-rex-common/pkg/ledger"
-	presencedata "back-rex-common/pkg/presencedata/gen"
+	"back-rex-common/pkg/presencedata"
+	presencegen "back-rex-common/pkg/presencedata/gen"
 	"back-rex-common/pkg/presencetoken"
 	"back-rex-common/pkg/services"
 	"context"
@@ -206,8 +207,8 @@ func OpenSeanceHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// Séance importée, pas encore activée → on lui assigne un code
-			activated, err := presencedata.New(services.GetPgCtx(r.Context()).Db).
-				ActivateSeance(ctx, presencedata.ActivateSeanceParams{
+			activated, err := presencegen.New(services.GetPgCtx(r.Context()).Db).
+				ActivateSeance(ctx, presencegen.ActivateSeanceParams{
 					ID:               existing.ID,
 					Code:             toText(presencetoken.GenerateCode()),
 					LateAfterMinutes: req.LateAfterMinutes,
@@ -296,8 +297,11 @@ func CloseSeanceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := presencedata.New(services.GetPgCtx(r.Context()).Db)
-	if err := q.CloseSeance(context.Background(), seanceID); err != nil {
+	// Clôture ET figement de l'effectif attendu, dans une seule transaction :
+	// la règle vit dans common, jamais dupliquée avec le chemin mobile.
+	if _, _, err := presencedata.CloseSeanceEtFiger(
+		context.Background(), services.GetPgCtx(r.Context()).Db, seanceID,
+	); err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}
@@ -311,7 +315,7 @@ func GetTokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := presencedata.New(services.GetPgCtx(r.Context()).Db)
+	q := presencegen.New(services.GetPgCtx(r.Context()).Db)
 	seance, err := q.GetSeance(context.Background(), seanceID)
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
@@ -336,7 +340,7 @@ func GetPresenceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := presencedata.New(services.GetPgCtx(r.Context()).Db)
+	q := presencegen.New(services.GetPgCtx(r.Context()).Db)
 	ctx := context.Background()
 
 	seance, err := q.GetSeance(ctx, seanceID)
@@ -592,7 +596,7 @@ func PresencePdfHandler(w http.ResponseWriter, r *http.Request) {
 
 	db := services.GetPgCtx(r.Context()).Db
 	q := New(db)
-	qd := presencedata.New(db)
+	qd := presencegen.New(db)
 	ctx := context.Background()
 
 	seance, err := q.GetSeanceDetail(ctx, seanceID)

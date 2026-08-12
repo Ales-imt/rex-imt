@@ -1,12 +1,18 @@
 package aurega
 
 import (
+	"back-rex-common/pkg/auth"
 	"back-rex-eleve/pkg/programme"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
+	"time"
 )
+
+// jourFmt : format des paramètres de date attendu par l'API Aurega.
+const jourFmt = "20060102"
 
 // Connector récupère le planning depuis l'API Aurega.
 type Connector struct {
@@ -14,9 +20,12 @@ type Connector struct {
 	APIKey  string
 }
 
-func (c *Connector) GetProgramme(ctx context.Context, email, start, end string, gestionnaire bool) ([]programme.Cours, error) {
+func (c *Connector) GetProgramme(ctx context.Context, d programme.Demandeur, debut, fin time.Time) ([]programme.Cours, error) {
 	// gestionnaire : toutes les séances de la période (email ignoré côté API).
-	url := fmt.Sprintf("%s/programme?email=%s&start=%s&end=%s&all=%t", c.BaseURL, email, start, end, gestionnaire)
+	gestionnaire := slices.Contains(d.Roles, auth.RoleGestionnaire)
+	// La borne haute de l'interface est exclusive, celle de l'API inclusive.
+	url := fmt.Sprintf("%s/programme?email=%s&start=%s&end=%s&all=%t",
+		c.BaseURL, d.Email, debut.Format(jourFmt), fin.AddDate(0, 0, -1).Format(jourFmt), gestionnaire)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

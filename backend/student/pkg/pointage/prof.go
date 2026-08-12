@@ -14,7 +14,8 @@ package pointage
 
 import (
 	"back-rex-common/pkg/auth"
-	presencedata "back-rex-common/pkg/presencedata/gen"
+	"back-rex-common/pkg/presencedata"
+	presencegen "back-rex-common/pkg/presencedata/gen"
 	"back-rex-common/pkg/presencetoken"
 	"back-rex-common/pkg/services"
 	"context"
@@ -134,22 +135,22 @@ func canManageSeance(isGestionnaire bool, userID int, profID pgtype.Int4) bool {
 
 // loadManagedSeance charge la séance et applique canManageSeance.
 // Écrit la réponse d'erreur (404/403/500) et retourne ok=false le cas échéant.
-func loadManagedSeance(w http.ResponseWriter, r *http.Request, seanceID int64) (presencedata.GetSeanceRow, bool) {
-	q := presencedata.New(services.GetPgCtx(r.Context()).Db)
+func loadManagedSeance(w http.ResponseWriter, r *http.Request, seanceID int64) (presencegen.GetSeanceRow, bool) {
+	q := presencegen.New(services.GetPgCtx(r.Context()).Db)
 	seance, err := q.GetSeance(context.Background(), seanceID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		w.WriteHeader(http.StatusNotFound)
-		return presencedata.GetSeanceRow{}, false
+		return presencegen.GetSeanceRow{}, false
 	}
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return presencedata.GetSeanceRow{}, false
+		return presencegen.GetSeanceRow{}, false
 	}
 
 	userID := auth.GetSecurityUserId(r.Context())
 	if !canManageSeance(auth.HasRole(r.Context(), auth.RoleGestionnaire), *userID, seance.ProfID) {
 		services.AuthorizationError(w, r, "séance d'un autre enseignant", services.NO_INFORMATION, nil)
-		return presencedata.GetSeanceRow{}, false
+		return presencegen.GetSeanceRow{}, false
 	}
 	return seance, true
 }
@@ -160,7 +161,7 @@ func loadManagedSeance(w http.ResponseWriter, r *http.Request, seanceID int64) (
 // gestionnaire, uniquement les siennes pour un prof (filtrage en SQL).
 // GET /pointage/seances/jour
 func GetSeancesJourHandler(w http.ResponseWriter, r *http.Request) {
-	q := presencedata.New(services.GetPgCtx(r.Context()).Db)
+	q := presencegen.New(services.GetPgCtx(r.Context()).Db)
 	ctx := context.Background()
 	dayStart, dayEnd := dayWindow()
 
@@ -169,7 +170,7 @@ func GetSeancesJourHandler(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]seanceJourItem, 0)
 	if auth.HasRole(r.Context(), auth.RoleGestionnaire) {
-		rows, err := q.ListSeancesJour(ctx, presencedata.ListSeancesJourParams{
+		rows, err := q.ListSeancesJour(ctx, presencegen.ListSeancesJourParams{
 			DayStart: tsStart,
 			DayEnd:   tsEnd,
 		})
@@ -187,7 +188,7 @@ func GetSeancesJourHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		userID := auth.GetSecurityUserId(r.Context())
-		rows, err := q.ListSeancesJourByProf(ctx, presencedata.ListSeancesJourByProfParams{
+		rows, err := q.ListSeancesJourByProf(ctx, presencegen.ListSeancesJourByProfParams{
 			ProfID:   pgtype.Int4{Int32: int32(*userID), Valid: true},
 			DayStart: tsStart,
 			DayEnd:   tsEnd,
@@ -222,7 +223,7 @@ func GetSeancePresenceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := presencedata.New(services.GetPgCtx(r.Context()).Db)
+	q := presencegen.New(services.GetPgCtx(r.Context()).Db)
 	ctx := context.Background()
 
 	rows, err := q.ListPresence(ctx, seanceID)
@@ -326,8 +327,8 @@ func OpenSeanceProfHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := presencedata.New(services.GetPgCtx(r.Context()).Db)
-	activated, err := q.ActivateSeance(context.Background(), presencedata.ActivateSeanceParams{
+	q := presencegen.New(services.GetPgCtx(r.Context()).Db)
+	activated, err := q.ActivateSeance(context.Background(), presencegen.ActivateSeanceParams{
 		ID:               seanceID,
 		Code:             pgtype.Text{String: presencetoken.GenerateCode(), Valid: true},
 		LateAfterMinutes: req.LateAfterMinutes,
@@ -369,8 +370,11 @@ func CloseSeanceProfHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := presencedata.New(services.GetPgCtx(r.Context()).Db)
-	if err := q.CloseSeance(context.Background(), seanceID); err != nil {
+	// Clôture ET figement de l'effectif attendu, dans une seule transaction :
+	// même appel que le chemin admin, la règle n'existe qu'une fois.
+	if _, _, err := presencedata.CloseSeanceEtFiger(
+		context.Background(), services.GetPgCtx(r.Context()).Db, seanceID,
+	); err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}

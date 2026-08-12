@@ -90,6 +90,16 @@ databaseChangeLog:
             columns:
               - column:
                   name: closed_at
+        # Le planning est TOUJOURS interrogé par plage de dates (programme
+        # élève/prof, séances du jour, export semestriel) : sans cet index,
+        # chaque consultation balaye la table entière.
+        - createIndex:
+            tableName: seance
+            schemaName: public
+            indexName: idx_seance_starts_at
+            columns:
+              - column:
+                  name: starts_at
         - addForeignKeyConstraint:
             baseTableName: seance
             baseTableSchemaName: public
@@ -195,4 +205,118 @@ databaseChangeLog:
       rollback:
         - dropTable:
             tableName: pointage
+            schemaName: public
+
+  # ---- public.seance_effectif ---------------------------------------------
+  # Effectif ATTENDU d'une séance, figé au moment de sa clôture.
+  #
+  # Sans cette table, l'effectif est recalculé à chaque lecture depuis
+  # eleve_groupe, qui est un état COURANT (réconcilié à chaque synchronisation).
+  # Un élève changeant de groupe en cours d'année voyait donc ses feuilles
+  # d'appel PASSÉES réécrites : disparu de celles de son ancien groupe, ABSENT
+  # sur celles du nouveau, auxquelles il n'avait jamais été convoqué. Un PDF de
+  # semestre régénéré différait alors de celui déjà émis.
+  #
+  # La table ne porte QUE l'effectif attendu : le statut reste dérivé de
+  # `pointage`, aucune donnée de pointage n'est dupliquée ici.
+  - changeSet:
+      id: v0.0.1-012c-create-table-seance-effectif
+      author: vjo
+      changes:
+        - createTable:
+            tableName: seance_effectif
+            schemaName: public
+            columns:
+              - column:
+                  name: seance_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: figee_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: seance_effectif
+            schemaName: public
+            columnNames: seance_id, user_id
+            constraintName: pk_seance_effectif
+        - createIndex:
+            tableName: seance_effectif
+            schemaName: public
+            indexName: idx_seance_effectif_user
+            columns:
+              - column:
+                  name: user_id
+        # ON DELETE CASCADE des deux côtés, délibérément : eleve_groupe et
+        # pointage le sont déjà, et un compte sans maillon de presence_ledger
+        # reste physiquement supprimable (account.HasPresence ne regarde que
+        # presence_ledger). Il doit alors disparaître de l'effectif figé
+        # exactement comme il disparaît aujourd'hui de la feuille vivante.
+        - addForeignKeyConstraint:
+            baseTableName: seance_effectif
+            baseTableSchemaName: public
+            baseColumnNames: seance_id
+            referencedTableSchemaName: public
+            referencedTableName: seance
+            referencedColumnNames: id
+            constraintName: seance_effectif_seance_id_fkey
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: seance_effectif
+            baseTableSchemaName: public
+            baseColumnNames: user_id
+            referencedTableSchemaName: public
+            referencedTableName: user
+            referencedColumnNames: id
+            constraintName: seance_effectif_user_id_fkey
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: seance_effectif
+            schemaName: public
+
+  # ---- public.seance_effectif_resolu ---------------------------------------
+  # La règle « qui est attendu à cette séance » n'existe qu'ICI.
+  #
+  # Elle était auparavant recopiée à l'identique dans six requêtes, chacune
+  # accompagnée d'un commentaire exigeant qu'elle reste alignée sur les autres.
+  # La vue transforme cette consigne en garantie structurelle : une divergence
+  # entre la feuille de présence, l'aperçu d'une excuse et le PDF semestriel
+  # n'est plus possible.
+  - changeSet:
+      id: v0.0.1-012d-create-view-seance-effectif-resolu
+      author: vjo
+      changes:
+        - createView:
+            viewName: seance_effectif_resolu
+            schemaName: public
+            selectQuery: |
+              -- Effectif figé à la clôture : une feuille émise ne se réécrit plus.
+              SELECT se.seance_id, se.user_id
+              FROM public.seance_effectif se
+              UNION ALL
+              -- Séances pas encore clôturées : résolution vivante sur les
+              -- groupes actuels. Les deux branches sont disjointes (NOT EXISTS),
+              -- l'UNION ALL ne peut donc pas produire de doublon.
+              SELECT DISTINCT s.id AS seance_id, eg.num_etudiant AS user_id
+              FROM public.seance s
+              JOIN public.matiere m       ON m.id = s.matiere_id
+              JOIN public.periode pe      ON pe.id = m.periode_id
+              JOIN public.promotion pr    ON pr.id = pe.promotion_id
+              JOIN public.groupe g        ON g.promo_id = pr.id AND (s.groupe_id IS NULL OR g.id = s.groupe_id)
+              JOIN public.eleve_groupe eg ON eg.id_groupe = g.id
+              WHERE NOT EXISTS (
+                SELECT 1 FROM public.seance_effectif x WHERE x.seance_id = s.id
+              )
+      rollback:
+        - dropView:
+            viewName: seance_effectif_resolu
             schemaName: public
