@@ -5,6 +5,7 @@
 
   vars_files:
     - vault-vars.yml
+    - vars/admin.yml
 
   roles:
     - common

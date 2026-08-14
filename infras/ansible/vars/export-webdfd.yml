@@ -1,0 +1,64 @@
+---
+# Variables du service rex-export-webdfd. Voir vars/sync.yml pour la raison
+# d'être de ce fichier plutôt qu'un group_vars.
+
+app_name: export-webdfd
+container_name: rex-export-webdfd
+container_image: "ghcr.io/{{ ghcr_org }}/rex-export-webdfd:{{ image_tag | default('latest') }}"
+app_dir: /home/{{ app_user }}/rex-export-webdfd
+config_dest_in_container: /opt/rex-export/conf/config.yaml
+
+# Aucun port : le service ne sert rien, il lit un répertoire et en écrit un
+# autre. Neutralisation EXPLICITE plutôt que simple omission — ce play tourne
+# sur un hôte du groupe `admin`, partagé avec rex-admin (port 8121) et rex-sync
+# (3334) : une valeur héritée par mégarde produirait un PublishPort en collision
+# avec un service déjà en place. `false` est falsy côté Jinja, donc le test
+# `container_port is defined and container_port` du template tombe à vide.
+container_port: false
+
+# Idem : ce service n'horodate rien, aucun certificat FreeTSA à monter.
+freetsa_cert_container_path: false
+
+# AUCUN SECRET. C'est ce qui justifie de l'avoir séparé de sync : ce service
+# donne à mâcher des archives venues d'un partage Samba à un exécutable WinDev
+# sous wine, la plus large surface d'attaque de l'ensemble. Lui confier les
+# identifiants PostgreSQL annulerait tout le bénéfice de la séparation.
+secrets_enabled: false
+
+gotenberg_enabled: false
+
+# Il ÉCRIT sur les volumes partagés, d'où keep-id : sans lui, podman rootless
+# remappe l'UID du conteneur vers une plage subuid et les exports produits
+# n'appartiendraient pas à {{ app_user }} — sync ne pourrait pas les lire, et la
+# purge des anciens exports échouerait.
+#
+# L'image doit donc être construite avec UID = celui de {{ app_user }} sur la VM
+# (1001) : voir build-container-export-prod dans makefile.prod.
+container_userns: keep-id
+
+# Le service démarre immédiatement — mais pas au PREMIER lancement. keep-id
+# oblige podman à décaler la propriété de tout le rootfs de l'image (~2 Go, le
+# préfixe wine), et la VM n'a que 1,7 Go de RAM : rien ne tient en cache, tout
+# passe par le disque. Mesuré à plus de 300 s, si bien que systemd tuait le
+# démarrage au moment où il aboutissait, puis relançait (Restart=always) — une
+# boucle qui fait attendre Ansible indéfiniment sur « Activer et démarrer ».
+#
+# Ce coût n'est payé qu'une fois, le rootfs décalé étant conservé dans le
+# stockage podman ; les démarrages suivants sont immédiats. La marge vaut donc
+# pour le premier déploiement et pour tout changement de digest de l'image.
+container_timeout_start: 900
+
+# hfsql_depot et hfsql_data viennent du vault (config-prod.env), pas d'ici : les
+# redéfinir serait sans effet, --extra-vars primant sur vars_files.
+#
+# Les deux chemins sont disjoints, l'ordre de création est donc indifférent. Ce
+# play les crée tous les deux bien qu'il ne produise que les exports : le dépôt
+# est son entrée, et podman rootless ne saurait pas le créer au montage.
+hfsql_dirs:
+  - "{{ hfsql_data }}"
+  - "{{ hfsql_depot }}"
+container_volumes:
+  # Le dépôt est alimenté par Samba : lecture seule suffit, le service ne
+  # supprime jamais les archives déposées.
+  - "{{ hfsql_depot }}:{{ hfsql_depot }}:ro,z"
+  - "{{ hfsql_data }}:{{ hfsql_data }}:z"

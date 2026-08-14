@@ -1,0 +1,155 @@
+# Image du service rex-export-webdfd : surveille le dépôt des sauvegardes HFSQL
+# de cybema et les convertit en JSON.
+#
+# L'image EST l'environnement wine : le service n'appelle pas `docker run`, il
+# lance wine dans son propre conteneur (runner: local). C'est ce qui permet de
+# le conteneuriser sans lui monter le socket du démon, donc sans lui accorder
+# l'équivalent du root sur l'hôte — pour un processus qui déballe des archives
+# venues d'un partage Samba, ce serait le pire endroit où le faire.
+#
+# Transposé de hfsql/docker/Dockerfile, dont les exécutables 32 bits vivent
+# désormais dans backend/export-webdfd/exe/.
+
+# ── Stage Go sources (partagé) ───────────────────────────────────────────────
+FROM golang:1.26-alpine AS go-base
+
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+COPY backend/common ./common
+COPY backend/export-webdfd ./export-webdfd
+COPY .git ./.git
+
+WORKDIR /app/export-webdfd
+
+# ── Stage Go backend prod ─────────────────────────────────────────────────────
+FROM go-base AS backend-prod
+
+ARG VERSION
+ARG BUILD_TIME
+# CGO_ENABLED=0 : binaire statique construit sous alpine/musl, exécuté sous
+# debian/glibc. Le paquet n'utilise que des appels système purs Go.
+RUN VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}" && \
+    BUILD_TIME="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" && \
+    CGO_ENABLED=0 go build \
+        -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" \
+        -o /rex-export ./cmd
+
+# ── Stage Go backend local (symboles de debug) ────────────────────────────────
+FROM go-base AS backend-local
+
+RUN CGO_ENABLED=0 go build -gcflags="all=-N -l" -o /rex-export ./cmd
+
+# ── Stage wine (lourd, volontairement indépendant de l'UID final) ─────────────
+FROM debian:bookworm AS wine-base
+
+# Versions ÉPINGLÉES de wine : c'est lui qui interprète les .FIC, une montée de
+# version amont changerait l'export sans qu'aucun commit ne l'explique.
+#
+# Effet de bord assumé : le jour où debian remplace cette version (mise à jour
+# de sécurité), le build ÉCHOUE — l'ancienne disparaît de l'archive. C'est le
+# but : on bumpe alors ces valeurs sciemment, on ne le subit pas.
+#
+# xvfb, winbind, xauth et ca-certificates ne sont PAS épinglés : ils reçoivent
+# des mises à jour de sécurité de point release, et les figer casserait le build
+# à chaque publication sans rien garantir sur le comportement de l'export.
+ARG WINE_VERSION=8.0~repack-4
+
+RUN dpkg --add-architecture i386 && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        wine="${WINE_VERSION}" \
+        wine32:i386="${WINE_VERSION}" \
+        winbind xvfb xauth procps ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV WINEPREFIX=/wine \
+    WINEARCH=win32 \
+    WINEDEBUG=-all \
+    HOME=/home/wineuser
+
+# Le préfixe wine est initialisé sous l'UID DE SERVICE, et non sous un UID de
+# build fixe : wine vérifie que le WINEPREFIX lui APPARTIENT, pas seulement
+# qu'il est accessible. Un préfixe en 1000 exécuté sous 1001 échoue sur
+#   wine: '/wine' is not owned by you
+# quels que soient les droits posés dessus.
+#
+# Conséquence assumée : cette couche de ~590 Mo n'est plus partagée entre
+# l'image locale (1000) et l'image prod (1001), et le wineboot est rejoué pour
+# chacune. Le chown a posteriori serait pire — il dupliquerait les 590 Mo dans
+# une couche supplémentaire, sur une image qui pèse déjà ~2 Go et qu'un
+# UserNS=keep-id doit décaler à chaque nouveau digest.
+#
+# build-export-webdfd.sh passe ces deux ARG à la même valeur que UID/GID ; les
+# valeurs par défaut ne servent qu'à un `docker build` lancé à la main.
+ARG BUILD_UID=1000
+ARG BUILD_GID=1000
+RUN groupadd -g "$BUILD_GID" winebuild 2>/dev/null || true && \
+    useradd -u "$BUILD_UID" -g "$BUILD_GID" -M -d /home/wineuser winebuild 2>/dev/null || true && \
+    mkdir -p /wine /home/wineuser && \
+    chown -R "$BUILD_UID:$BUILD_GID" /wine /home/wineuser
+
+USER $BUILD_UID:$BUILD_GID
+# wineboot sous Xvfb : sinon le préfixe est initialisé sans partie graphique.
+# Le chmod est dans le même RUN pour ne pas dupliquer les ~590 Mo du préfixe.
+RUN xvfb-run -a wineboot -u && \
+    wineserver -w && \
+    chmod -R a+rwX /wine /home/wineuser
+
+USER root
+WORKDIR /app
+COPY backend/export-webdfd/exe/ /app/
+COPY infras/run/build/entrypoint-export.sh /entrypoint.sh
+# /app doit être INSCRIPTIBLE par le compte de service : l'exécutable WinDev y
+# crée ses fichiers de travail (planning.fic, profs.fic…) à chaque export. Privé
+# de ce droit, HFSQL ouvre une boîte de dialogue modale sur le display Xvfb
+# invisible et le conteneur se fige jusqu'au délai de garde, sans un message.
+#
+# a+rwX plutôt qu'un chown : /app ne contient que les binaires WinDev livrés
+# avec l'image, quelques mégaoctets. Le rendre inscriptible par tous coûte moins
+# qu'une couche de plus, et évite d'y répercuter l'UID de service.
+RUN chmod 0755 /entrypoint.sh && chmod -R a+rwX /app
+
+# ── Stage cible commun ────────────────────────────────────────────────────────
+# L'UID de service est fixé ICI, dans une couche légère : 1000 en local, 1001 en
+# prod (l'UID de userdfx sur la VM). Il doit correspondre au propriétaire des
+# répertoires depot/data sur l'hôte, ET l'unité Quadlet doit porter
+# `UserNS=keep-id` — sans quoi podman rootless remappe cet UID vers une plage
+# subuid et les fichiers produits n'appartiennent à personne d'utile.
+FROM wine-base AS service-base
+
+ARG UID=1000
+ARG GID=1000
+RUN if ! getent group "$GID" >/dev/null; then groupadd -g "$GID" wineuser; fi && \
+    if ! getent passwd "$UID" >/dev/null; then \
+        useradd -u "$UID" -g "$GID" -M -d /home/wineuser wineuser; \
+    fi
+
+# ── Target prod ───────────────────────────────────────────────────────────────
+FROM service-base AS prod
+
+ARG UID=1000
+ARG GID=1000
+COPY --from=backend-prod /rex-export /usr/local/bin/rex-export
+
+USER $UID:$GID
+# Le répertoire courant doit rester /app : entrypoint-export.sh y invoque
+# l'exécutable WinDev par son nom seul.
+WORKDIR /app
+ENTRYPOINT ["/usr/local/bin/rex-export"]
+CMD ["-config", "/opt/rex-export/conf/config.yaml"]
+
+# ── Target local ──────────────────────────────────────────────────────────────
+# Pas de delve ici : le service attend des fichiers et enchaîne des appels
+# système, il se débogue au journal. L'image pèse déjà ~2 Go.
+FROM service-base AS local
+
+ARG UID=1000
+ARG GID=1000
+COPY --from=backend-local /rex-export /usr/local/bin/rex-export
+
+USER $UID:$GID
+WORKDIR /app
+ENTRYPOINT ["/usr/local/bin/rex-export"]
+CMD ["-config", "/opt/rex-export/conf/config.yaml"]

@@ -2,7 +2,7 @@
   NE PAS ÉDITER LA CONFIG ICI.
   Source de vérité : backend/admin/cmd/config.yaml (les ${VAR} sont résolues au
   runtime par le serveur via secrets.env). Ce template ne fait qu'adapter les
-  chemins de certificats aux montages du container (voir group_vars/admin.yml).
+  chemins de certificats aux montages du container (voir vars/admin.yml).
 #}
 {{ lookup('ansible.builtin.file', playbook_dir ~ '/../../backend/admin/cmd/config.yaml')
    | regex_replace('caCertPath:\s*\./x509/freetsa/cacert\.pem', 'caCertPath: ' ~ freetsa_cert_container_path) }}

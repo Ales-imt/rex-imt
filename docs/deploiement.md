@@ -111,7 +111,7 @@ make stop-eleve     # arrête le container élève
 make stop-local     # arrête admin + élève
 ```
 
-Les variables de connexion sont lues depuis `.vscode/secrets-local.env`.
+Les variables de connexion sont lues depuis `infras/env/secrets-local.env`.
 
 ### Nettoyage
 
@@ -299,7 +299,7 @@ Le déploiement est géré par **Ansible** depuis le poste de développement.
 ### Prérequis
 
 - Accès SSH aux VMs prod configuré (utilisateur `userdfx`)
-- Fichier `.vscode/secrets-prod.env` renseigné
+- Fichier `infras/env/secrets-prod.env` renseigné
 - Certificats TLS déposés dans `infras/ansible/files/` (voir ci-dessous)
 
 ### Certificats TLS (`infras/ansible/files/`)
@@ -355,7 +355,7 @@ Chaque playbook applique trois rôles dans l'ordre :
 
 ### Gestion des secrets
 
-Les secrets de production sont dans `.vscode/secrets-prod.env`. Le script `generate-vault-vars.sh` les exporte dans `vault-vars.yml` pour Ansible. Ce fichier contient notamment :
+Les secrets de production sont dans `infras/env/secrets-prod.env`. Le script `generate-vault-vars.sh` les exporte dans `vault-vars.yml` pour Ansible. Ce fichier contient notamment :
 
 - Credentials PostgreSQL et MariaDB
 - Secrets JWT admin et élève

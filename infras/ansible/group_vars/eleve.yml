@@ -3,22 +3,15 @@ app_name: eleve
 server_name: vecu-etudiant-eleves-2.mines-ales.fr
 ssl_dir: "/etc/ssl/{{ server_name }}"
 container_name: rex-eleve
-container_image: ghcr.io/ales-imt/rex-eleve:latest
+container_image: "ghcr.io/{{ ghcr_org }}/rex-eleve:{{ image_tag | default('latest') }}"
 container_port: 8131
 app_dir: /home/userdfx/rex-eleve
 config_dest_in_container: /opt/rex-eleve/conf/config.yaml
 
-postgres_host: "{{ postgres_host }}"
-postgres_port: "{{ postgres_port }}"
-postgres_db: "{{ postgres_db }}"
-mariadb_host: "{{ mariadb_host }}"
-mariadb_port: "{{ mariadb_port }}"
-mariadb_database: "{{ mariadb_database }}"
-ldap_host: "{{ ldap_host }}"
-
-jwt_secret: "{{ jwt_secret_eleve }}"
-
-age_public_key: "{{ age_public_key }}"
+# Les accès PostgreSQL / MariaDB / LDAP et age_public_key viennent du vault
+# (vault-vars.yml, chargé en vars_files ET en --extra-vars par le makefile), qui
+# prime sur group_vars : les redéfinir ici donnerait des lignes
+# `postgres_host: "{{ postgres_host }}"` jamais évaluées.
 
 # Pas de génération de bulletins côté élève : Gotenberg désactivé (opt-out du
 # défaut activé), pour ne pas déployer un conteneur inutile sur la VM élève.

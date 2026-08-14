@@ -1,0 +1,12 @@
+---
+# Les trois services de la VM admin en UNE seule invocation d'ansible-playbook.
+#
+# --ask-become-pass demande le mot de passe une fois par invocation, quel que
+# soit le nombre de plays enchaînés : un fichier par VM, c'est une demande par
+# VM. Les playbooks par service restent utilisables tels quels pour un
+# déploiement ciblé (make deploy-vm-sync-prod), au prix d'une demande chacun.
+#
+# Ordre : export-webdfd avant sync, il produit les exports que sync consomme.
+- import_playbook: playbook-admin.yml
+- import_playbook: playbook-export-webdfd.yml
+- import_playbook: playbook-sync.yml

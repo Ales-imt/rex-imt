@@ -1,0 +1,39 @@
+# Configuration du service rex-sync.
+#
+# Il maintient dans PostgreSQL le référentiel scolaire — promotions, profs,
+# élèves, planning, groupes — à partir de la source amont désignée ci-dessous.
+# Il ne sert aucune donnée : seuls /health et /version sont exposés.
+
+database:
+  host: ${POSTGRES_HOST}
+  port: ${POSTGRES_PORT}
+  user: ${POSTGRES_USER}
+  password: ${POSTGRES_PASSWORD}
+  name: ${POSTGRES_DB}
+
+server:
+  host: localhost
+  port: 3334
+
+# Source du référentiel. Les deux décrivent la même base cybema et portent les
+# mêmes identifiants ; seule la façon de l'atteindre change. Une source absente
+# ou inconnue arrête le démarrage — se rabattre sur l'autre synchroniserait un
+# référentiel différent de celui attendu, sans que personne ne s'en aperçoive.
+migration:
+  # webdfd : interrogation directe de cybema, rafraîchie toutes les 2 h.
+  # hfsql  : lecture des exports JSON déposés par le service rex-export-webdfd,
+  #          pris à mesure qu'ils apparaissent.
+  source: webdfd
+
+  # Source hfsql : où lire les exports. Le répertoire est monté en LECTURE
+  # SEULE — la rétention appartient au producteur, pas à ce service.
+  hfsql:
+    data: /var/lib/rex/hfsql/data
+    # Fréquence de recherche d'un nouvel export. Une sauvegarde arrive au plus
+    # une fois par jour : parcourir un répertoire chaque minute ne coûte rien.
+    interval: 1m
+
+# Source webdfd : cybema interrogé en direct.
+webdfd:
+  baseURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe
+  listeGroupeURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgihtml.exe

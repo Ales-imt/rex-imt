@@ -1,11 +1,22 @@
 # ── Secrets & certificats ─────────────────────────────────────────────────────
-.vscode/secrets-*.env
+# Les secrets ne sont jamais versionnés ; leur LISTE l'est, dans
+# infras/env/secrets.env.example, pour qu'un oubli se voie.
+infras/env/secrets-*.env
+# config-local.env ET config-prod.env sont versionnés : ils ne contiennent aucun
+# secret, et le dépôt versionne déjà la topologie de production (inventaire
+# ansible, group_vars, chemins /srv). Les en sortir n'aurait protégé personne
+# tout en privant d'historique les changements de serveur ou de chemin.
+#
+# Seule exception, dans les fichiers de secrets : WITNESS_RECIPIENT, qui n'est
+# pas un secret mais une donnée à caractère personnel (cf. docs/rgpd-dpo.md).
 infras/ansible/vault-vars.yml
 infras/migration/config-runtime.yaml
 infras/migration/config-prod-runtime.yaml
 # Fichiers dérivés, régénérés par start-{admin,eleve}-local.sh depuis backend/{admin,student}/cmd/config.yaml
 infras/run/config-admin.yaml
 infras/run/config-eleve.yaml
+infras/run/config-sync.yaml
+infras/run/config-export-webdfd.yaml
 **/*.pem
 **/*.age*
 
@@ -39,6 +50,8 @@ infras/liquibase/liquibase_libs
 **/*.xlsx#
 **/*.docx
 **/testconfig.yaml
-**/cmd
 data
+**/testdata
+**/exe
+
 

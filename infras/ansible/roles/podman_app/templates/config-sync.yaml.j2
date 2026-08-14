@@ -1,0 +1,8 @@
+{#
+  NE PAS ÉDITER LA CONFIG ICI.
+  Source de vérité : backend/sync/cmd/config.yaml (les ${VAR} sont résolues au
+  runtime par le serveur via secrets.env). Ce template ne fait qu'adapter le
+  chemin des exports au montage du container (voir vars/sync.yml).
+#}
+{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../backend/sync/cmd/config.yaml')
+   | regex_replace('data:\s*/var/lib/rex/hfsql/data', 'data: ' ~ hfsql_data) }}

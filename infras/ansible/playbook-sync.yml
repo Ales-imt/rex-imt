@@ -1,0 +1,27 @@
+---
+# Déploiement du service rex-sync sur la VM admin.
+#
+# Il tourne sur le même hôte que l'admin : c'est là que se trouvent l'accès à
+# PostgreSQL et, pour la source hfsql, le partage Samba des sauvegardes.
+#
+# Pas de rôle nginx_vhost : le service n'expose que /health et /version, et
+# n'est joint par personne depuis l'extérieur.
+- name: Configure le service sync (prod)
+  hosts: admin
+  become: true
+
+  vars_files:
+    - vault-vars.yml
+    - vars/sync.yml
+
+  roles:
+    - podman_app
+
+  handlers:
+    - name: Reload user daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+        scope: user
+      become_user: "{{ app_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[app_user][1] }}"

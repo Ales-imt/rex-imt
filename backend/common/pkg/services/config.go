@@ -20,9 +20,58 @@ type Config struct {
 	Rack          RackConfig      `yaml:"rack"`
 	Presence      PresenceConfig  `yaml:"presence"`
 	Webdfd        WebdfdConfig    `yaml:"webdfd"`
+	Migration     MigrationConfig `yaml:"migration"`
 	Programme     ProgrammeConfig `yaml:"programme"`
 	SMTP          SMTPConfig      `yaml:"smtp"`
 	Bullettin     BullettinConfig `yaml:"bullettin"`
+}
+
+// MigrationConfig choisit la source du référentiel scolaire synchronisé vers
+// PostgreSQL par pkg/migration : promotions, profs, élèves, planning, groupes.
+//
+// Comme pour ProgrammeConfig, `source` n'a volontairement pas de valeur par
+// défaut : une source absente ou inconnue doit faire échouer le démarrage.
+// Synchroniser depuis une autre source que celle attendue ne se verrait qu'au
+// moment où un cours manquerait à l'appel.
+//
+// Les deux sources décrivent le MÊME référentiel amont (cybema) et portent les
+// mêmes identifiants : `webdfd` l'interroge en direct par HTTP, `hfsql` lit les
+// exports JSON produits par le watcher à partir de ses sauvegardes.
+type MigrationConfig struct {
+	Source  string        `yaml:"source"`  // webdfd | hfsql
+	HFSQL   HFSQLConfig   `yaml:"hfsql"`   // service sync, source hfsql
+	Watcher WatcherConfig `yaml:"watcher"` // service export-webdfd
+}
+
+// HFSQLConfig paramètre, côté service `sync`, la lecture des exports produits
+// par `export-webdfd`. Le répertoire est monté en LECTURE SEULE : sync n'y
+// écrit rien, la rétention appartient au producteur.
+type HFSQLConfig struct {
+	Data string `yaml:"data"` // répertoire des exports (chemin absolu)
+	// Intervalle de sondage de `data`. Le sondage est préféré à inotify parce
+	// qu'il est déclenché sur niveau et non sur front : un événement perdu
+	// laisserait un export complet que plus personne ne viendrait lire. Une
+	// sauvegarde arrive au plus une fois par jour, la latence est sans
+	// conséquence. Défaut 1m.
+	Interval time.Duration `yaml:"interval"`
+}
+
+// WatcherConfig paramètre le service `export-webdfd` : surveillance du
+// répertoire de dépôt des sauvegardes cybema, dézippage, puis conversion en
+// JSON par l'exécutable WinDev.
+type WatcherConfig struct {
+	Depot string `yaml:"depot"` // répertoire de dépôt surveillé (chemin absolu)
+	Data  string `yaml:"data"`  // bases dézippées et exports (chemin absolu)
+	// Runner choisit comment l'export est exécuté :
+	//   - "docker" : `docker run <image>` — le service tourne sur l'hôte ;
+	//   - "local"  : wine appelé directement — le service EST le conteneur
+	//     wine32-hf55, et n'a donc besoin d'aucun accès au démon.
+	// Défaut "docker", qui ne suppose rien du déploiement.
+	Runner  string        `yaml:"runner"`
+	Image   string        `yaml:"image"`   // runner docker : image de l'export ; défaut wine32-hf55
+	Entree  string        `yaml:"entree"`  // runner local : script d'export ; défaut /entrypoint.sh
+	Timeout time.Duration `yaml:"timeout"` // durée maximale d'un export ; défaut 15m
+	Keep    int           `yaml:"keep"`    // exports conservés sous data ; 0 = tous
 }
 
 // ProgrammeConfig choisit la source du planning servi aux élèves et aux profs.
@@ -62,7 +111,6 @@ type WebdfdConfig struct {
 
 type PresenceConfig struct {
 	TokenSecret string          `yaml:"tokenSecret"`
-	PlanningURL string          `yaml:"planningURL"`
 	Timestamp   TimestampConfig `yaml:"timestamp"`
 	Witness     WitnessConfig   `yaml:"witness"`
 }

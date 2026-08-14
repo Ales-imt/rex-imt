@@ -1,10 +1,8 @@
 package migration
 
 import (
+	"back-rex-sync/pkg/source"
 	"context"
-	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -14,13 +12,10 @@ import (
 const testDSN = "host=10.20.1.4 port=5432 user=postgres password=root dbname=db_rex sslmode=disable"
 
 func TestSyncPromotions(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "P0;94;NOM;1A BAT 2026-27;COLORI;1;CFOND;10987431;CTEXTE;0\n")
-		fmt.Fprint(w, "P0;95;NOM;2A BAT 2025-26;COLORI;2;CFOND;10987432;CTEXTE;1\n")
-		fmt.Fprint(w, "\n")
-		fmt.Fprint(w, "EOT\n")
-	}))
-	defer srv.Close()
+	src := sourceFixe{promos: []source.Promo{
+		{ExternalID: "94", Nom: "1A BAT 2026-27"},
+		{ExternalID: "95", Nom: "2A BAT 2025-26"},
+	}}
 
 	ctx := context.Background()
 	db, err := pgxpool.New(ctx, testDSN)
@@ -44,7 +39,7 @@ func TestSyncPromotions(t *testing.T) {
 		t.Skip("aucune année ne correspond à la date du jour")
 	}
 
-	if err = SyncPromotions(ctx, srv.URL, db, ac); err != nil {
+	if err = SyncPromotions(ctx, src, db, ac); err != nil {
 		t.Fatalf("SyncPromotions: %v", err)
 	}
 
@@ -132,39 +127,4 @@ func TestSyncPromotions(t *testing.T) {
 				got[0].externalID, got[1].externalID)
 		}
 	})
-}
-
-func TestParseKV(t *testing.T) {
-	cases := []struct {
-		line string
-		want map[string]string
-	}{
-		{
-			line: "P0;94;NOM;1A BAT 2026-27;COLORI;1;CFOND;10987431;CTEXTE;0",
-			want: map[string]string{
-				"P0": "94", "NOM": "1A BAT 2026-27",
-				"COLORI": "1", "CFOND": "10987431", "CTEXTE": "0",
-			},
-		},
-		{
-			line: "P0;1;NOM;TEST ",
-			want: map[string]string{"P0": "1", "NOM": "TEST"},
-		},
-		{
-			line: "cle_seule",
-			want: map[string]string{},
-		},
-	}
-
-	for _, tc := range cases {
-		got := parseKV(tc.line)
-		for k, v := range tc.want {
-			if got[k] != v {
-				t.Errorf("parseKV(%q)[%q] = %q, want %q", tc.line, k, got[k], v)
-			}
-		}
-		if len(got) != len(tc.want) {
-			t.Errorf("parseKV(%q): got %d clefs, want %d", tc.line, len(got), len(tc.want))
-		}
-	}
 }

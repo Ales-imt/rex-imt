@@ -1,6 +1,8 @@
-.PHONY: local deploy-local infra-local stop-infra migration-local cyber_note start-local stop-local build-local build-admin-local start-admin stop-admin build-eleve-local start-eleve stop-eleve db-to-code-local
+.PHONY: local deploy-local infra-local stop-infra migration-local cyber_note start-local stop-local build-local build-admin-local start-admin stop-admin build-eleve-local start-eleve stop-eleve db-to-code-local build-sync-local build-export-local start-sync stop-sync start-export stop-export
 
-_get_local=$(shell grep '^$(1)=' $(SECRETS_FILE_LOCAL) | cut -d= -f2)
+# Cherche dans la topologie PUIS dans les secrets. `-f2-` et non `-f2` : une
+# valeur contenant un « = » (padding base64) serait sinon tronquée en silence.
+_get_local=$(shell grep -h '^$(1)=' $(CONFIG_FILE_LOCAL) $(SECRETS_FILE_LOCAL) 2>/dev/null | head -1 | cut -d= -f2-)
 
 local:  infra-local migration-local cyber_note build-local  start-local
 
@@ -10,7 +12,7 @@ local:  infra-local migration-local cyber_note build-local  start-local
 
 infra-local:
 	@echo "--- 🐳 Démarrage des conteneurs Docker ---"
-	cd $(DOCKER_DIR) && docker compose -f compose.yaml --env-file ../../$(SECRETS_FILE_LOCAL) up -d
+	cd $(DOCKER_DIR) && docker compose -f compose.yaml --env-file ../../$(CONFIG_FILE_LOCAL) --env-file ../../$(SECRETS_FILE_LOCAL) up -d
 
 	@echo "--- 🗑️ suppression de la bd db_rex ---"
 	docker exec -i postgres-16.10-alpine-rex psql -U postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'db_rex';"
@@ -27,7 +29,7 @@ infra-local:
 
 stop-infra:
 	@echo "--- 🛑 Arrêt des conteneurs Docker ---"
-	cd $(DOCKER_DIR) && docker compose -f compose.yaml --env-file ../../$(SECRETS_FILE_LOCAL) down
+	cd $(DOCKER_DIR) && docker compose -f compose.yaml --env-file ../../$(CONFIG_FILE_LOCAL) --env-file ../../$(SECRETS_FILE_LOCAL) down
 
 # ── Migration ──────────────────────────────────────────────────────────────────────
 
@@ -47,7 +49,7 @@ cyber_note:
 
 # ── Conteneurs locaux ─────────────────────────────────────────────────────────
 
-start-local: start-admin start-eleve
+start-local: start-admin start-eleve start-sync start-export
 
 start-admin: fetch-freetsa-cert-if-missing build-admin-local
 	$(RUN_DIR)/start-admin-local.sh
@@ -55,15 +57,24 @@ start-admin: fetch-freetsa-cert-if-missing build-admin-local
 start-eleve: build-eleve-local
 	$(RUN_DIR)/start-eleve-local.sh
 
-stop-local: stop-admin stop-eleve stop-infra
+stop-local: stop-admin stop-eleve stop-sync stop-export stop-infra
 
-build-local : build-admin-local build-eleve-local
+build-local : build-admin-local build-eleve-local build-sync-local build-export-local
 
 build-admin-local: db-to-code-local
-	$(RUN_DIR)/build-admin.sh local
+	$(RUN_DIR)/build-admin.sh local $(IMAGE_TAG)
 
 build-eleve-local: db-to-code-local
-	$(RUN_DIR)/build-eleve.sh local
+	$(RUN_DIR)/build-eleve.sh local $(IMAGE_TAG)
+
+build-sync-local: db-to-code-local
+	$(RUN_DIR)/build-sync.sh local $(IMAGE_TAG)
+
+# L'image embarque wine et le préfixe WinDev : premier build long (~590 Mo de
+# couche), les suivants réutilisent le cache tant que la version de wine ne
+# bouge pas. UID 1000 en local, celui du développeur.
+build-export-local:
+	$(RUN_DIR)/build-export-webdfd.sh local $(IMAGE_TAG) 1000
 
 db-to-code-local:
 	@echo "--- 🆕 gen code sqlc ---"
@@ -76,3 +87,23 @@ stop-admin:
 stop-eleve:
 	@echo "--- 🛑 Arrêt du container élève ---"
 	docker rm -f $(ELEVE_CONTAINER) 2>/dev/null || true
+
+start-sync: build-sync-local
+	$(RUN_DIR)/start-sync-local.sh
+
+stop-sync:
+	@echo "--- 🛑 Arrêt du container sync ---"
+	docker rm -f $(SYNC_CONTAINER) 2>/dev/null || true
+
+# Démarré par `make local` bien que la source configurée soit peut-être webdfd :
+# le service tourne alors à vide, en attente d'un dépôt. C'est voulu — on veut
+# pouvoir éprouver la chaîne hfsql sans rien reconfigurer.
+#
+# Il coûte ~2 Go d'image et quelques minutes au PREMIER build (wine 32 bits et
+# wineboot) ; ensuite la couche est réutilisée, y compris à UID différent.
+start-export: build-export-local
+	$(RUN_DIR)/start-export-local.sh
+
+stop-export:
+	@echo "--- 🛑 Arrêt du container export-webdfd ---"
+	docker rm -f $(EXPORT_CONTAINER) 2>/dev/null || true

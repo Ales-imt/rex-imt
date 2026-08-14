@@ -1,3 +1,12 @@
 ---
 - import_playbook: playbook-admin.yml
 - import_playbook: playbook-eleve.yml
+# export-webdfd avant sync : en source hfsql, c'est lui qui produit les exports
+# que sync consomme, et c'est son play qui crée les répertoires partagés
+# (hfsql_dirs) avec le bon propriétaire.
+#
+# Son image pèse ~2 Go, mais `podman pull` est idempotent : le coût n'est payé
+# qu'au premier déploiement, tant que le digest ne bouge pas.
+- import_playbook: playbook-export-webdfd.yml
+- import_playbook: playbook-sync.yml
+

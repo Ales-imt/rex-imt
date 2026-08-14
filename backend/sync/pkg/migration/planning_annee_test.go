@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"back-rex-sync/pkg/source"
 	"testing"
 	"time"
 )
@@ -10,13 +11,13 @@ func date(y int, m time.Month, d int) time.Time {
 }
 
 func TestFirstSeanceByCocle(t *testing.T) {
-	seances := map[string]planningEntry{
-		"pl1": {cocle: "10", date: "20250915", hd: "0800"},
-		"pl2": {cocle: "10", date: "20250908", hd: "1000"}, // plus tôt → gagnant
-		"pl3": {cocle: "10", date: "20251201", hd: "0800"},
-		"pl4": {cocle: "20", date: "20260210", hd: "1400"},
-		"pl5": {cocle: "0", date: "20250908", hd: "0800"}, // COCLE fictif ignoré
-		"pl6": {cocle: "30", date: "bad", hd: "0800"},     // date illisible ignorée
+	seances := map[string]source.Creneau{
+		"pl1": {Cocle: "10", Date: "20250915", HD: "0800"},
+		"pl2": {Cocle: "10", Date: "20250908", HD: "1000"}, // plus tôt → gagnant
+		"pl3": {Cocle: "10", Date: "20251201", HD: "0800"},
+		"pl4": {Cocle: "20", Date: "20260210", HD: "1400"},
+		"pl5": {Cocle: "0", Date: "20250908", HD: "0800"}, // COCLE fictif ignoré
+		"pl6": {Cocle: "30", Date: "bad", HD: "0800"},     // date illisible ignorée
 	}
 
 	got := firstSeanceByCocle(seances)

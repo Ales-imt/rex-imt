@@ -160,7 +160,7 @@ La révision précédente de ce document (commit `dd77a45`) signalait un **trois
 
 **Conséquence pratique :** sélectionner `provider: ragarenn` aujourd'hui produirait une `baseURL` vide — le connecteur échouerait au premier appel sans joindre aucun tiers. Le rétablissement d'un transfert externe supposerait de **réintroduire délibérément une adresse** dans la configuration, ce qui ne peut pas résulter d'une simple bascule de paramètre.
 
-**Résidu de code, sans effet sur les données** (voir §10.6) : le nom du fournisseur reste sélectionnable dans le code — package `backend/admin/pkg/ia/ragarenn/`, structure `RAGaRennConfig` (`backend/common/pkg/services/config.go`), deux `case "ragarenn"` dans `backend/admin/cmd/main.go`, mention dans le commentaire `# "ollama" ou "ragarenn" ou "rack"` des fichiers de configuration, et variable `RAGARENN_API_KEY` dans `.vscode/secrets.env.example`.
+**Résidu de code, sans effet sur les données** (voir §10.6) : le nom du fournisseur reste sélectionnable dans le code — package `backend/admin/pkg/ia/ragarenn/`, structure `RAGaRennConfig` (`backend/common/pkg/services/config.go`), deux `case "ragarenn"` dans `backend/admin/cmd/main.go`, mention dans le commentaire `# "ollama" ou "ragarenn" ou "rack"` des fichiers de configuration, et variable `RAGARENN_API_KEY` dans `infras/env/secrets.env.example`.
 
 Le fournisseur actif en production reste `rack`, auto-hébergé sur l'infrastructure de l'école.
 
@@ -309,7 +309,7 @@ Données étudiantes (identités, planning, notes) en clair sur le réseau lors 
 
 Subsiste un **résidu de code sans effet sur les données** : le nom `ragarenn` reste une valeur acceptée par le sélecteur de fournisseur, avec un package et une structure de configuration désormais orphelins. Sélectionner cette valeur aboutit à une `baseURL` vide et à un échec au premier appel.
 
-**Recommandation (hygiène, non bloquante) :** supprimer le package `backend/admin/pkg/ia/ragarenn/`, la structure `RAGaRennConfig`, les deux `case "ragarenn"` de `main.go`, la variable `RAGARENN_API_KEY` de `.vscode/secrets.env.example` et les mentions résiduelles dans les commentaires. Cela évite qu'une future réintroduction d'URL passe pour une remise en service d'un chemin déjà validé, alors qu'elle constituerait un nouveau transfert à analyser.
+**Recommandation (hygiène, non bloquante) :** supprimer le package `backend/admin/pkg/ia/ragarenn/`, la structure `RAGaRennConfig`, les deux `case "ragarenn"` de `main.go`, la variable `RAGARENN_API_KEY` de `infras/env/secrets.env.example` et les mentions résiduelles dans les commentaires. Cela évite qu'une future réintroduction d'URL passe pour une remise en service d'un chemin déjà validé, alors qu'elle constituerait un nouveau transfert à analyser.
 
 ### 10.7 Périmètre du rôle MODERATEUR à valider
 

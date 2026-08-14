@@ -1,0 +1,35 @@
+# Le contexte de build est la racine du dépôt : sans exclusions, chaque `docker
+# build` expédie au démon les dépendances npm, les artefacts de build et les
+# données de base. Quatre images se construisent désormais depuis ce contexte.
+#
+# .git n'est PAS exclu : les Dockerfiles s'en servent pour `git describe` quand
+# VERSION n'est pas passé en argument de build.
+
+# ── Frontend ──────────────────────────────────────────────────────────────────
+# apps/mobile fait 3,7 Go, mais sa SOURCE est nécessaire : Dockerfile.eleve y
+# construit le frontend web (`npx expo export --platform web`). On n'exclut donc
+# que le dérivé et les projets natifs, inutiles à la cible web.
+**/node_modules
+apps/web-admin/dist
+apps/web-admin/.vite
+apps/mobile/android
+apps/mobile/ios
+apps/mobile/.expo
+apps/mobile/dist
+
+# ── Données et artefacts ──────────────────────────────────────────────────────
+infras/bd_data
+infras/liquibase/liquibase_libs
+infras/migration/migration
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+# Ils arrivent par --env-file au démarrage, jamais par l'image.
+infras/env/secrets-*.env
+infras/ansible/vault-vars.yml
+**/*.pem
+**/*.age*
+
+# ── Divers ────────────────────────────────────────────────────────────────────
+.claude
+**/.DS_Store
+*.tar

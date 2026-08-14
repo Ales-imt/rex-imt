@@ -1,0 +1,36 @@
+# Configuration du service rex-export-webdfd.
+#
+# Il surveille le répertoire où sont déposées les sauvegardes HFSQL de cybema
+# (partage Samba) et convertit chaque archive en JSON, à charge de rex-sync de
+# les reprendre. Aucun accès base de données, aucun port exposé.
+
+migration:
+  watcher:
+    # Répertoire de dépôt surveillé, chemin absolu (inotify, Linux seulement).
+    depot: /var/lib/rex/hfsql/depot
+    # Bases dézippées et exports, chemin absolu. C'est ce répertoire que
+    # rex-sync monte en lecture seule.
+    data: /var/lib/rex/hfsql/data
+
+    # Comment l'export est exécuté :
+    #   docker : ce service tourne sur l'hôte et délègue à un conteneur.
+    #   local  : ce service EST le conteneur wine32-hf55 et appelle wine
+    #            directement — aucun accès au démon docker n'est nécessaire.
+    # Conteneuriser avec le mode `docker` imposerait de monter le socket du
+    # démon, donc d'accorder à ce service l'équivalent du root sur l'hôte :
+    # inacceptable pour un processus qui déballe des archives venues d'un
+    # partage réseau.
+    runner: docker
+
+    # Mode docker uniquement : image de l'export.
+    image: wine32-hf55
+    # Mode local uniquement : script d'export de l'image wine32-hf55. Il reçoit
+    # les chemins par HFSQL_BASE et HFSQL_OUT.
+    entree: /entrypoint.sh
+
+    # Durée maximale d'un export.
+    timeout: 15m
+    # Nombre d'exports conservés sous `data` ; 0 pour tous les garder.
+    # Chaque dépôt laisse un export complet : sans purge, le disque se remplit
+    # au rythme des sauvegardes.
+    keep: 5
