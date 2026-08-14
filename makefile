@@ -1,8 +1,12 @@
 .DEFAULT_GOAL := all
 
 # --- Variables communes ---
-SECRETS_FILE_LOCAL=.vscode/secrets-local.env
-SECRETS_FILE_PROD=.vscode/secrets-prod.env
+# Deux fichiers par environnement : la topologie (versionnée en local) et les
+# secrets (jamais versionnés). Voir infras/env/secrets.env.example.
+CONFIG_FILE_LOCAL=infras/env/config-local.env
+CONFIG_FILE_PROD=infras/env/config-prod.env
+SECRETS_FILE_LOCAL=infras/env/secrets-local.env
+SECRETS_FILE_PROD=infras/env/secrets-prod.env
 
 SCHEMA_FILE_POSTGRES=schema.sql
 SCHEMA_FILE_MARIADB=schema_maria_db.sql
@@ -13,6 +17,18 @@ RUN_DIR=./infras/run
 ANSIBLE_DIR=./infras/ansible
 ADMIN_CONTAINER=rex-admin
 ELEVE_CONTAINER=rex-eleve
+SYNC_CONTAINER=rex-sync
+EXPORT_CONTAINER=rex-export-webdfd
+
+# ── Version des images ────────────────────────────────────────────────────────
+# Tag porté par les quatre images publiées sur GHCR, et déployé en prod.
+# Bump MANUEL : c'est ce numéro, et lui seul, qui décide de ce qui tourne.
+#
+# Un tag figé rend `AutoUpdate=registry` (Quadlet) sans effet — c'est voulu :
+# une mise en production devient un changement de version tracé dans ce fichier,
+# et non un redémarrage qui ramasse ce qui traîne au bout du tag `latest`.
+# Déployer = bumper IMAGE_TAG, `make release-prod`.
+IMAGE_TAG ?= 0.1.0
 
 include makefile.local
 include makefile.prod
@@ -58,5 +74,5 @@ fetch-freetsa-cert-if-missing:
 
 clean:
 #-v pour tous supprimer.
-	cd $(DOCKER_DIR) && docker compose --env-file ../../$(SECRETS_FILE_LOCAL) down
+	cd $(DOCKER_DIR) && docker compose --env-file ../../$(CONFIG_FILE_LOCAL) --env-file ../../$(SECRETS_FILE_LOCAL) down
 	rm -rf $(INFRA_DIR)/liquibase/liquibase_libs

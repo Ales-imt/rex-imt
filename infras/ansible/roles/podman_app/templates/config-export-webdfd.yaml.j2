@@ -1,0 +1,10 @@
+{#
+  NE PAS ÉDITER LA CONFIG ICI.
+  Source de vérité : backend/export-webdfd/cmd/config.yaml. Ce template adapte
+  les chemins aux montages du container et bascule le runner en `local` : en
+  prod le service EST l'image wine, il n'a pas de démon docker à joindre.
+#}
+{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../backend/export-webdfd/cmd/config.yaml')
+   | regex_replace('depot:\s*/var/lib/rex/hfsql/depot', 'depot: ' ~ hfsql_depot)
+   | regex_replace('data:\s*/var/lib/rex/hfsql/data', 'data: ' ~ hfsql_data)
+   | regex_replace('runner:\s*docker', 'runner: local') }}

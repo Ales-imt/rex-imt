@@ -1,0 +1,50 @@
+---
+# Variables du service rex-sync.
+#
+# Elles sont chargées par `vars_files` dans playbook-sync.yml, et NON par
+# group_vars : sync, export-webdfd et admin tournent sur la même VM, donc sur le
+# même hôte d'inventaire. Trois fichiers group_vars s'appliqueraient alors tous
+# les trois et fusionneraient par ordre alphabétique — app_name, container_name
+# et app_dir se recouvriraient silencieusement. `vars_files` est prioritaire sur
+# group_vars et sans ambiguïté.
+
+app_name: sync
+container_name: rex-sync
+container_image: "ghcr.io/{{ ghcr_org }}/rex-sync:{{ image_tag | default('latest') }}"
+container_port: 3334
+app_dir: /home/{{ app_user }}/rex-sync
+config_dest_in_container: /opt/rex-sync/conf/config.yaml
+
+# Pas de frontend, donc pas de vhost nginx ni de sidecar Gotenberg.
+gotenberg_enabled: false
+
+# Neutralisation explicite : sync n'horodate rien, aucun certificat FreeTSA à
+# monter. La clé est posée à false plutôt qu'omise parce que ce play partage son
+# hôte d'inventaire avec rex-admin, qui lui en définit un.
+freetsa_cert_container_path: false
+
+# Répertoire des exports produits par export-webdfd, monté en LECTURE SEULE :
+# sync n'y écrit rien, la rétention appartient au producteur.
+#
+# Aucun UserNS n'est nécessaire ici. Les exports sont écrits en 0755/0644, donc
+# lisibles quel que soit l'UID auquel podman rootless remappe ce conteneur — ce
+# conteneur tourne sous le compte `rex` du Dockerfile, remappé dans la plage
+# subuid et non vers {{ app_user }}. C'est pourquoi hfsql_data doit rester hors
+# de /home/{{ app_user }}, dont les app_dir sont en 0750 : le répertoire des
+# exports serait lisible, mais son parent infranchissable.
+#
+# hfsql_data vient du vault (config-prod.env), pas d'ici : le redéfinir serait
+# sans effet, --extra-vars primant sur vars_files.
+container_volumes:
+  - "{{ hfsql_data }}:{{ hfsql_data }}:ro,z"
+
+# Le point de montage doit exister AVANT le démarrage du conteneur : podman
+# rootless ne peut pas le créer, /srv appartient à root, et il sort en 125 sans
+# jamais lancer l'image. Le play export-webdfd crée déjà ces répertoires, mais
+# s'en remettre à lui rend `make deploy-vm-sync-prod` dépendant d'un ordre de
+# déroulement — la tâche est idempotente, autant que chaque play soit autonome.
+#
+# hfsql_depot n'y figure pas : sync ne monte pas le dépôt, il ne lit que les
+# exports déjà transformés.
+hfsql_dirs:
+  - "{{ hfsql_data }}"

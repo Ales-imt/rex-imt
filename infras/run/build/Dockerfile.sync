@@ -1,0 +1,78 @@
+# Image du service rex-sync : maintient le référentiel scolaire dans PostgreSQL.
+#
+# Pas de frontend, donc pas de nginx ni de script de démarrage : le binaire est
+# l'ENTRYPOINT. Le service n'expose que /health et /version.
+#
+# Les stages qui ne sont pas ancêtres de la cible sont ignorés : en --target
+# prod, docker ne construit ni backend-local ni dlv-builder.
+
+# ── Stage Go sources (partagé) ───────────────────────────────────────────────
+FROM golang:1.26-alpine AS go-base
+
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+COPY backend/common ./common
+COPY backend/sync ./sync
+# .git sert au versionnage par git describe quand VERSION n'est pas fourni.
+COPY .git ./.git
+
+WORKDIR /app/sync
+
+# db.go, models.go et query.sql.go sont générés par sqlc et gitignorés :
+# `sqlc generate` doit avoir tourné avant ce build (make db-to-code-*).
+RUN test -f pkg/migration/query.sql.go || \
+    (echo "ERREUR: code sqlc absent — lancer 'cd backend/sync && sqlc generate'" >&2; exit 1)
+
+# ── Stage Go backend prod ─────────────────────────────────────────────────────
+FROM go-base AS backend-prod
+
+ARG VERSION
+ARG BUILD_TIME
+# CGO_ENABLED=0 : binaire statique, indépendant de la libc de l'image finale.
+RUN VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}" && \
+    BUILD_TIME="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" && \
+    CGO_ENABLED=0 go build \
+        -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" \
+        -o /rex-sync-server ./cmd
+
+# ── Stage Go backend local (symboles de debug) ────────────────────────────────
+FROM go-base AS backend-local
+
+RUN CGO_ENABLED=0 go build -gcflags="all=-N -l" -o /rex-sync-server ./cmd
+
+# ── Stage Delve ───────────────────────────────────────────────────────────────
+FROM golang:1.26-alpine AS dlv-builder
+
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+
+# ── Stage base commune ────────────────────────────────────────────────────────
+FROM alpine:3.21 AS base
+
+RUN addgroup -S rex && adduser -S rex -G rex
+
+RUN mkdir -p /opt/rex-sync/conf && chown -R rex:rex /opt/rex-sync
+
+# ── Target prod ───────────────────────────────────────────────────────────────
+FROM base AS prod
+
+COPY --from=backend-prod /rex-sync-server /usr/local/bin/rex-sync-server
+
+USER rex
+EXPOSE 3334
+ENTRYPOINT ["/usr/local/bin/rex-sync-server"]
+CMD ["/opt/rex-sync/conf/config.yaml"]
+
+# ── Target local (debug via Delve) ────────────────────────────────────────────
+FROM base AS local
+
+COPY --from=backend-local /rex-sync-server /usr/local/bin/rex-sync-server
+COPY --from=dlv-builder /go/bin/dlv /usr/local/bin/dlv
+
+USER rex
+EXPOSE 3334 2346
+ENTRYPOINT ["/usr/local/bin/dlv", "exec", "/usr/local/bin/rex-sync-server", \
+            "--listen=:2346", "--headless=true", "--api-version=2", \
+            "--accept-multiclient", "--continue", "--"]
+CMD ["/opt/rex-sync/conf/config.yaml"]

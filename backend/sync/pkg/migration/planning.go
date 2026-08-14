@@ -1,10 +1,10 @@
 package migration
 
 import (
+	"back-rex-sync/pkg/source"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"strconv"
 	"strings"
@@ -13,32 +13,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/text/encoding/charmap"
-	"golang.org/x/text/transform"
 )
 
-// planningEntry regroupe les données utiles d'une ligne PL du planning.
-type planningEntry struct {
-	plcle  string // identifiant stable du créneau (champ "PL" de webdfd)
-	p0cle  string // promo webdfd
-	cocle  string // matière webdfd
-	grcle  string // groupe webdfd
-	prcle  string // identifiant stable du prof (champ "PRCLE" de webdfd)
-	cours  string // nom d'affichage de la matière (tronqué)
-	groupe string // nom d'affichage du groupe
-	date   string // AAAAMMJJ
-	hd     string // HHMM heure de début
-	hf     string // HHMM heure de fin
-	salle  string // salle
-	prof   string // nom d'affichage du professeur
-}
-
-// SyncPlanning charge le planning de chaque promo connue (planning_txt),
-// puis enrichit les noms via cours_txt, et upserte groupes + matières.
+// SyncPlanning charge le planning de chaque promo connue depuis la source
+// amont, enrichit les noms de matières, et upserte groupes + matières.
 //
-// Ordre : 1. Récupérer cours_txt (noms complets). 2. Pour chaque promo,
-// parser planning_txt. 3. Déduplication puis upsert en base.
-func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anneeCourante) error {
+// Ordre : 1. Récupérer les noms complets des matières. 2. Pour chaque promo,
+// récupérer ses créneaux. 3. Déduplication puis upsert en base.
+func SyncPlanning(ctx context.Context, src source.Source, db *pgxpool.Pool, ac anneeCourante) error {
 	q := New(db)
 	annee := ac.Annee
 
@@ -46,8 +28,8 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 	// le last_seen_at lui est antérieur n'a pas été revue pendant ce cycle.
 	cycleStart := time.Now()
 
-	// --- 1. Noms complets depuis cours_txt ---
-	coursNoms, err := fetchCoursNoms(baseURL + "?TYPE=cours_txt")
+	// --- 1. Noms complets des matières ---
+	coursNoms, err := src.CoursNoms()
 	if err != nil {
 		return err
 	}
@@ -73,9 +55,9 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 	cocles := make(map[string]cocleInfo)
 	grcles := make(map[string]grcleInfo)
 
-	// seanceKeys : clé "{cocle}_{date}_{hd}" → première occurrence de planningEntry.
+	// seanceKeys : clé "{cocle}_{date}_{hd}" → première occurrence de source.Creneau.
 	// Correspond à l'unicité (matiere_id, starts_at) dans public.seance.
-	seanceKeys := make(map[string]planningEntry)
+	seanceKeys := make(map[string]source.Creneau)
 
 	startAnnee := ac.Debut.Format("20060102")
 	endAnnee := ac.Fin.Format("20060102")
@@ -86,29 +68,29 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 	promosOK := make(map[int64]bool, len(promos))
 
 	for _, promo := range promos {
-		entries, err := fetchPlanning(baseURL, promo.ExternalID, startAnnee, endAnnee)
+		entries, err := src.Planning(promo.ExternalID, startAnnee, endAnnee)
 		if err != nil {
 			log.Printf("planning: promo P0=%s inaccessible: %v — ignorée", promo.ExternalID, err)
 			continue
 		}
 		promosOK[promo.InternalID] = true
 		for _, e := range entries {
-			if e.cocle != "" && e.cocle != "0" {
-				if _, seen := cocles[e.cocle]; !seen {
-					cocles[e.cocle] = cocleInfo{
-						displayName: e.cours,
-						promoExtID:  e.p0cle,
+			if e.Cocle != "" && e.Cocle != "0" {
+				if _, seen := cocles[e.Cocle]; !seen {
+					cocles[e.Cocle] = cocleInfo{
+						displayName: e.Cours,
+						promoExtID:  e.P0cle,
 						promoID:     promo.InternalID,
 					}
 				}
-				if e.plcle != "" {
-					seanceKeys[e.plcle] = e
+				if e.Plcle != "" {
+					seanceKeys[e.Plcle] = e
 				}
 			}
-			if e.grcle != "" && e.grcle != "0" {
-				if _, seen := grcles[e.grcle]; !seen {
-					grcles[e.grcle] = grcleInfo{
-						displayName: e.groupe,
+			if e.Grcle != "" && e.Grcle != "0" {
+				if _, seen := grcles[e.Grcle]; !seen {
+					grcles[e.Grcle] = grcleInfo{
+						displayName: e.Groupe,
 						promoID:     promo.InternalID,
 					}
 				}
@@ -145,7 +127,7 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 			}
 		}
 
-		matiereID, err := q.GetMatiereBySource(ctx, GetMatiereBySourceParams{Source: "webdfd", ExternalID: cocleStr, Annee: annee})
+		matiereID, err := q.GetMatiereBySource(ctx, GetMatiereBySourceParams{Source: source.Map, ExternalID: cocleStr, Annee: annee})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("matiere_map: lookup planning COCLE=%s: %w", cocleStr, err)
 		}
@@ -164,7 +146,7 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 		}
 		if err = q.UpsertMatiereMap(ctx, UpsertMatiereMapParams{
 			InternalID: matiereID,
-			Source:     "webdfd",
+			Source:     source.Map,
 			ExternalID: cocleStr,
 			Annee:      annee,
 		}); err != nil {
@@ -192,7 +174,7 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 	grcleToGroupeID := make(map[string]int64, len(grcles))
 	gCount := 0
 	for grcleStr, info := range grcles {
-		groupeID, err := q.GetGroupeBySource(ctx, GetGroupeBySourceParams{Source: "webdfd", ExternalID: grcleStr, Annee: annee})
+		groupeID, err := q.GetGroupeBySource(ctx, GetGroupeBySourceParams{Source: source.Map, ExternalID: grcleStr, Annee: annee})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("groupe_map: lookup planning GRCLE=%s: %w", grcleStr, err)
 		}
@@ -218,7 +200,7 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 		}
 		if err = q.UpsertGroupeMap(ctx, UpsertGroupeMapParams{
 			InternalID: groupeID,
-			Source:     "webdfd",
+			Source:     source.Map,
 			ExternalID: grcleStr,
 			Annee:      annee,
 		}); err != nil {
@@ -232,18 +214,18 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 	// --- 6. Résolution prof_id depuis prof_map ---
 	prcleToUserID := make(map[string]int32)
 	for _, e := range seanceKeys {
-		if e.prcle == "" {
+		if e.Prcle == "" {
 			continue
 		}
-		if _, already := prcleToUserID[e.prcle]; already {
+		if _, already := prcleToUserID[e.Prcle]; already {
 			continue
 		}
-		uid, err := q.GetProfBySource(ctx, GetProfBySourceParams{Source: "webdfd", ExternalID: e.prcle})
+		uid, err := q.GetProfBySource(ctx, GetProfBySourceParams{Source: source.Map, ExternalID: e.Prcle})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("prof_map: lookup PRCLE=%s depuis planning: %w", e.prcle, err)
+			return fmt.Errorf("prof_map: lookup PRCLE=%s depuis planning: %w", e.Prcle, err)
 		}
 		if err == nil {
-			prcleToUserID[e.prcle] = uid
+			prcleToUserID[e.Prcle] = uid
 		}
 	}
 
@@ -267,7 +249,7 @@ func SyncPlanning(ctx context.Context, baseURL string, db *pgxpool.Pool, ac anne
 	if err != nil {
 		return fmt.Errorf("planning: annulation des séances disparues: %w", err)
 	}
-	log.Printf("planning: %d séances annulées (absentes du planning webdfd, annee=%d)", annulees, annee)
+	log.Printf("planning: %d séances annulées (absentes du planning amont, annee=%d)", annulees, annee)
 	return nil
 }
 
@@ -282,7 +264,7 @@ var parisLoc = func() *time.Location {
 
 const planningTimeFmt = "20060102 1504"
 
-func parseWebdfdTime(date, hhmm string) (time.Time, bool) {
+func parsePlanningTime(date, hhmm string) (time.Time, bool) {
 	if len(date) != 8 || len(hhmm) != 4 {
 		return time.Time{}, false
 	}
@@ -290,7 +272,7 @@ func parseWebdfdTime(date, hhmm string) (time.Time, bool) {
 	return t, err == nil
 }
 
-// syncSeances synchronise chaque créneau webdfd (identifié par PL = plcle stable)
+// syncSeances synchronise chaque créneau amont (identifié par PL = plcle stable)
 // dans public.seance + migration.seance_map.
 // Schéma : lookup seance_map par PL → trouvé : UPDATE ; absent : INSERT.
 //
@@ -299,7 +281,7 @@ func parseWebdfdTime(date, hhmm string) (time.Time, bool) {
 func syncSeances(
 	ctx context.Context,
 	q *Queries,
-	seanceKeys map[string]planningEntry,
+	seanceKeys map[string]source.Creneau,
 	cocleToMatiereID map[string]int64,
 	grcleToGroupeID map[string]int64,
 	prcleToUserID map[string]int32,
@@ -312,35 +294,35 @@ func syncSeances(
 
 	var count, ressuscitees int
 	for plcle, e := range seanceKeys {
-		matiereID, ok := cocleToMatiereID[e.cocle]
+		matiereID, ok := cocleToMatiereID[e.Cocle]
 		if !ok {
 			continue
 		}
-		startsAt, ok := parseWebdfdTime(e.date, e.hd)
+		startsAt, ok := parsePlanningTime(e.Date, e.HD)
 		if !ok {
 			continue
 		}
 		var endsAt pgtype.Timestamptz
-		if t, ok2 := parseWebdfdTime(e.date, e.hf); ok2 {
+		if t, ok2 := parsePlanningTime(e.Date, e.HF); ok2 {
 			endsAt = pgtype.Timestamptz{Time: t, Valid: true}
 		}
 		var promoID pgtype.Int8
-		if v := p0cleToPromoID[e.p0cle]; v != 0 {
+		if v := p0cleToPromoID[e.P0cle]; v != 0 {
 			promoID = pgtype.Int8{Int64: v, Valid: true}
 		}
 		var groupeID pgtype.Int8
-		if v := grcleToGroupeID[e.grcle]; v != 0 {
+		if v := grcleToGroupeID[e.Grcle]; v != 0 {
 			groupeID = pgtype.Int8{Int64: v, Valid: true}
 		}
-		salle := pgtype.Text{String: e.salle, Valid: e.salle != ""}
-		prof := pgtype.Text{String: e.prof, Valid: e.prof != ""}
+		salle := pgtype.Text{String: e.Salle, Valid: e.Salle != ""}
+		prof := pgtype.Text{String: e.Prof, Valid: e.Prof != ""}
 		var profID pgtype.Int4
-		if uid, found := prcleToUserID[e.prcle]; found {
+		if uid, found := prcleToUserID[e.Prcle]; found {
 			profID = pgtype.Int4{Int32: uid, Valid: true}
 		}
 		startsAtPg := pgtype.Timestamptz{Time: startsAt, Valid: true}
 
-		seanceID, err := q.GetSeanceBySource(ctx, GetSeanceBySourceParams{Source: "webdfd", ExternalID: plcle})
+		seanceID, err := q.GetSeanceBySource(ctx, GetSeanceBySourceParams{Source: source.Map, ExternalID: plcle})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return count, ressuscitees, fmt.Errorf("seance_map: lookup PL=%s: %w", plcle, err)
 		}
@@ -388,7 +370,7 @@ func syncSeances(
 		}
 		if err = q.UpsertSeanceMap(ctx, UpsertSeanceMapParams{
 			InternalID: seanceID,
-			Source:     "webdfd",
+			Source:     source.Map,
 			ExternalID: plcle,
 		}); err != nil {
 			return count, ressuscitees, err
@@ -398,96 +380,21 @@ func syncSeances(
 	return count, ressuscitees, nil
 }
 
-// fetchCoursNoms récupère le flux cours_txt et retourne une map COCLE→NOM.
-func fetchCoursNoms(url string) (map[string]string, error) {
-	resp, err := webdfdGet(url)
-	if err != nil {
-		return nil, fmt.Errorf("webdfd: cours_txt inaccessible: %w", err)
-	}
-	defer resp.Body.Close()
-
-	decoder := charmap.Windows1252.NewDecoder()
-	body, err := io.ReadAll(transform.NewReader(resp.Body, decoder))
-	if err != nil {
-		return nil, err
-	}
-
-	noms := make(map[string]string)
-	for line := range strings.SplitSeq(string(body), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || line == "EOT" {
-			continue
-		}
-		kv := parseKV(line)
-		co := strings.TrimSpace(kv["CO"])
-		nom := strings.TrimSpace(kv["NOM"])
-		if co != "" && nom != "" {
-			noms[co] = nom
-		}
-	}
-	return noms, nil
-}
-
-// fetchPlanning interroge planning_txt pour une promo donnée sur la plage annuelle.
-func fetchPlanning(baseURL, p0cle, debut, fin string) ([]planningEntry, error) {
-	url := fmt.Sprintf("%s?TYPE=planning_txt&DATEDEBUT=%s&DATEFIN=%s&TYPECLE=p0cleunik&VALCLE=%s",
-		baseURL, debut, fin, p0cle)
-
-	resp, err := webdfdGet(url)
-	if err != nil {
-		return nil, fmt.Errorf("webdfd: planning_txt P0=%s inaccessible: %w", p0cle, err)
-	}
-	defer resp.Body.Close()
-
-	decoder := charmap.Windows1252.NewDecoder()
-	body, err := io.ReadAll(transform.NewReader(resp.Body, decoder))
-	if err != nil {
-		return nil, err
-	}
-
-	var entries []planningEntry
-	for line := range strings.SplitSeq(string(body), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || line == "EOT" {
-			continue
-		}
-		kv := parseKV(line)
-		if kv["DATE"] == "" {
-			continue
-		}
-		entries = append(entries, planningEntry{
-			plcle:  strings.TrimSpace(kv["PL"]),
-			p0cle:  strings.TrimSpace(kv["P0CLE"]),
-			cocle:  strings.TrimSpace(kv["COCLE"]),
-			grcle:  strings.TrimSpace(kv["GRCLE"]),
-			prcle:  strings.TrimSpace(kv["PRCLE"]),
-			cours:  strings.TrimSpace(kv["COURS"]),
-			groupe: strings.TrimSpace(kv["GROUPE"]),
-			date:   strings.TrimSpace(kv["DATE"]),
-			hd:     strings.TrimSpace(kv["HD"]),
-			hf:     strings.TrimSpace(kv["HF"]),
-			salle:  strings.TrimSpace(kv["SALLE"]),
-			prof:   strings.TrimSpace(kv["PROF"]),
-		})
-	}
-	return entries, nil
-}
-
 // firstSeanceByCocle parcourt les créneaux collectés et retourne, par COCLE
-// (matière webdfd), l'horaire de début de la première séance rencontrée.
+// (matière amont), l'horaire de début de la première séance rencontrée.
 // Les créneaux dont la date/heure est illisible sont ignorés.
-func firstSeanceByCocle(seanceKeys map[string]planningEntry) map[string]time.Time {
+func firstSeanceByCocle(seanceKeys map[string]source.Creneau) map[string]time.Time {
 	first := make(map[string]time.Time)
 	for _, e := range seanceKeys {
-		if e.cocle == "" || e.cocle == "0" {
+		if e.Cocle == "" || e.Cocle == "0" {
 			continue
 		}
-		t, ok := parseWebdfdTime(e.date, e.hd)
+		t, ok := parsePlanningTime(e.Date, e.HD)
 		if !ok {
 			continue
 		}
-		if cur, seen := first[e.cocle]; !seen || t.Before(cur) {
-			first[e.cocle] = t
+		if cur, seen := first[e.Cocle]; !seen || t.Before(cur) {
+			first[e.Cocle] = t
 		}
 	}
 	return first

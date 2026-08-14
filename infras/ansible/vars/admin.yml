@@ -1,0 +1,29 @@
+---
+# Variables du service rex-admin.
+#
+# Chargées par `vars_files` dans playbook-admin.yml, et NON par group_vars, pour
+# la même raison que vars/sync.yml et vars/export-webdfd.yml : admin, sync et
+# export-webdfd tournent sur la MÊME VM, donc sur le même hôte d'inventaire.
+# Tout ce qui vit dans group_vars/admin.yml s'applique donc aussi aux plays sync
+# et export-webdfd, qui doivent alors neutraliser une à une les clés qui ne les
+# concernent pas — un oubli suffisait à faire publier le port 8121 par
+# rex-export-webdfd et à le mettre en collision avec rex-admin.
+#
+# Règle : ce qui décrit LE SERVICE admin va ici ; ce qui décrit L'HÔTE et vaut
+# pour les trois services (nom DNS, accès PostgreSQL/MariaDB/LDAP) reste dans
+# group_vars/admin.yml.
+
+app_name: admin
+container_name: rex-admin
+container_image: "ghcr.io/{{ ghcr_org }}/rex-admin:{{ image_tag | default('latest') }}"
+container_port: 8121
+app_dir: /home/{{ app_user }}/rex-admin
+config_dest_in_container: /opt/rex-admin/conf/config.yaml
+freetsa_cert_container_path: /opt/rex-admin/conf/x509/freetsa/cacert.pem
+
+# Génération des bulletins en PDF : sidecar Gotenberg (conversion docx -> PDF).
+# Activé par défaut (voir templates). Gotenberg publie son port sur l'hôte ;
+# l'app admin le joint via host.containers.internal:3000 (GOTENBERG_URL).
+gotenberg_container_name: gotenberg
+gotenberg_image: docker.io/gotenberg/gotenberg:8
+gotenberg_port: 3000

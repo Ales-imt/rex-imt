@@ -8,19 +8,39 @@ ContainerName={{ container_name }}
 # Rotation des logs par taille (driver k8s-file, lisible via `podman logs`).
 LogDriver=k8s-file
 LogOpt=max-size={{ log_max_size | default('10mb') }}
+{% if container_port is defined and container_port %}
 PublishPort={{ container_port }}:{{ container_port }}
+{% endif %}
 AddHost=host.containers.internal:host-gateway
 Environment=HOST={{ ansible_default_ipv4.address }}
+{% if secrets_enabled | default(true) %}
 EnvironmentFile={{ app_dir }}/secrets.env
+{% endif %}
 Volume={{ app_dir }}/config-{{ app_name }}.yaml:{{ config_dest_in_container }}:ro,z
 {% if freetsa_cert_container_path is defined and freetsa_cert_container_path %}
 Volume={{ app_dir }}/x509/freetsa/cacert.pem:{{ freetsa_cert_container_path }}:ro,z
 {% endif %}
+{% for vol in container_volumes | default([]) %}
+Volume={{ vol }}
+{% endfor %}
+{% if container_userns is defined and container_userns %}
+# podman rootless remappe par défaut l'UID du conteneur vers une plage subuid :
+# un service qui ÉCRIT sur un volume de l'hôte produirait des fichiers
+# n'appartenant pas à {{ app_user }}. keep-id rend le mapping identitaire, à
+# condition que l'UID de service dans l'image soit celui de {{ app_user }}.
+UserNS={{ container_userns }}
+{% endif %}
+{% if image_tag | default('latest') == 'latest' %}
 AutoUpdate=registry
+{% else %}
+# Pas d'AutoUpdate : l'image est épinglée sur la version {{ image_tag }}. Une
+# mise en production passe par un bump d'IMAGE_TAG dans le makefile, pas par un
+# redémarrage qui ramasserait ce qui traîne au bout du tag.
+{% endif %}
 
 [Service]
 Restart=always
-TimeoutStartSec=300
+TimeoutStartSec={{ container_timeout_start | default(300) }}
 
 [Install]
 WantedBy=default.target

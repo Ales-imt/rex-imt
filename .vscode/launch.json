@@ -7,7 +7,10 @@
       "request": "launch",
       "mode": "auto",
       "program": "${file}",
-      "envFile": "${workspaceFolder}/.vscode/secrets-local.env"
+      "envFile": [
+        "${workspaceFolder}/infras/env/config-local.env",
+        "${workspaceFolder}/infras/env/secrets-local.env"
+      ]
     },
     {
       "name": "Debug rex-admin",
@@ -17,7 +20,10 @@
       "program": "${workspaceFolder}/backend/admin/cmd/main.go",
       "args": ["${workspaceFolder}/backend/admin/cmd/config.yaml"],
       "cwd": "${workspaceFolder}/backend/admin",
-      "envFile": "${workspaceFolder}/.vscode/secrets-local.env"
+      "envFile": [
+        "${workspaceFolder}/infras/env/config-local.env",
+        "${workspaceFolder}/infras/env/secrets-local.env"
+      ]
     },
         {
       "name": "Debug rex-student",
@@ -27,7 +33,10 @@
       "program": "${workspaceFolder}/backend/student/cmd/main.go",
       "args": ["${workspaceFolder}/backend/student/cmd/config.yaml"],
       "cwd": "${workspaceFolder}/backend/student",
-      "envFile": "${workspaceFolder}/.vscode/secrets-local.env"
+      "envFile": [
+        "${workspaceFolder}/infras/env/config-local.env",
+        "${workspaceFolder}/infras/env/secrets-local.env"
+      ]
     },
     {
       "name": "Attach admin (container)",
@@ -38,6 +47,18 @@
       "port": 2345,
       "substitutePath": [
         { "from": "${workspaceFolder}/backend/admin",  "to": "/app/admin"  },
+        { "from": "${workspaceFolder}/backend/common", "to": "/app/common" }
+      ]
+    },
+    {
+      "name": "Attach sync (container)",
+      "type": "go",
+      "request": "attach",
+      "mode": "remote",
+      "host": "10.20.1.12",
+      "port": 2346,
+      "substitutePath": [
+        { "from": "${workspaceFolder}/backend/sync",   "to": "/app/sync"   },
         { "from": "${workspaceFolder}/backend/common", "to": "/app/common" }
       ]
     },

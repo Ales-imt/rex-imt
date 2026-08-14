@@ -1,8 +1,9 @@
 #!/bin/sh
 set -e
 
-SECRETS_FILE="$(dirname "$0")/../../.vscode/secrets-local.env"
-get() { grep "^$1=" "$SECRETS_FILE" | cut -d= -f2; }
+SECRETS_FILE="$(dirname "$0")/../env/secrets-local.env"
+CONFIG_FILE="$(dirname "$0")/../env/config-local.env"
+get() { grep -h "^$1=" "$CONFIG_FILE" "$SECRETS_FILE" 2>/dev/null | head -1 | cut -d= -f2-; }
 
 POSTGRES_HOST=$(get POSTGRES_HOST)
 POSTGRES_PORT=$(get POSTGRES_PORT)

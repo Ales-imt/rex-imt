@@ -2,6 +2,31 @@ databaseChangeLog:
 
   # ---- public.annee : données initiales ------------------------------------
   - changeSet:
+      id: v0.0.1-015b-insert-annee-2024-2025
+      author: vjo
+      changes:
+        - insert:
+            tableName: annee
+            schemaName: public
+            columns:
+              - column:
+                  name: name
+                  value: "2024/2025"
+              - column:
+                  name: debut
+                  valueDate: "2024-08-05"
+              - column:
+                  name: fin
+                  valueDate: "2025-08-19"
+      rollback:
+        - delete:
+            tableName: annee
+            schemaName: public
+            where: name = '2024/2025'
+
+
+
+  - changeSet:
       id: v0.0.1-015a-insert-annee-2025-2026
       author: vjo
       changes:

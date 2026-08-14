@@ -2,7 +2,17 @@
 set -e
 
 HOST_IP=$(ip route get 1 | awk '{print $7; exit}')
-SECRETS_FILE=.vscode/secrets-local.env
+CONFIG_FILE=infras/env/config-local.env
+SECRETS_FILE=infras/env/secrets-local.env
+
+# Un fichier absent ne doit pas passer inaperçu : les valeurs manquantes
+# deviennent des chaînes VIDES au moment de résoudre les ${VAR}, et le
+# déploiement réussirait avec une configuration creuse.
+for _f in "$CONFIG_FILE" "$SECRETS_FILE"; do
+    [ -f "$_f" ] || { echo "❌ Fichier de configuration absent : $_f" >&2
+                      echo "   Voir infras/env/README.md" >&2; exit 1; }
+done
+
 ADMIN_CONFIG=./infras/run/config-admin.yaml
 
 echo "--- 📋 Copie de la configuration admin ---"
@@ -28,6 +38,7 @@ docker run -d \
     --network imt-rex_rex-net \
     --ip 10.20.1.10 \
     --add-host=host.docker.internal:host-gateway \
+    --env-file "$CONFIG_FILE" \
     --env-file "$SECRETS_FILE" \
     -e HTTP_PROXY=socks5h://host.docker.internal:1080 \
     -e NO_PROXY=10.20.1.4,10.20.1.5,10.20.1.6,localhost,127.0.0.1 \

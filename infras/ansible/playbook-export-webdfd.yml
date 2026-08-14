@@ -1,0 +1,25 @@
+---
+# Déploiement du service rex-export-webdfd sur la VM admin.
+#
+# À ne dérouler que si la source hfsql est en service (migration.source: hfsql
+# côté rex-sync). L'image pèse ~2 Go : elle embarque wine 32 bits et le préfixe
+# WinDev nécessaires à la lecture des .FIC.
+- name: Configure le service export-webdfd (prod)
+  hosts: admin
+  become: true
+
+  vars_files:
+    - vault-vars.yml
+    - vars/export-webdfd.yml
+
+  roles:
+    - podman_app
+
+  handlers:
+    - name: Reload user daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+        scope: user
+      become_user: "{{ app_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[app_user][1] }}"

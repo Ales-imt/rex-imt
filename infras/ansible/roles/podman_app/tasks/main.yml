@@ -1,4 +1,15 @@
 ---
+# L'UID de {{ app_user }} sert à joindre le bus systemd --user (XDG_RUNTIME_DIR)
+# dans ce fichier comme dans les handlers. Le rôle `common` le relève déjà, mais
+# les plays sync et export-webdfd ne l'exécutent pas : déroulés seuls
+# (make deploy-vm-sync-prod), `getent_passwd` y est indéfini et le rôle échoue au
+# rechargement du daemon user, après avoir déposé la config mais sans jamais
+# démarrer le conteneur. Le relever ici rend le rôle autonome.
+- name: Récupérer l'UID de {{ app_user }}
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ app_user }}"
+
 - name: Créer le répertoire {{ app_dir }}
   ansible.builtin.file:
     path: "{{ app_dir }}"
@@ -43,6 +54,9 @@
     mode: "0644"
   notify: Restart container
 
+# secrets.env n'est pas déployé pour les services qui n'ont aucun secret à
+# recevoir (export-webdfd) : y déposer les identifiants PostgreSQL annulerait
+# l'isolement qui justifie de l'avoir séparé de sync.
 - name: Déployer secrets.env
   ansible.builtin.template:
     src: secrets.env.j2
@@ -50,7 +64,20 @@
     owner: "{{ app_user }}"
     group: "{{ app_user }}"
     mode: "0600"
+  when: secrets_enabled | default(true)
   notify: Restart container
+
+# Répertoires partagés de la source hfsql : le dépôt alimenté par Samba et les
+# exports. Créés ici pour appartenir à {{ app_user }}, dont l'UID est celui que
+# porte l'image export-webdfd (UserNS=keep-id).
+- name: Créer les répertoires hfsql
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0755"
+  loop: "{{ hfsql_dirs | default([]) }}"
 
 - name: Créer le répertoire Quadlet pour {{ app_user }}
   ansible.builtin.file:

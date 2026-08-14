@@ -39,5 +39,5 @@ pg_dump -h localhost -p 5433  -U devedbuserext  -d devedb -F c -f db_rex_backup.
 
 dump de mysql
 
-source .vscode/secrets-prod.env && docker run --rm --network host mariadb:latest   mariadb-dump -h $MARIADB_HOST -P $MARIADB_PORT -u $MARIADB_USER -p$MARIADB_PASSWORD   --skip-ssl --skip-lock-tables  "$MARIADB_DB" > dump_cyber_notes_$(date +%Y%m%d).sql
+source infras/env/secrets-prod.env && docker run --rm --network host mariadb:latest   mariadb-dump -h $MARIADB_HOST -P $MARIADB_PORT -u $MARIADB_USER -p$MARIADB_PASSWORD   --skip-ssl --skip-lock-tables  "$MARIADB_DB" > dump_cyber_notes_$(date +%Y%m%d).sql
 

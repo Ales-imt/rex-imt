@@ -51,7 +51,6 @@ rack:
 
 presence:
   tokenSecret: ${PRESENCE_TOKEN_SECRET}
-  planningURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe
   timestamp:
     enabled: true
     urls:
@@ -82,9 +81,10 @@ presence:
       startTLS: false
       timeout: 10s
 
-webdfd:
-  baseURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe
-  listeGroupeURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgihtml.exe
+# Le référentiel scolaire (promotions, profs, élèves, planning, groupes) n'est
+# plus synchronisé ici : voir backend/sync/cmd/config.yaml (service rex-sync).
+# Ce service ne contacte plus webdfd du tout : les séances du pointage sont
+# lues en base, telles que rex-sync les y a déposées.
 
 # Génération des bulletins : conversion docx -> PDF via le sidecar Gotenberg
 # (service défini dans infras/container/compose.yaml, publié sur localhost:3000).

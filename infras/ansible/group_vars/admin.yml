@@ -1,27 +1,17 @@
 ---
-app_name: admin
+# Variables de l'HÔTE admin — elles s'appliquent à TOUS les plays qui ciblent
+# `hosts: admin`, c'est-à-dire admin, sync ET export-webdfd, qui partagent cette
+# VM. N'y mettre que ce qui vaut pour les trois.
+#
+# Tout ce qui décrit le seul service rex-admin (container_name, container_port,
+# app_dir, Gotenberg…) vit dans vars/admin.yml, chargé par `vars_files` dans
+# playbook-admin.yml : sans quoi ces valeurs fuiraient vers les plays sync et
+# export-webdfd, qui devraient les neutraliser une à une.
+#
+# Les accès PostgreSQL / MariaDB / LDAP ne sont pas repris ici : ils viennent du
+# vault (vault-vars.yml, chargé en vars_files ET en --extra-vars par le
+# makefile), qui prime de toute façon sur group_vars. Les redéfinir donnerait
+# des lignes `postgres_host: "{{ postgres_host }}"` jamais évaluées.
+
 server_name: vecu-etudiant-admin-2.mines-ales.fr
 ssl_dir: "/etc/ssl/{{ server_name }}"
-container_name: rex-admin
-container_image: ghcr.io/ales-imt/rex-admin:latest
-container_port: 8121
-app_dir: /home/userdfx/rex-admin
-config_dest_in_container: /opt/rex-admin/conf/config.yaml
-freetsa_cert_container_path: /opt/rex-admin/conf/x509/freetsa/cacert.pem
-
-# Génération des bulletins en PDF : sidecar Gotenberg (conversion docx -> PDF).
-# Activé par défaut (voir templates). Gotenberg publie son port sur l'hôte ;
-# l'app admin le joint via host.containers.internal:3000 (GOTENBERG_URL).
-gotenberg_container_name: gotenberg
-gotenberg_image: docker.io/gotenberg/gotenberg:8
-gotenberg_port: 3000
-
-postgres_host: "{{ postgres_host }}"
-postgres_port: "{{ postgres_port }}"
-postgres_db: "{{ postgres_db }}"
-mariadb_host: "{{ mariadb_host }}"
-mariadb_port: "{{ mariadb_port }}"
-mariadb_database: "{{ mariadb_database }}"
-ldap_host: "{{ ldap_host }}"
-
-jwt_secret: "{{ jwt_secret_admin }}"

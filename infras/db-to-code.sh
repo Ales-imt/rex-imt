@@ -12,7 +12,12 @@ fi
 
 SECRETS_FILE="$(realpath "$SECRETS_FILE")"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-get() { grep "^$1=" "$SECRETS_FILE" | cut -d= -f2; }
+# La configuration est scindée en deux : la topologie (config-*.env) et les
+# secrets (secrets-*.env). Le chemin du second est donné en argument, le premier
+# s'en deduit par convention de nommage. `-f2-` et non `-f2` : une valeur
+# contenant un « = » (padding base64) serait sinon tronquee en silence.
+CONFIG_FILE="${SECRETS_FILE/secrets-/config-}"
+get() { grep -h "^$1=" "$CONFIG_FILE" "$SECRETS_FILE" 2>/dev/null | head -1 | cut -d= -f2-; }
 
 POSTGRES_HOST=$(get POSTGRES_HOST)
 POSTGRES_PORT=$(get POSTGRES_PORT)
@@ -52,3 +57,4 @@ echo "--- 🏗️ 3. Lancement de sqlc generate ---"
 (cd "$BACK_DIR/admin"   && sqlc generate)
 (cd "$BACK_DIR/common"  && sqlc generate)
 (cd "$BACK_DIR/student" && sqlc generate)
+(cd "$BACK_DIR/sync"    && sqlc generate)

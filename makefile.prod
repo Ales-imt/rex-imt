@@ -1,12 +1,30 @@
-.PHONY: first-deploy-prod release-prod release-prod-admin release-prod-eleve drop-db-prod init-db-prod db-to-code-prod build-container-admin-prod build-container-eleve-prod push deploy-vm-prod deploy-vm-admin-prod deploy-vm-eleve-prod
+.PHONY: first-deploy-prod release-prod release-prod-admin release-prod-eleve release-prod-sync release-prod-export drop-db-prod init-db-prod db-to-code-prod build-container-admin-prod build-container-eleve-prod build-container-sync-prod build-container-export-prod build-containers-prod push push-containers-prod push-admin-prod push-eleve-prod push-sync-prod push-export-prod deploy-vm-prod deploy-vm-admin-prod deploy-vm-eleve-prod deploy-vm-sync-prod deploy-vm-export-prod
 
 first-deploy-prod: drop-db-prod init-db-prod release-prod
 
-release-prod: release-prod-admin release-prod-eleve
+# Tout est construit, poussé, puis déployé en UN passage par VM via
+# deploy-vm-prod — et non par enchaînement des quatre cibles release-prod-*, qui
+# demanderaient le mot de passe sudo quatre fois.
+#
+# L'ordre de déploiement (export-webdfd avant sync, il produit les exports que
+# sync lit) est porté par site-admin.yml.
+release-prod: db-to-code-prod build-containers-prod push-containers-prod deploy-vm-prod
 
-release-prod-admin: db-to-code-prod build-container-admin-prod push deploy-vm-admin-prod
+# ── Releases par service ──────────────────────────────────────────────────────
+# Chacune construit, pousse et déploie SON image et elle seule. Elles passaient
+# auparavant par `push`, qui reconstruit et repousse les quatre : corriger le
+# seul export-webdfd repoussait aussi admin, eleve et sync, soit ~2 Go inutiles.
+#
+# db-to-code-prod couvre déjà `sqlc generate` pour les quatre modules, ce que
+# push-container.sh refaisait de son côté. export-webdfd n'en dépend pas : il ne
+# parle à aucune base, il lit des .FIC et écrit du JSON.
+release-prod-admin: db-to-code-prod build-container-admin-prod push-admin-prod deploy-vm-admin-prod
 
-release-prod-eleve: db-to-code-prod build-container-eleve-prod push deploy-vm-eleve-prod
+release-prod-eleve: db-to-code-prod build-container-eleve-prod push-eleve-prod deploy-vm-eleve-prod
+
+release-prod-sync: db-to-code-prod build-container-sync-prod push-sync-prod deploy-vm-sync-prod
+
+release-prod-export: build-container-export-prod push-export-prod deploy-vm-export-prod
 
 # ── SUPPRESSION BD ─────────────────────────────────────────────────────────────
 
@@ -34,29 +52,84 @@ db-to-code-prod:
 # ── Build ──────────────────────────────────────────────────────────────────────
 
 build-container-admin-prod:
-	$(RUN_DIR)/build-admin.sh prod
+	$(RUN_DIR)/build-admin.sh prod $(IMAGE_TAG)
 
 build-container-eleve-prod:
-	$(RUN_DIR)/build-eleve.sh prod
+	$(RUN_DIR)/build-eleve.sh prod $(IMAGE_TAG)
+
+build-container-sync-prod:
+	$(RUN_DIR)/build-sync.sh prod $(IMAGE_TAG)
+
+# UID 1001 : celui de userdfx sur la VM. Il doit correspondre au propriétaire de
+# depot/data ET l'unité Quadlet porte UserNS=keep-id, sans quoi podman rootless
+# remappe l'UID et les exports n'appartiennent à personne d'utile.
+build-container-export-prod:
+	$(RUN_DIR)/build-export-webdfd.sh prod $(IMAGE_TAG) 1001
+
+build-containers-prod: build-container-admin-prod build-container-eleve-prod build-container-export-prod build-container-sync-prod
 
 
 # ── Push ──────────────────────────────────────────────────────────────────────
 
+# `push` reconstruit les quatre images avant de les pousser. Il n'est PLUS dans
+# release-prod : celui-ci construit déjà tout via build-containers-prod, et
+# l'appeler ensuite refaisait les quatre builds une seconde fois — dont les 2 Go
+# d'export-webdfd. Conservé comme raccourci autonome « tout refaire et pousser ».
 push:
-	$(RUN_DIR)/push-container.sh
+	IMAGE_TAG=$(IMAGE_TAG) $(RUN_DIR)/push-container.sh
+
+push-containers-prod: push-admin-prod push-eleve-prod push-sync-prod push-export-prod
+
+# Push d'UNE image déjà construite, pour les releases par service.
+push-admin-prod:
+	$(RUN_DIR)/push-image.sh $(ADMIN_CONTAINER) $(IMAGE_TAG)
+
+push-eleve-prod:
+	$(RUN_DIR)/push-image.sh $(ELEVE_CONTAINER) $(IMAGE_TAG)
+
+push-sync-prod:
+	$(RUN_DIR)/push-image.sh $(SYNC_CONTAINER) $(IMAGE_TAG)
+
+push-export-prod:
+	$(RUN_DIR)/push-image.sh $(EXPORT_CONTAINER) $(IMAGE_TAG)
 
 # ── Configure VM et deploy ──────────────────────────────────────────────────────────────────────
 
-deploy-vm-prod: deploy-vm-admin-prod deploy-vm-eleve-prod
+# UNE invocation d'ansible-playbook par VM, et non une par service : sudo n'est
+# demandé qu'une fois par invocation, quel que soit le nombre de plays enchaînés.
+# Passer par les quatre cibles par service demanderait quatre fois le mot de
+# passe. Les cibles par service restent là pour un déploiement ciblé.
+#
+# Deux demandes donc, une par VM — c'est le minimum sans mettre le mot de passe
+# sudo dans le vault, les deux machines pouvant avoir des identifiants distincts.
+deploy-vm-prod:
+	@echo "--- 🚀 Creation du vault pour ansible ---"
+	cd $(ANSIBLE_DIR) && ./generate-vault-vars.sh
+	@echo "--- 🚀 Déploiement VM admin — admin + export-webdfd + sync ($(IMAGE_TAG)) ---"
+	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod site-admin.yml --extra-vars "@vault-vars.yml" --extra-vars "image_tag=$(IMAGE_TAG)" --ask-become-pass
+	@echo "--- 🚀 Déploiement VM eleve ($(IMAGE_TAG)) ---"
+	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod playbook-eleve.yml --extra-vars "@vault-vars.yml" --extra-vars "image_tag=$(IMAGE_TAG)" --ask-become-pass
 
 deploy-vm-admin-prod:
 	@echo "--- 🚀 Creation du vault pour ansible ---"
 	cd $(ANSIBLE_DIR) && ./generate-vault-vars.sh
 	@echo "--- 🚀 Déploiement Admin ---"
-	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod playbook-admin.yml --extra-vars "@vault-vars.yml" --ask-become-pass
+	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod playbook-admin.yml --extra-vars "@vault-vars.yml" --extra-vars "image_tag=$(IMAGE_TAG)" --ask-become-pass
 
 deploy-vm-eleve-prod:
 	@echo "--- 🚀 Creation du vault pour ansible ---"
 	cd $(ANSIBLE_DIR) && ./generate-vault-vars.sh
 	@echo "--- 🚀 Déploiement Eleve ---"
-	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod playbook-eleve.yml --extra-vars "@vault-vars.yml" --ask-become-pass
+	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod playbook-eleve.yml --extra-vars "@vault-vars.yml" --extra-vars "image_tag=$(IMAGE_TAG)" --ask-become-pass
+
+deploy-vm-sync-prod:
+	@echo "--- 🚀 Creation du vault pour ansible ---"
+	cd $(ANSIBLE_DIR) && ./generate-vault-vars.sh
+	@echo "--- 🚀 Déploiement Sync ($(IMAGE_TAG)) ---"
+	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod playbook-sync.yml --extra-vars "@vault-vars.yml" --extra-vars "image_tag=$(IMAGE_TAG)" --ask-become-pass
+
+deploy-vm-export-prod:
+	@echo "--- 🚀 Creation du vault pour ansible ---"
+	cd $(ANSIBLE_DIR) && ./generate-vault-vars.sh
+	@echo "--- 🚀 Déploiement Export-webdfd ($(IMAGE_TAG)) ---"
+	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/prod playbook-export-webdfd.yml --extra-vars "@vault-vars.yml" --extra-vars "image_tag=$(IMAGE_TAG)" --ask-become-pass

@@ -12,7 +12,6 @@ import (
 	"back-rex-admin/pkg/ia/rack"
 	"back-rex-admin/pkg/ia/ragarenn"
 	"back-rex-admin/pkg/justification"
-	"back-rex-admin/pkg/migration"
 	"back-rex-admin/pkg/moderation"
 	"back-rex-admin/pkg/planning"
 	"back-rex-admin/pkg/postit"
@@ -95,14 +94,8 @@ func main() {
 
 	}
 
-	migration.StartSync(context.Background(), migration.Config{
-		PromosURL:      cfg.Webdfd.BaseURL + "?TYPE=promos_txt",
-		CoursURL:       cfg.Webdfd.BaseURL + "?TYPE=cours_txt",
-		PlanningURL:    cfg.Webdfd.BaseURL,
-		ElevesURL:      cfg.Webdfd.BaseURL + "?TYPE=eleves_txt",
-		ProfsURL:       cfg.Webdfd.BaseURL + "?TYPE=profs_txt",
-		ListeGroupeURL: cfg.Webdfd.ListeGroupeURL,
-	}, pg.Db)
+	// La synchronisation du référentiel scolaire a quitté ce service : elle est
+	// assurée par rex-sync (backend/sync), qui écrit directement en base.
 
 	go feedback.ListenForNewFeedbacks(&cfg.Database, iaConnector)
 	rgpd.StartPurge(&cfg.Database, &cfg.MariaDBConfig)
