@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // anneeCourante décrit l'année scolaire (table public.annee) couvrant une date donnée.
@@ -31,22 +30,19 @@ func getAnneeCourante(ctx context.Context, q *Queries, now time.Time) (ac anneeC
 	return anneeCourante{ID: row.ID, Annee: int32(row.Debut.Year()), Debut: row.Debut, Fin: row.Fin}, true, nil
 }
 
-func createUserEleve(ctx context.Context, db *pgxpool.Pool, name, surname, email string) (int32, error) {
-	tx, err := db.Begin(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("user: begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx)
-	q := New(tx)
+// createUserEleve crée le couple user + student.
+//
+// La transaction locale d'autrefois a disparu : le cycle entier en tient
+// désormais une seule (cf. RunSync), et en ouvrir une seconde sur une autre
+// connexion se serait bloqué sur les lignes que la première détient.
+// L'atomicité du couple est donc assurée par la transaction du cycle.
+func createUserEleve(ctx context.Context, q *Queries, name, surname, email string) (int32, error) {
 	id, err := q.InsertUserEleve(ctx, InsertUserEleveParams{Email: email, Name: name, Surname: surname})
 	if err != nil {
 		return 0, fmt.Errorf("user: create %s: %w", email, err)
 	}
 	if err = q.InsertStudent(ctx, id); err != nil {
 		return 0, fmt.Errorf("student: create user_id=%d: %w", id, err)
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("user: commit: %w", err)
 	}
 	return id, nil
 }

@@ -16,12 +16,13 @@ import (
 )
 
 const (
-	// RafraichissementWebdfd : cybema ne prévient pas de ses changements, il
-	// faut donc l'interroger régulièrement.
-	RafraichissementWebdfd = 2 * time.Hour
-	// ReessaiWebdfd : délai après un cycle en échec (coupure réseau, cgiempt
-	// indisponible).
-	ReessaiWebdfd = 5 * time.Minute
+	// RafraichissementWebdfdDefaut : cybema ne prévient pas de ses changements,
+	// il faut donc l'interroger régulièrement. Surchargeable par
+	// migration.webdfd.interval.
+	RafraichissementWebdfdDefaut = 2 * time.Hour
+	// ReessaiWebdfdDefaut : délai après un cycle en échec (coupure réseau,
+	// cgiempt indisponible). Surchargeable par migration.webdfd.retry.
+	ReessaiWebdfdDefaut = 5 * time.Minute
 	// SondageHFSQLDefaut : à quelle fréquence chercher un nouvel export.
 	SondageHFSQLDefaut = time.Minute
 )
@@ -33,12 +34,27 @@ func Periodique(ctx context.Context, cfg *services.Config, db *pgxpool.Pool) err
 		return err
 	}
 
+	rafraichissement := cfg.Migration.Webdfd.Interval
+	if rafraichissement <= 0 {
+		rafraichissement = RafraichissementWebdfdDefaut
+	}
+	reessai := cfg.Migration.Webdfd.Retry
+	if reessai <= 0 {
+		reessai = ReessaiWebdfdDefaut
+	}
+	log.Printf("sync: source webdfd, un cycle toutes les %s (réessai à %s après échec)", rafraichissement, reessai)
+
+	dump := cfg.Migration.DumpPlanning
+	if dump != "" {
+		log.Printf("sync: dump de diagnostic du planning activé → %s", dump)
+	}
+
 	go func() {
 		for {
-			attente := RafraichissementWebdfd
-			if err := migration.RunSync(ctx, src, db); err != nil {
-				log.Printf("sync: échec complet: %v — nouvel essai dans %s", err, ReessaiWebdfd)
-				attente = ReessaiWebdfd
+			attente := rafraichissement
+			if err := migration.RunSync(ctx, src, db, dump); err != nil {
+				log.Printf("sync: échec complet: %v — nouvel essai dans %s", err, reessai)
+				attente = reessai
 			}
 			select {
 			case <-time.After(attente):
@@ -120,7 +136,7 @@ func synchroniser(ctx context.Context, cfg *services.Config, jsonDir string, db 
 		log.Printf("sync: export %s illisible: %v", jsonDir, err)
 		return false
 	}
-	if err := migration.RunSync(ctx, src, db); err != nil {
+	if err := migration.RunSync(ctx, src, db, cfg.Migration.DumpPlanning); err != nil {
 		log.Printf("sync: synchronisation depuis %s: %v", jsonDir, err)
 		return false
 	}

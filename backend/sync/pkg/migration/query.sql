@@ -1,5 +1,16 @@
+-- name: Now :one
+-- Horloge de la BASE, prise en début de transaction d'écriture. Elle sert de
+-- borne à ListSeancesWebdfdNonVues, dont les lignes portent un last_seen_at
+-- écrit par now() : comparer les deux depuis la même horloge supprime la dérive
+-- entre l'application et le serveur. Dans une transaction, now() vaut
+-- transaction_timestamp(), constant du BEGIN au COMMIT.
+SELECT now()::timestamptz;
+
 -- name: GetAnneeByDate :one
-SELECT id, debut, fin FROM public.annee WHERE debut <= $1 AND fin >= $1;
+-- La date est castée avant comparaison : debut et fin sont des `date`, et un
+-- timestamptz non casté les promeut à minuit — l'année cesserait alors d'être
+-- trouvée dès 00:00:01 le dernier jour de la période.
+SELECT id, debut, fin FROM public.annee WHERE @jour::date BETWEEN debut AND fin;
 
 -- name: ListAnnees :many
 SELECT id, debut, fin FROM public.annee ORDER BY debut;
@@ -112,7 +123,16 @@ SELECT id FROM public."user" WHERE email = $1;
 INSERT INTO public."user" (email, name, surname, roles) VALUES ($1, $2, $3, ARRAY['ELEVE']) RETURNING id;
 
 -- name: InsertStudent :exec
-INSERT INTO public.student (user_id) VALUES ($1);
+-- ON CONFLICT : le rattachement par email (SyncEleves étape 2) l'appelle sur un
+-- compte qui peut déjà porter sa ligne student.
+INSERT INTO public.student (user_id) VALUES ($1) ON CONFLICT DO NOTHING;
+
+-- name: AddEleveRole :exec
+-- Pendant de AddProfRole. Un compte retrouvé par email lors de la
+-- synchronisation des élèves doit porter le rôle, sans quoi les deux chemins
+-- d'arrivée (création, rattachement) produisent des comptes différents.
+UPDATE public."user" SET roles = array_append(roles, 'ELEVE')
+WHERE id = $1 AND NOT ('ELEVE' = ANY(roles));
 
 -- name: UpdateUserNames :exec
 UPDATE public."user" SET name = $1, surname = $2 WHERE id = $3;
@@ -167,11 +187,21 @@ ON CONFLICT DO NOTHING;
 -- zéro, une erreur de saisie corrigée en amont laisserait le cours invisible
 -- pour toujours.
 --
--- Le CTE `avant` capte l'état précédent : RETURNING ne rend que les valeurs
--- nouvelles, et le compteur de résurrections du journal a besoin de savoir si
--- la séance était annulée avant cet UPDATE.
+-- prof_id et groupe_id ne sont PAS écrasés aveuglément. L'amont distingue deux
+-- situations que l'UPDATE confondait : le créneau ne porte aucun PRCLE/GRCLE
+-- (l'amont dit « pas de prof », « pas de groupe » → NULL), ou il en porte un
+-- que la synchronisation n'a pas su résoudre (prof absent de prof_map faute
+-- d'email, groupe encore inconnu → on garde la valeur en place). L'enjeu est
+-- surtout sur groupe_id : à NULL, seance_effectif_resolu élargit
+-- silencieusement l'effectif attendu à la promotion entière.
+--
+-- Le CTE `cible` capte l'état précédent et calcule les valeurs retenues :
+-- RETURNING ne rend que les valeurs nouvelles, alors que l'appelant a besoin de
+-- savoir si la séance était annulée (compteur de résurrections) et si son
+-- rattachement aux justifications doit être revu.
 WITH avant AS (
-  SELECT sa.id, sa.cancelled_at FROM public.seance sa WHERE sa.id = @seance_id
+  SELECT sa.id, sa.cancelled_at, sa.starts_at, sa.ends_at, sa.matiere_id, sa.groupe_id, sa.prof_id
+  FROM public.seance sa WHERE sa.id = @seance_id
 )
 UPDATE public.seance s
 SET matiere_id   = @matiere_id,
@@ -180,12 +210,30 @@ SET matiere_id   = @matiere_id,
     salle        = @salle,
     prof         = @prof,
     promotion_id = @promotion_id,
-    groupe_id    = @groupe_id,
-    prof_id      = @prof_id,
+    groupe_id    = COALESCE(@groupe_id, CASE WHEN @grcle_vide::bool THEN NULL ELSE avant.groupe_id END),
+    prof_id      = COALESCE(@prof_id,   CASE WHEN @prcle_vide::bool THEN NULL ELSE avant.prof_id   END),
     cancelled_at = NULL
 FROM avant
 WHERE s.id = avant.id
-RETURNING (avant.cancelled_at IS NOT NULL)::bool AS ressuscitee;
+RETURNING
+  (avant.cancelled_at IS NOT NULL)::bool AS ressuscitee,
+  -- rattacher : la couverture des excuses doit être recalculée. Vrai quand la
+  -- séance redevient visible, quand sa plage horaire bouge, ou quand son
+  -- effectif attendu change (matière → période → promotion, ou groupe).
+  --
+  -- Le groupe est comparé à la valeur RETENUE, en répétant le COALESCE du SET
+  -- plutôt qu'en testant le paramètre. Ce n'est pas un choix de style : un
+  -- `@groupe_id IS NOT NULL` n'apporte aucune information de type, et
+  -- PostgreSQL analyse le RETURNING AVANT la liste SET — le paramètre y serait
+  -- donc encore non typé, et la requête entière échouerait au PREPARE avec
+  -- « could not determine data type of parameter » (SQLSTATE 42P08).
+  (avant.cancelled_at IS NOT NULL
+   OR avant.starts_at  IS DISTINCT FROM @starts_at
+   OR avant.ends_at    IS DISTINCT FROM @ends_at
+   OR avant.matiere_id IS DISTINCT FROM @matiere_id
+   OR avant.groupe_id  IS DISTINCT FROM
+        COALESCE(@groupe_id, CASE WHEN @grcle_vide::bool THEN NULL ELSE avant.groupe_id END)
+  )::bool AS rattacher;
 
 -- name: ListSeancesWebdfdNonVues :many
 -- Séances webdfd dont la correspondance n'a pas été rafraîchie pendant le cycle

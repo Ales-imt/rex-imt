@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // serveur rend une source branchée sur un serveur qui répond toujours le même
@@ -117,6 +118,31 @@ func TestErreurHTTP(t *testing.T) {
 
 	if _, err := (&Source{BaseURL: srv.URL}).Promos(); err == nil {
 		t.Fatal("HTTP 500 accepté")
+	}
+}
+
+// TestTimeout vérifie qu'une requête est bornée dans le temps. L'enjeu n'est
+// pas la valeur du délai mais le fait que les appels passent bien par `client`
+// : avec http.Get, un amont qui accepte la connexion sans répondre bloquerait
+// le cycle indéfiniment, et rien dans les tests ne le signalerait.
+func TestTimeout(t *testing.T) {
+	precedent := client
+	client = &http.Client{Timeout: 20 * time.Millisecond}
+	t.Cleanup(func() { client = precedent })
+
+	// Le serveur répond, mais trop tard. La tempo reste courte : srv.Close
+	// attend les requêtes en cours.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+	}))
+	defer srv.Close()
+
+	debut := time.Now()
+	if _, err := (&Source{BaseURL: srv.URL}).Promos(); err == nil {
+		t.Fatal("requête sans réponse acceptée")
+	}
+	if ecoule := time.Since(debut); ecoule > 250*time.Millisecond {
+		t.Fatalf("requête interrompue au bout de %s, le timeout n'a pas joué", ecoule)
 	}
 }
 

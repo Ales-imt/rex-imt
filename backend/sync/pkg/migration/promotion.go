@@ -9,23 +9,15 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// SyncPromotions charge la liste des promotions depuis la source amont,
-// upserte chaque promotion dans public.promotion et insère la ligne de map
-// correspondante dans migration.promotion_map.
-func SyncPromotions(ctx context.Context, src source.Source, db *pgxpool.Pool, ac anneeCourante) error {
-	q := New(db)
+// syncPromotions upserte chaque promotion collectée dans public.promotion et
+// insère la ligne de map correspondante dans migration.promotion_map.
+func syncPromotions(ctx context.Context, q *Queries, promos []source.Promo, ac anneeCourante) error {
 	annee := ac.Annee
 	anneeID := ac.ID
 
-	promos, err := src.Promos()
-	if err != nil {
-		return err
-	}
-
-	if err = q.CreateInconnuPromotion(ctx); err != nil {
+	if err := q.CreateInconnuPromotion(ctx); err != nil {
 		return err
 	}
 

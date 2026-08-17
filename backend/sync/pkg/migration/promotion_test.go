@@ -39,8 +39,8 @@ func TestSyncPromotions(t *testing.T) {
 		t.Skip("aucune année ne correspond à la date du jour")
 	}
 
-	if err = SyncPromotions(ctx, src, db, ac); err != nil {
-		t.Fatalf("SyncPromotions: %v", err)
+	if err = syncPromotions(ctx, New(db), src.promos, ac); err != nil {
+		t.Fatalf("syncPromotions: %v", err)
 	}
 
 	// Récupère les IDs internes créés.

@@ -38,9 +38,37 @@ type Config struct {
 // mêmes identifiants : `webdfd` l'interroge en direct par HTTP, `hfsql` lit les
 // exports JSON produits par le watcher à partir de ses sauvegardes.
 type MigrationConfig struct {
-	Source  string        `yaml:"source"`  // webdfd | hfsql
-	HFSQL   HFSQLConfig   `yaml:"hfsql"`   // service sync, source hfsql
-	Watcher WatcherConfig `yaml:"watcher"` // service export-webdfd
+	Source  string             `yaml:"source"`  // webdfd | hfsql
+	Webdfd  MigrationWebdfdCfg `yaml:"webdfd"`  // service sync, source webdfd
+	HFSQL   HFSQLConfig        `yaml:"hfsql"`   // service sync, source hfsql
+	Watcher WatcherConfig      `yaml:"watcher"` // service export-webdfd
+
+	// DumpPlanning : chemin d'un fichier JSON où déverser, à chaque cycle,
+	// l'intégralité des créneaux collectés ET la liste de ceux qui ont été
+	// écartés avec leur raison.
+	//
+	// Outil d'ENQUÊTE, vide par défaut. Il sert à répondre à « le planning
+	// amont contient N créneaux, la base en montre moins, où sont les
+	// autres ? » — une question que les logs ne peuvent pas trancher, les
+	// créneaux étant écartés à cinq endroits différents du cycle. L'activer
+	// mémorise chaque rejet, donc une empreinte mémoire proportionnelle au
+	// planning, et réécrit le fichier à chaque cycle.
+	DumpPlanning string `yaml:"dumpPlanning"`
+}
+
+// MigrationWebdfdCfg paramètre, côté service `sync`, le rythme d'interrogation
+// de cybema. Les URL elles-mêmes vivent dans WebdfdConfig : ici on ne décide
+// que du QUAND, comme HFSQLConfig.Interval pour l'autre source.
+type MigrationWebdfdCfg struct {
+	// Interval sépare deux cycles complets. cybema ne prévient pas de ses
+	// changements, il faut donc l'interroger régulièrement — mais un cycle lit
+	// le planning de chaque promotion, ce qui n'est pas gratuit pour l'amont.
+	// Défaut 2h.
+	Interval time.Duration `yaml:"interval"`
+	// Retry remplace Interval après un cycle en échec (coupure réseau,
+	// cgiempt indisponible), pour ne pas attendre le cycle nominal entier
+	// avant de retenter. Défaut 5m.
+	Retry time.Duration `yaml:"retry"`
 }
 
 // HFSQLConfig paramètre, côté service `sync`, la lecture des exports produits

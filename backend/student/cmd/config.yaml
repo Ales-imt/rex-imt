@@ -32,11 +32,17 @@ age:
 presence:
   tokenSecret: ${PRESENCE_TOKEN_SECRET}
 
-# Source du planning : bd = public.seance, alimentée toutes les 2 h par la
+# Source du planning : bd = public.seance, alimentée toutes les heures par la
 # synchronisation de back-rex-admin. webdfd et aurega interrogent le système
 # amont en direct et restent pleinement fonctionnels.
+#
+# `bd` est la source nominale : elle sert exactement les séances sur lesquelles
+# se fait le pointage, là où webdfd en direct laissait coexister deux vérités —
+# un cours affiché au planning sans exister dans public.seance, donc jamais
+# pointable. Elle évite en outre un aller-retour HTTP vers cybema à chaque
+# consultation, sur un amont qui cesse périodiquement d'accepter les connexions.
 programme:
-  source: webdfd
+  source: bd
   webdfd:
     baseURL: http://webdfd.mines-ales.fr/cybema/cgi-bin/cgiempt.exe
   aurega:

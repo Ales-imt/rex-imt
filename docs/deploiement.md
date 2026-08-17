@@ -96,20 +96,47 @@ make local
 ```
 
 Elle enchaîne dans l'ordre :
-1. `infra-local` — démarre les conteneurs Docker locaux (PostgreSQL, LDAP, Ollama)
+1. `infra-local` — démarre les conteneurs Docker locaux (PostgreSQL, MariaDB, LDAP, Ollama) **et recrée les deux bases à vide**
 2. `migration-local` — applique la migration v0 → v1 (script `migrate-v0-to-v1.sh`)
-3. `db-to-code-local` — extrait le schéma et génère le code sqlc
-4. `start-local` — build et lance les conteneurs admin et élève
+3. `cyber_note` — importe le dump CyberNotes dans MariaDB
+4. `release-local` — `db-to-code-local`, puis build et lancement des quatre conteneurs
 
-### Gestion individuelle des conteneurs
+`make local` **détruit les données** des deux bases. Pour rebâtir et relancer sans y toucher :
 
 ```bash
-make start-admin    # build (target local) + lance le container admin sur :8121 (debug :2345)
-make start-eleve    # build (target local) + lance le container élève sur :8131 (debug :2346)
-make stop-admin     # arrête le container admin
-make stop-eleve     # arrête le container élève
-make stop-local     # arrête admin + élève
+make release-local
 ```
+
+### Un seul service
+
+Même découpage qu'en prod (`release-prod-<service>`) : génération du code sqlc, build de la seule image concernée, relance du seul conteneur.
+
+```bash
+make release-local-admin     # idem -eleve, -sync, -export
+```
+
+`release-local-export` ne passe pas par sqlc : export-webdfd ne parle à aucune base.
+
+### Étapes séparées
+
+Les trois étages sont indépendants — `make help-local` en donne la liste.
+
+```bash
+make db-to-code-local              # sqlc generate (exige les BD démarrées)
+make build-container-admin-local   # build seul, infra éteinte (idem eleve|sync|export)
+make build-local                   # build des quatre images
+make start-admin                   # lance l'image telle qu'elle est, SANS rebuild
+make stop-admin                    # arrête le container admin
+make stop-apps-local               # arrête les quatre services, laisse l'infra debout
+make stop-local                    # les quatre + l'infra Docker Compose
+```
+
+Deux conséquences de ce découpage :
+
+- `build-container-*-local` ne régénère plus le code sqlc. Après une retouche de `query.sql`, passer par `release-local[-<service>]` ou appeler `db-to-code-local` à la main.
+- `start-*` ne construit rien. Un service redémarre sans attendre un build (utile pour les ~2 Go d'export-webdfd), au risque de relancer une image périmée.
+
+Les scripts de lancement font `docker rm -f` avant de démarrer : rejouer un `start-*` suffit à redémarrer, sans `stop-*` intercalé.
 
 Les variables de connexion sont lues depuis `infras/env/secrets-local.env`.
 

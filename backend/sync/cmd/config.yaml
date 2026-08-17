@@ -20,10 +20,35 @@ server:
 # ou inconnue arrête le démarrage — se rabattre sur l'autre synchroniserait un
 # référentiel différent de celui attendu, sans que personne ne s'en aperçoive.
 migration:
-  # webdfd : interrogation directe de cybema, rafraîchie toutes les 2 h.
+  # webdfd : interrogation directe de cybema, au rythme fixé ci-dessous.
   # hfsql  : lecture des exports JSON déposés par le service rex-export-webdfd,
   #          pris à mesure qu'ils apparaissent.
   source: webdfd
+
+  # Source webdfd : à quel rythme interroger cybema. Il ne signale pas ses
+  # changements, il faut donc revenir le lire — mais un cycle parcourt le
+  # planning de CHAQUE promotion, ce qui n'est pas gratuit pour l'amont.
+  webdfd:
+    # Délai entre deux cycles complets. Défaut 2h.
+    interval: 1h
+    # Délai après un cycle en échec (coupure réseau, cgiempt indisponible) :
+    # plus court, pour ne pas attendre un cycle entier avant de retenter.
+    # Défaut 5m.
+    retry: 5m
+
+  # Diagnostic : chemin d'un fichier JSON réécrit à chaque cycle avec TOUS les
+  # créneaux collectés et TOUS ceux qui ont été écartés, avec leur raison.
+  #
+  # Sert à répondre à « le planning amont a N créneaux, la base en montre
+  # moins » — les créneaux sont écartés à cinq endroits du cycle, et les logs
+  # ne disent pas lesquels. Vide = désactivé, ce qui est l'état normal :
+  # l'activer mémorise chaque rejet le temps du cycle.
+  #
+  # Le répertoire est créé au besoin, MAIS le service tourne sous un compte non
+  # privilégié (`rex`) : il ne peut rien créer sous /var/lib, qui appartient à
+  # root. Viser /opt/rex-sync/…, que l'image donne à `rex`, ou un volume monté
+  # en écriture. Récupération : docker cp rex-sync:<chemin> .
+  dumpPlanning: ""
 
   # Source hfsql : où lire les exports. Le répertoire est monté en LECTURE
   # SEULE — la rétention appartient au producteur, pas à ce service.

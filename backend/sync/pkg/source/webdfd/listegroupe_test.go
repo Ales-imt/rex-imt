@@ -17,7 +17,11 @@ func TestParseListeGroupe(t *testing.T) {
 			"",
 		}, "\n"))
 
-		evs, groupeLabel, promoLabel := parseListeGroupe(raw)
+		evs, groupeLabel, promoLabel, err := parseListeGroupe(raw)
+
+		if err != nil {
+			t.Fatalf("parseListeGroupe: %v", err)
+		}
 
 		if promoLabel != "1A INFRES" {
 			t.Errorf("promoLabel = %q, want %q", promoLabel, "1A INFRES")
@@ -40,7 +44,10 @@ func TestParseListeGroupe(t *testing.T) {
 		raw := []byte("Promotion :\t1A\tGroupe :\tG1\n" +
 			"Num étudiant\tNom\tPrénom\tnote\n" +
 			"10001\tAHMED ALI\tJean\t\n")
-		evs, _, _ := parseListeGroupe(raw)
+		evs, _, _, err := parseListeGroupe(raw)
+		if err != nil {
+			t.Fatalf("parseListeGroupe: %v", err)
+		}
 		if len(evs) != 1 || evs[0] != "10001" {
 			t.Errorf("evs = %v, want [10001]", evs)
 		}
@@ -50,7 +57,10 @@ func TestParseListeGroupe(t *testing.T) {
 		raw := []byte("Promotion :\tPROMO\tGroupe :\tGR\n" +
 			"Num étudiant\tNom\tPrénom\tnote\n" +
 			"99999\tDUPONT\tPierre\t18.5\n")
-		evs, _, _ := parseListeGroupe(raw)
+		evs, _, _, err := parseListeGroupe(raw)
+		if err != nil {
+			t.Fatalf("parseListeGroupe: %v", err)
+		}
 		// La note est en 4e colonne : elle ne doit pas interférer avec l'EV.
 		if len(evs) != 1 || evs[0] != "99999" {
 			t.Errorf("evs = %v, want [99999]", evs)
@@ -63,16 +73,45 @@ func TestParseListeGroupe(t *testing.T) {
 			"\t\t\t\n" +
 			"abc\tFOO\tBAR\t\n" +
 			"20000\tMARTIN\tLuc\t\n")
-		evs, _, _ := parseListeGroupe(raw)
+		evs, _, _, err := parseListeGroupe(raw)
+		if err != nil {
+			t.Fatalf("parseListeGroupe: %v", err)
+		}
 		if len(evs) != 1 || evs[0] != "20000" {
 			t.Errorf("evs = %v, want [20000]", evs)
 		}
 	})
 
-	t.Run("flux vide", func(t *testing.T) {
-		evs, groupeLabel, promoLabel := parseListeGroupe([]byte{})
-		if len(evs) != 0 || groupeLabel != "" || promoLabel != "" {
-			t.Errorf("flux vide: got evs=%v groupe=%q promo=%q", evs, groupeLabel, promoLabel)
+	t.Run("groupe réellement vide : préambule seul, sans erreur", func(t *testing.T) {
+		// Un groupe dépeuplé en amont conserve son préambule. C'est ce qui le
+		// rend distinguable d'une page d'erreur, et donc réconciliable.
+		raw := []byte("Promotion :\tPROMO\tGroupe :\tGR\n" +
+			"Num étudiant\tNom\tPrénom\tnote\n")
+		evs, groupeLabel, _, err := parseListeGroupe(raw)
+		if err != nil {
+			t.Fatalf("un groupe vide mais identifiable ne doit pas être une erreur: %v", err)
+		}
+		if len(evs) != 0 {
+			t.Errorf("evs = %v, want []", evs)
+		}
+		if groupeLabel != "GR" {
+			t.Errorf("groupeLabel = %q, want %q", groupeLabel, "GR")
+		}
+	})
+
+	t.Run("flux vide : erreur", func(t *testing.T) {
+		if _, _, _, err := parseListeGroupe([]byte{}); err == nil {
+			t.Fatal("un flux vide doit être une erreur, pas un groupe vide")
+		}
+	})
+
+	t.Run("page d'erreur amont : erreur", func(t *testing.T) {
+		// cgiempt sert ses pages d'erreur en HTTP 200. Rendues comme un groupe
+		// vide, elles videraient l'effectif attendu de toutes ses séances.
+		raw := []byte("<html><head><title>Erreur</title></head>\n" +
+			"<body>Session expirée, veuillez vous reconnecter.</body></html>\n")
+		if _, _, _, err := parseListeGroupe(raw); err == nil {
+			t.Fatal("une page d'erreur HTML doit être une erreur, pas un groupe vide")
 		}
 	})
 }

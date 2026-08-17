@@ -88,6 +88,27 @@ func TestSeancesPerimeesHorsPlage(t *testing.T) {
 	}
 }
 
+// public.annee.fin est une `date` : elle arrive à minuit. Comparée telle
+// quelle, elle excluait toutes les séances du dernier jour de l'année scolaire,
+// qui n'étaient donc jamais annulables — alors même que le planning avait bien
+// été interrogé jusqu'à cette date incluse (Format("20060102") sur la borne).
+func TestSeancesPerimeesDernierJourDeLAnnee(t *testing.T) {
+	debut := date(2025, time.September, 1)
+	fin := date(2026, time.July, 31) // minuit, comme la colonne `date`
+
+	candidates := []seanceCandidate{
+		{id: 1, plcle: "PL1", promoID: 10, startsAt: time.Date(2026, time.July, 31, 8, 0, 0, 0, time.UTC), hasStart: true},
+		{id: 2, plcle: "PL2", promoID: 10, startsAt: time.Date(2026, time.July, 31, 23, 59, 0, 0, time.UTC), hasStart: true},
+		{id: 3, plcle: "PL3", promoID: 10, startsAt: time.Date(2026, time.August, 1, 8, 0, 0, 0, time.UTC), hasStart: true},
+	}
+
+	got := seancesPerimees(candidates, map[string]struct{}{}, map[int64]bool{10: true}, debut, fin)
+	slices.Sort(got)
+	if !slices.Equal(got, []int64{1, 2}) {
+		t.Errorf("seancesPerimees = %v, attendu [1 2] : le dernier jour est dans la plage interrogée, le lendemain non", got)
+	}
+}
+
 // Une séance sans promotion (promotion_id NULL, donc promoID 0) ne peut être
 // rattachée à aucun flux : rien ne prouve qu'elle a disparu.
 func TestSeancesPerimeesSansPromotion(t *testing.T) {

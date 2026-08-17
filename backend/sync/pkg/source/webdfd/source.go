@@ -4,6 +4,7 @@ import (
 	"back-rex-common/pkg/services"
 	"back-rex-sync/pkg/source"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,31 @@ import (
 )
 
 const throttle = 50 * time.Millisecond
+
+// timeout borne UNE requête, de l'établissement de la connexion à la lecture du
+// dernier octet du corps.
+//
+// La valeur est volontairement large : cgiempt met plusieurs secondes par promo
+// et rien ne justifierait d'écarter une réponse lente mais valide. Elle ne sert
+// qu'à interdire l'attente infinie — un serveur qui accepte la connexion sans
+// jamais répondre, cas typique d'IIS saturé ou d'une coupure réseau qui laisse
+// la socket ouverte. Sans elle, la goroutine du scheduler reste bloquée dans le
+// cycle, ne réatteint jamais son select d'attente, et le service cesse
+// silencieusement de synchroniser tout en restant vivant pour /health.
+const timeout = 2 * time.Minute
+
+// client est partagé par toutes les requêtes du service.
+//
+// Il n'est pas porté par Source parce que Source est construite par littéral
+// ailleurs que dans NewSource (les tests le font) : un champ resterait nil sur
+// ces chemins, et le timeout — sa seule raison d'être — ne s'appliquerait pas
+// là où on l'attend.
+//
+// Le Transport par défaut convient : il maintient un pool de connexions
+// keep-alive par hôte, et cybema (IIS, HTTP/1.1) les honore. Les appels d'un
+// cycle étant séquentiels, une connexion suffit et le MaxIdleConnsPerHost par
+// défaut n'est jamais atteint.
+var client = &http.Client{Timeout: timeout}
 
 // Source interroge cybema en direct : cgiempt.exe pour les référentiels
 // et le planning, cgihtml.exe pour la composition des groupes.
@@ -31,12 +57,18 @@ func NewSource(cfg services.WebdfdConfig) *Source {
 
 // get effectue un GET sur webdfd puis marque une pause pour ne pas saturer le serveur.
 func get(url string) (*http.Response, error) {
-	resp, err := http.Get(url)
+	resp, err := client.Get(url)
 	time.Sleep(throttle)
 	if err != nil {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
+		// Drainer avant de fermer : une réponse close sans avoir été lue
+		// jusqu'au bout fait jeter la connexion au lieu de la rendre au pool.
+		// Les pages d'erreur de cgiempt tiennent en quelques dizaines d'octets,
+		// mais la borne évite d'avaler un corps arbitrairement long pour une
+		// réponse dont on ne fera rien.
+		io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
 		resp.Body.Close()
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
@@ -199,7 +231,10 @@ func (s *Source) MembresGroupe(grcle string) ([]string, string, error) {
 		return nil, "", err
 	}
 
-	evs, groupeLabel, _ := parseListeGroupe(raw)
+	evs, groupeLabel, _, err := parseListeGroupe(raw)
+	if err != nil {
+		return nil, "", fmt.Errorf("webdfd: listegroupe GRCLE=%s: %w", grcle, err)
+	}
 	return evs, groupeLabel, nil
 }
 
@@ -217,7 +252,15 @@ func (s *Source) MembresGroupe(grcle string) ([]string, string, error) {
 //   - Ignorer toutes les lignes dont le premier champ n'est pas numérique.
 //   - Retourner uniquement le numéro d'étudiant (EV) ; la colonne note est ignorée.
 //   - Retourner aussi les libellés Groupe et Promotion du préambule pour validation.
-func parseListeGroupe(raw []byte) (evs []string, groupeLabel, promoLabel string) {
+//
+// Une erreur est rendue quand le flux ne ressemble à rien de connu : ni
+// préambule, ni la moindre ligne d'étudiant. Ce cas n'est pas théorique et il
+// est même le plus dangereux du service — cgiempt sert ses pages d'erreur en
+// HTTP 200, et un analyseur total les rendait comme un groupe légitimement
+// vide. En aval, une liste vide vaut « plus personne dans ce groupe » et vide
+// l'effectif attendu de toutes ses séances à venir. Un groupe réellement vide,
+// lui, conserve son préambule : les deux restent distinguables.
+func parseListeGroupe(raw []byte) (evs []string, groupeLabel, promoLabel string, err error) {
 	// Détecter délimiteur sur les octets bruts.
 	delim := detectDelimiter(raw)
 
@@ -245,8 +288,14 @@ func parseListeGroupe(raw []byte) (evs []string, groupeLabel, promoLabel string)
 		}
 		evs = append(evs, first)
 	}
-	return
+	if promoLabel == "" && len(evs) == 0 {
+		return nil, "", "", errListeGroupeIllisible
+	}
+	return evs, groupeLabel, promoLabel, nil
 }
+
+// errListeGroupeIllisible signale un flux sans préambule ni ligne d'étudiant.
+var errListeGroupeIllisible = errors.New("flux listegroupe illisible (ni préambule ni ligne d'étudiant) — page d'erreur amont ?")
 
 // detectDelimiter inspecte les octets bruts pour choisir '\t' ou ';'.
 func detectDelimiter(raw []byte) byte {

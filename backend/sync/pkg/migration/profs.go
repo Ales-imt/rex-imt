@@ -8,25 +8,25 @@ import (
 	"log"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// SyncProfs charge la liste des professeurs depuis la source amont et
-// maintient la correspondance dans migration.prof_map.
+// syncProfs maintient la correspondance des professeurs dans
+// migration.prof_map.
 //
 // Ordre de résolution pour chaque PRCLE :
 //  1. Chercher dans prof_map (external_id=PRCLE) → mettre à jour les noms.
-//  2. Sinon, chercher par email → ajouter le rôle PROF + créer la ligne prof_map.
-//  3. Sinon, créer l'utilisateur avec rôle PROF et la ligne prof_map.
-func SyncProfs(ctx context.Context, src source.Source, db *pgxpool.Pool) error {
-	profs, err := src.Profs()
-	if err != nil {
-		return err
-	}
+//  2. Sinon, et seulement si le planning fait venir ce prof, chercher par
+//     email → ajouter le rôle PROF + créer la ligne prof_map.
+//  3. Sinon, et sous la même condition, créer l'utilisateur avec rôle PROF.
+//
+// L'étape 1 est inconditionnelle : un prof déjà connu voit son identité
+// rafraîchie même s'il n'enseigne pas cette année. Ce sont les étapes 2 et 3 —
+// les seules qui CRÉENT quelque chose — que le filtre gouverne.
+func syncProfs(ctx context.Context, q *Queries, c *collecte) error {
+	f := c.filtreProfs()
 
-	q := New(db)
-	var count, created, linked int
-	for _, p := range profs {
+	var count, created, linked, ecartes int
+	for _, p := range c.profs {
 		if p.Email == "" {
 			log.Printf("prof: PRCLE=%s sans email, ignoré", p.ExternalID)
 			continue
@@ -45,6 +45,12 @@ func SyncProfs(ctx context.Context, src source.Source, db *pgxpool.Pool) error {
 				return err
 			}
 			count++
+			continue
+		}
+
+		// Inconnu ET absent du planning : on n'ouvre rien.
+		if !f.retient(p.ExternalID) {
+			ecartes++
 			continue
 		}
 
@@ -76,6 +82,7 @@ func SyncProfs(ctx context.Context, src source.Source, db *pgxpool.Pool) error {
 		created++
 		count++
 	}
-	log.Printf("prof: %d profs synchronisés (%d créés, %d rattachés par email)", count, created, linked)
+	log.Printf("prof: %d profs synchronisés (%d créés, %d rattachés par email, %d écartés faute de créneau)",
+		count, created, linked, ecartes)
 	return nil
 }

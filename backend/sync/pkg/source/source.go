@@ -23,19 +23,23 @@ const Map = "webdfd"
 
 // Creneau regroupe les données utiles d'un créneau du planning amont,
 // quelle que soit la source qui l'a produit.
+//
+// Les tags JSON ne servent PAS à lire les sources — hfsql décode l'export dans
+// ses propres types puis convertit — mais à écrire le dump de diagnostic
+// (pkg/migration/dump.go), qu'ils rendent lisible et interrogeable à `jq`.
 type Creneau struct {
-	Plcle  string // identifiant stable du créneau (PL / PLCLEUNIK)
-	P0cle  string // promo (P0CLE / P0CLEUNIK)
-	Cocle  string // matière (COCLE / COCLEUNIK)
-	Grcle  string // groupe (GRCLE / GRCLEUNIK)
-	Prcle  string // identifiant stable du prof (PRCLE / PRCLEUNIK)
-	Cours  string // nom d'affichage de la matière (tronqué)
-	Groupe string // nom d'affichage du groupe
-	Date   string // AAAAMMJJ
-	HD     string // HHMM heure de début
-	HF     string // HHMM heure de fin
-	Salle  string // salle
-	Prof   string // nom d'affichage du professeur
+	Plcle  string `json:"plcle"`  // identifiant stable du créneau (PL / PLCLEUNIK)
+	P0cle  string `json:"p0cle"`  // promo (P0CLE / P0CLEUNIK)
+	Cocle  string `json:"cocle"`  // matière (COCLE / COCLEUNIK)
+	Grcle  string `json:"grcle"`  // groupe (GRCLE / GRCLEUNIK)
+	Prcle  string `json:"prcle"`  // identifiant stable du prof (PRCLE / PRCLEUNIK)
+	Cours  string `json:"cours"`  // nom d'affichage de la matière (tronqué)
+	Groupe string `json:"groupe"` // nom d'affichage du groupe
+	Date   string `json:"date"`   // AAAAMMJJ
+	HD     string `json:"hd"`     // HHMM heure de début
+	HF     string `json:"hf"`     // HHMM heure de fin
+	Salle  string `json:"salle"`  // salle
+	Prof   string `json:"prof"`   // nom d'affichage du professeur
 }
 
 // Promo est une promotion du référentiel amont.

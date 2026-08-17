@@ -1,11 +1,57 @@
-.PHONY: local deploy-local infra-local stop-infra migration-local cyber_note start-local stop-local build-local build-admin-local start-admin stop-admin build-eleve-local start-eleve stop-eleve db-to-code-local build-sync-local build-export-local start-sync stop-sync start-export stop-export
+.PHONY: local help-local release-local release-local-admin release-local-eleve release-local-sync release-local-export \
+        infra-local stop-infra migration-local cyber_note db-to-code-local \
+        build-local build-container-admin-local build-container-eleve-local build-container-sync-local build-container-export-local \
+        start-local start-admin start-eleve start-sync start-export \
+        stop-local stop-apps-local stop-admin stop-eleve stop-sync stop-export
 
 # Cherche dans la topologie PUIS dans les secrets. `-f2-` et non `-f2` : une
 # valeur contenant un « = » (padding base64) serait sinon tronquée en silence.
 _get_local=$(shell grep -h '^$(1)=' $(CONFIG_FILE_LOCAL) $(SECRETS_FILE_LOCAL) 2>/dev/null | head -1 | cut -d= -f2-)
 
-local:  infra-local migration-local cyber_note build-local  start-local
+# Remise à zéro complète : infra neuve, BD recréée, notes réimportées, puis
+# release-local. C'est le SEUL chemin local qui détruit des données — pour
+# reprendre le travail sans y toucher, `make release-local`.
+local: infra-local migration-local cyber_note release-local
 
+help-local:
+	@echo ""
+	@echo "Cycle complet"
+	@echo "  make local                  — remise à zéro (BD DÉTRUITE) + release-local"
+	@echo "  make release-local          — sqlc + build des 4 images + lancement"
+	@echo ""
+	@echo "Un seul service (sqlc + build + lancement)"
+	@echo "  make release-local-admin | -eleve | -sync | -export"
+	@echo ""
+	@echo "Étapes séparées"
+	@echo "  make db-to-code-local              — sqlc generate (exige les BD démarrées)"
+	@echo "  make build-local                   — build des 4 images"
+	@echo "  make build-container-admin-local   — build d'une seule image (idem eleve|sync|export)"
+	@echo "  make start-admin                   — lance l'image TELLE QU'ELLE EST, sans rebuild"
+	@echo "  make stop-admin / stop-apps-local  — arrête un service / les quatre"
+	@echo "  make stop-local                    — les quatre + l'infra Docker Compose"
+	@echo ""
+
+# ── Releases locales ──────────────────────────────────────────────────────────
+# Miroir de release-prod, sans push ni ansible : en local, « déployer » c'est
+# relancer le conteneur sur l'image qu'on vient de construire.
+#
+# db-to-code-local est appelé ICI, en frère des builds, et non en prérequis de
+# chacun d'eux — comme en prod, où db-to-code-prod couvre `sqlc generate` pour
+# les quatre modules d'un coup. Deux conséquences voulues :
+#   — enchaîné dans un même `make`, il ne tourne qu'une fois ;
+#   — les cibles build-* et start-* restent utilisables SEULES, infra éteinte,
+#     alors que db-to-code.sh exige PostgreSQL et MariaDB debout.
+release-local: db-to-code-local build-local start-local
+
+release-local-admin: db-to-code-local build-container-admin-local start-admin
+
+release-local-eleve: db-to-code-local build-container-eleve-local start-eleve
+
+release-local-sync: db-to-code-local build-container-sync-local start-sync
+
+# Pas de db-to-code : export-webdfd ne parle à aucune base, il lit des .FIC et
+# écrit du JSON. Même raison qu'en prod pour release-prod-export.
+release-local-export: build-container-export-local start-export
 
 #
 # ── Infra ─────────────────────────────────────────────────────────────────────
@@ -47,38 +93,78 @@ cyber_note:
 		$(call _get_local,MARIADB_DB) < $(INFRA_DIR)/bd_data/dump_cyber_notes.sql
 
 
-# ── Conteneurs locaux ─────────────────────────────────────────────────────────
+# ── Code ──────────────────────────────────────────────────────────────────────
 
-start-local: start-admin start-eleve start-sync start-export
+# Extrait le schéma des deux bases et régénère le code sqlc des quatre modules.
+# Exige PostgreSQL et MariaDB démarrés (`make infra-local`).
+db-to-code-local:
+	@echo "--- 🆕 gen code sqlc ---"
+	$(INFRA_DIR)/db-to-code.sh $(SECRETS_FILE_LOCAL)
 
-start-admin: fetch-freetsa-cert-if-missing build-admin-local
-	$(RUN_DIR)/start-admin-local.sh
+# ── Build ─────────────────────────────────────────────────────────────────────
 
-start-eleve: build-eleve-local
-	$(RUN_DIR)/start-eleve-local.sh
+# Aucune de ces cibles ne régénère le code sqlc : elles compilent ce qui est
+# dans l'arbre, infra éteinte, comme les build-container-*-prod. Après une
+# retouche de query.sql, passer par release-local[-<service>] — ou appeler
+# db-to-code-local à la main.
+#
+# Chaque build pose DEUX tags : rex-<service>:$(IMAGE_TAG) et rex-<service>
+# tout court. Les scripts de lancement utilisent le second : en local, le
+# dernier build gagne, là où la prod épingle une version (cf. IMAGE_TAG).
 
-stop-local: stop-admin stop-eleve stop-sync stop-export stop-infra
+build-local: build-container-admin-local build-container-eleve-local build-container-sync-local build-container-export-local
 
-build-local : build-admin-local build-eleve-local build-sync-local build-export-local
-
-build-admin-local: db-to-code-local
+build-container-admin-local:
 	$(RUN_DIR)/build-admin.sh local $(IMAGE_TAG)
 
-build-eleve-local: db-to-code-local
+build-container-eleve-local:
 	$(RUN_DIR)/build-eleve.sh local $(IMAGE_TAG)
 
-build-sync-local: db-to-code-local
+build-container-sync-local:
 	$(RUN_DIR)/build-sync.sh local $(IMAGE_TAG)
 
 # L'image embarque wine et le préfixe WinDev : premier build long (~590 Mo de
 # couche), les suivants réutilisent le cache tant que la version de wine ne
 # bouge pas. UID 1000 en local, celui du développeur.
-build-export-local:
+build-container-export-local:
 	$(RUN_DIR)/build-export-webdfd.sh local $(IMAGE_TAG) 1000
 
-db-to-code-local:
-	@echo "--- 🆕 gen code sqlc ---"
-	$(INFRA_DIR)/db-to-code.sh $(SECRETS_FILE_LOCAL)
+# ── Lancement ─────────────────────────────────────────────────────────────────
+
+# Les start-* ne construisent RIEN : ils lancent l'image locale telle qu'elle
+# est. C'est ce qui permet de redémarrer un service sans attendre un build (les
+# ~2 Go d'export-webdfd en particulier), au prix d'une image possiblement
+# périmée — release-local-<service> est le chemin qui garantit le contraire.
+#
+# Chaque script fait `docker rm -f` avant de lancer : rejouer un start-* équivaut
+# à un redémarrage, il n'y a pas de stop-* à intercaler.
+
+start-local: start-admin start-eleve start-sync start-export
+
+# Le certificat FreeTSA est monté au LANCEMENT (volume), pas embarqué dans
+# l'image : son prérequis est ici et non dans le build.
+start-admin: fetch-freetsa-cert-if-missing
+	$(RUN_DIR)/start-admin-local.sh
+
+start-eleve:
+	$(RUN_DIR)/start-eleve-local.sh
+
+start-sync:
+	$(RUN_DIR)/start-sync-local.sh
+
+# Démarré par `make local` bien que la source configurée soit peut-être webdfd :
+# le service tourne alors à vide, en attente d'un dépôt. C'est voulu — on veut
+# pouvoir éprouver la chaîne hfsql sans rien reconfigurer.
+start-export:
+	$(RUN_DIR)/start-export-local.sh
+
+# ── Arrêt ─────────────────────────────────────────────────────────────────────
+
+# Deux portées : les applications seules (l'infra reste debout, donc les BD
+# gardent leurs données et db-to-code-local continue de fonctionner), ou tout.
+stop-apps-local: stop-admin stop-eleve stop-sync stop-export
+
+stop-local: stop-apps-local stop-infra
 
 stop-admin:
 	@echo "--- 🛑 Arrêt du container admin ---"
@@ -88,21 +174,9 @@ stop-eleve:
 	@echo "--- 🛑 Arrêt du container élève ---"
 	docker rm -f $(ELEVE_CONTAINER) 2>/dev/null || true
 
-start-sync: build-sync-local
-	$(RUN_DIR)/start-sync-local.sh
-
 stop-sync:
 	@echo "--- 🛑 Arrêt du container sync ---"
 	docker rm -f $(SYNC_CONTAINER) 2>/dev/null || true
-
-# Démarré par `make local` bien que la source configurée soit peut-être webdfd :
-# le service tourne alors à vide, en attente d'un dépôt. C'est voulu — on veut
-# pouvoir éprouver la chaîne hfsql sans rien reconfigurer.
-#
-# Il coûte ~2 Go d'image et quelques minutes au PREMIER build (wine 32 bits et
-# wineboot) ; ensuite la couche est réutilisée, y compris à UID différent.
-start-export: build-export-local
-	$(RUN_DIR)/start-export-local.sh
 
 stop-export:
 	@echo "--- 🛑 Arrêt du container export-webdfd ---"

@@ -12,114 +12,121 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// SyncPlanning charge le planning de chaque promo connue depuis la source
-// amont, enrichit les noms de matières, et upserte groupes + matières.
+// syncPlanning écrit le planning collecté : matières, périodes, groupes,
+// séances, puis annulation des créneaux disparus de l'amont.
 //
-// Ordre : 1. Récupérer les noms complets des matières. 2. Pour chaque promo,
-// récupérer ses créneaux. 3. Déduplication puis upsert en base.
-func SyncPlanning(ctx context.Context, src source.Source, db *pgxpool.Pool, ac anneeCourante) error {
-	q := New(db)
+// Rend la liste des séances dont la couverture d'excuses doit être revue
+// (créées, rétablies, déplacées, ou dont l'effectif attendu a changé). Le
+// rattachement lui-même est fait plus tard, une fois eleve_groupe à jour — cf.
+// rattacherJustifications.
+func syncPlanning(ctx context.Context, q *Queries, c *collecte, ac anneeCourante, cycleStart pgtype.Timestamptz) ([]int64, error) {
 	annee := ac.Annee
 
-	// Relevé pris AVANT le premier UpsertSeanceMap : toute correspondance dont
-	// le last_seen_at lui est antérieur n'a pas été revue pendant ce cycle.
-	cycleStart := time.Now()
-
-	// --- 1. Noms complets des matières ---
-	coursNoms, err := src.CoursNoms()
-	if err != nil {
-		return err
-	}
-
-	// --- 2. Planning par promo ---
+	// Traduction des identifiants amont en identifiants internes : les
+	// promotions viennent d'être écrites, leur map est donc à jour.
 	promos, err := q.ListPromotionWebdfdIDs(ctx, annee)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	p0cleToPromoID := make(map[string]int64, len(promos))
+	for _, p := range promos {
+		p0cleToPromoID[p.ExternalID] = p.InternalID
 	}
 
-	// cocleToPromo: pour dériver la période, on veut savoir la promo de chaque COCLE.
-	// On prend la première promo vue pour un COCLE donné (simplification).
-	type cocleInfo struct {
-		displayName string
-		promoExtID  string
-		promoID     int64
-	}
-	type grcleInfo struct {
-		displayName string
-		promoID     int64
+	// --- Matières et périodes ---
+	cocleToMatiereID, err := syncMatieres(ctx, q, c, ac, p0cleToPromoID)
+	if err != nil {
+		return nil, err
 	}
 
-	cocles := make(map[string]cocleInfo)
-	grcles := make(map[string]grcleInfo)
+	// --- Groupes ---
+	grcleToGroupeID, err := syncGroupes(ctx, q, c, annee, p0cleToPromoID)
+	if err != nil {
+		return nil, err
+	}
 
-	// seanceKeys : clé "{cocle}_{date}_{hd}" → première occurrence de source.Creneau.
-	// Correspond à l'unicité (matiere_id, starts_at) dans public.seance.
-	seanceKeys := make(map[string]source.Creneau)
-
-	startAnnee := ac.Debut.Format("20060102")
-	endAnnee := ac.Fin.Format("20060102")
-
-	// promosOK : promos dont le flux a été récupéré SANS erreur. C'est la seule
-	// liste sur laquelle il est légitime d'annuler des séances — le `continue`
-	// ci-dessous laisse volontairement les autres de côté (cf. seancesPerimees).
-	promosOK := make(map[int64]bool, len(promos))
-
-	for _, promo := range promos {
-		entries, err := src.Planning(promo.ExternalID, startAnnee, endAnnee)
-		if err != nil {
-			log.Printf("planning: promo P0=%s inaccessible: %v — ignorée", promo.ExternalID, err)
+	// --- Résolution prof_id depuis prof_map ---
+	prcleToUserID := make(map[string]int32)
+	for _, e := range c.creneaux {
+		if e.Prcle == "" {
 			continue
 		}
-		promosOK[promo.InternalID] = true
-		for _, e := range entries {
-			if e.Cocle != "" && e.Cocle != "0" {
-				if _, seen := cocles[e.Cocle]; !seen {
-					cocles[e.Cocle] = cocleInfo{
-						displayName: e.Cours,
-						promoExtID:  e.P0cle,
-						promoID:     promo.InternalID,
-					}
-				}
-				if e.Plcle != "" {
-					seanceKeys[e.Plcle] = e
-				}
-			}
-			if e.Grcle != "" && e.Grcle != "0" {
-				if _, seen := grcles[e.Grcle]; !seen {
-					grcles[e.Grcle] = grcleInfo{
-						displayName: e.Groupe,
-						promoID:     promo.InternalID,
-					}
-				}
-			}
+		if _, already := prcleToUserID[e.Prcle]; already {
+			continue
+		}
+		uid, err := q.GetProfBySource(ctx, GetProfBySourceParams{Source: source.Map, ExternalID: e.Prcle})
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("prof_map: lookup PRCLE=%s depuis planning: %w", e.Prcle, err)
+		}
+		if err == nil {
+			prcleToUserID[e.Prcle] = uid
 		}
 	}
 
-	// --- 3. Année de chaque matière déduite de sa première séance ---
-	// On ne peut pas se contenter de l'année courante : une matière est rattachée
-	// à l'année (table public.annee) qui couvre la date de sa première séance.
-	cocleFirstSeance := firstSeanceByCocle(seanceKeys)
-	annees, err := q.ListAnnees(ctx)
+	// --- Séances ---
+	res, err := syncSeances(ctx, q, c, cocleToMatiereID, grcleToGroupeID, prcleToUserID, p0cleToPromoID)
+	log.Printf("planning: %d séances synchronisées, %d rétablies (annee=%d)", res.count, res.ressuscitees, annee)
+	if res.ecartesMatiere > 0 || res.ecartesHoraire > 0 {
+		log.Printf("planning: ATTENTION %d créneaux collectés n'ont pas produit de séance (%d matière inconnue, %d horaire illisible)",
+			res.ecartesMatiere+res.ecartesHoraire, res.ecartesMatiere, res.ecartesHoraire)
+	}
 	if err != nil {
-		return fmt.Errorf("annee: liste: %w", err)
+		return res.aRattacher, err
 	}
 
-	// --- 4. Upsert matières (construit cocleToMatiereID au passage) ---
-	cocleToMatiereID := make(map[string]int64, len(cocles))
-	mCount := 0
-	for cocleStr, info := range cocles {
+	// --- Séances disparues du planning amont ---
+	// `vus` porte TOUS les PL du flux, y compris ceux que syncSeances a écartés
+	// (matière inconnue, horaire illisible) : ils existent en amont, les
+	// annuler serait faux.
+	vus := make(map[string]struct{}, len(c.creneaux))
+	for plcle := range c.creneaux {
+		vus[plcle] = struct{}{}
+	}
+	// promosOK est indexé par P0 externe côté collecte ; seancesPerimees
+	// compare à seance.promotion_id, donc en interne.
+	promosOKInternes := make(map[int64]bool, len(c.promosOK))
+	for p0 := range c.promosOK {
+		if id, ok := p0cleToPromoID[p0]; ok {
+			promosOKInternes[id] = true
+		}
+	}
+
+	annulees, err := annulerSeancesDisparues(ctx, q, cycleStart, vus, promosOKInternes, ac.Debut, ac.Fin)
+	if err != nil {
+		return res.aRattacher, fmt.Errorf("planning: annulation des séances disparues: %w", err)
+	}
+	log.Printf("planning: %d séances annulées (absentes du planning amont, annee=%d)", annulees, annee)
+	return res.aRattacher, nil
+}
+
+// syncMatieres upserte les matières du planning et leur période, et rend la
+// table COCLE → matiere_id.
+func syncMatieres(ctx context.Context, q *Queries, c *collecte, ac anneeCourante, p0cleToPromoID map[string]int64) (map[string]int64, error) {
+	annee := ac.Annee
+
+	// L'année d'une matière est celle qui couvre sa première séance, et non
+	// mécaniquement l'année courante. En pratique les deux coïncident tant que
+	// la fenêtre interrogée est [ac.Debut, ac.Fin] ; le calcul ne sert que si
+	// une source rend des créneaux hors de la plage demandée.
+	cocleFirstSeance := firstSeanceByCocle(c.creneaux)
+	annees, err := q.ListAnnees(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("annee: liste: %w", err)
+	}
+
+	cocleToMatiereID := make(map[string]int64, len(c.cocles))
+	count := 0
+	for cocleStr, info := range c.cocles {
 		nom := info.displayName
-		if fullNom, ok := coursNoms[cocleStr]; ok {
+		if fullNom, ok := c.coursNoms[cocleStr]; ok {
 			nom = fullNom
 		}
 		if nom == "" {
 			continue
 		}
 
-		// Année rattachée à la première séance ; à défaut, année courante.
 		matAnnee := annee
 		if first, ok := cocleFirstSeance[cocleStr]; ok {
 			if ay, found := anneeForDate(annees, first); found {
@@ -129,19 +136,19 @@ func SyncPlanning(ctx context.Context, src source.Source, db *pgxpool.Pool, ac a
 
 		matiereID, err := q.GetMatiereBySource(ctx, GetMatiereBySourceParams{Source: source.Map, ExternalID: cocleStr, Annee: annee})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("matiere_map: lookup planning COCLE=%s: %w", cocleStr, err)
+			return nil, fmt.Errorf("matiere_map: lookup planning COCLE=%s: %w", cocleStr, err)
 		}
 		if err == nil {
 			if err = q.UpdateMatiereName(ctx, UpdateMatiereNameParams{Name: nom, ID: matiereID}); err != nil {
-				return err
+				return nil, err
 			}
 			if err = q.UpdateMatiereAnnee(ctx, UpdateMatiereAnneeParams{Annee: matAnnee, ID: matiereID}); err != nil {
-				return err
+				return nil, err
 			}
 		} else {
 			matiereID, err = q.CreateMatiere(ctx, CreateMatiereParams{Name: nom, Annee: matAnnee})
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 		if err = q.UpsertMatiereMap(ctx, UpsertMatiereMapParams{
@@ -150,33 +157,50 @@ func SyncPlanning(ctx context.Context, src source.Source, db *pgxpool.Pool, ac a
 			ExternalID: cocleStr,
 			Annee:      annee,
 		}); err != nil {
-			return err
+			return nil, err
 		}
 		cocleToMatiereID[cocleStr] = matiereID
 
-		// Période depuis le nom complet.
+		// Période depuis le nom complet, rattachée à la promo où le COCLE a été
+		// vu en premier. Pour un cours mutualisé, les autres promos n'auront
+		// donc pas d'effectif attendu — la collecte l'a signalé.
+		promoID, ok := p0cleToPromoID[info.promoExtID]
+		if !ok {
+			log.Printf("planning: COCLE=%s rattaché à la promo P0=%s inconnue en base, période ignorée", cocleStr, info.promoExtID)
+			count++
+			continue
+		}
 		pname, _ := semesterFromName(nom)
-		periodeID, err := q.UpsertPeriode(ctx, UpsertPeriodeParams{Name: pname, PromotionID: info.promoID, Annee: annee})
+		periodeID, err := q.UpsertPeriode(ctx, UpsertPeriodeParams{Name: pname, PromotionID: promoID, Annee: annee})
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if err = q.UpdateMatierePeriode(ctx, UpdateMatierePeriodeParams{
 			PeriodeID: pgtype.Int8{Int64: periodeID, Valid: true},
 			ID:        matiereID,
 		}); err != nil {
-			return err
+			return nil, err
 		}
-		mCount++
+		count++
 	}
-	log.Printf("planning: %d matières synchronisées depuis le planning (annee=%d)", mCount, annee)
+	log.Printf("planning: %d matières synchronisées depuis le planning (annee=%d)", count, annee)
+	return cocleToMatiereID, nil
+}
 
-	// --- 5. Upsert groupes (construit grcleToGroupeID au passage) ---
-	grcleToGroupeID := make(map[string]int64, len(grcles))
-	gCount := 0
-	for grcleStr, info := range grcles {
+// syncGroupes upserte les groupes du planning et rend la table GRCLE → groupe_id.
+func syncGroupes(ctx context.Context, q *Queries, c *collecte, annee int32, p0cleToPromoID map[string]int64) (map[string]int64, error) {
+	grcleToGroupeID := make(map[string]int64, len(c.grcles))
+	count := 0
+	for grcleStr, info := range c.grcles {
+		promoID, ok := p0cleToPromoID[info.promoExtID]
+		if !ok {
+			log.Printf("planning: GRCLE=%s rattaché à la promo P0=%s inconnue en base, groupe ignoré", grcleStr, info.promoExtID)
+			continue
+		}
+
 		groupeID, err := q.GetGroupeBySource(ctx, GetGroupeBySourceParams{Source: source.Map, ExternalID: grcleStr, Annee: annee})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("groupe_map: lookup planning GRCLE=%s: %w", grcleStr, err)
+			return nil, fmt.Errorf("groupe_map: lookup planning GRCLE=%s: %w", grcleStr, err)
 		}
 		nom := info.displayName
 		if nom == "" {
@@ -187,15 +211,15 @@ func SyncPlanning(ctx context.Context, src source.Source, db *pgxpool.Pool, ac a
 				Name: pgtype.Text{String: nom, Valid: true},
 				ID:   groupeID,
 			}); err != nil {
-				return err
+				return nil, err
 			}
 		} else {
 			groupeID, err = q.CreateGroupe(ctx, CreateGroupeParams{
 				Name:    pgtype.Text{String: nom, Valid: true},
-				PromoID: info.promoID,
+				PromoID: promoID,
 			})
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 		if err = q.UpsertGroupeMap(ctx, UpsertGroupeMapParams{
@@ -204,53 +228,13 @@ func SyncPlanning(ctx context.Context, src source.Source, db *pgxpool.Pool, ac a
 			ExternalID: grcleStr,
 			Annee:      annee,
 		}); err != nil {
-			return err
+			return nil, err
 		}
 		grcleToGroupeID[grcleStr] = groupeID
-		gCount++
+		count++
 	}
-	log.Printf("planning: %d groupes synchronisés depuis le planning (annee=%d)", gCount, annee)
-
-	// --- 6. Résolution prof_id depuis prof_map ---
-	prcleToUserID := make(map[string]int32)
-	for _, e := range seanceKeys {
-		if e.Prcle == "" {
-			continue
-		}
-		if _, already := prcleToUserID[e.Prcle]; already {
-			continue
-		}
-		uid, err := q.GetProfBySource(ctx, GetProfBySourceParams{Source: source.Map, ExternalID: e.Prcle})
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("prof_map: lookup PRCLE=%s depuis planning: %w", e.Prcle, err)
-		}
-		if err == nil {
-			prcleToUserID[e.Prcle] = uid
-		}
-	}
-
-	// --- 7. Upsert séances ---
-	sCount, ressuscitees, sErr := syncSeances(ctx, q, seanceKeys, cocleToMatiereID, grcleToGroupeID, prcleToUserID, promos)
-	log.Printf("planning: %d séances synchronisées, %d rétablies (annee=%d)", sCount, ressuscitees, annee)
-	if sErr != nil {
-		return sErr
-	}
-
-	// --- 8. Séances disparues du planning amont ---
-	// Après l'upsert : les créneaux encore présents viennent d'y rafraîchir leur
-	// last_seen_at. `vus` porte TOUS les PL du flux, y compris ceux que
-	// syncSeances a écartés (matière inconnue, horaire illisible) : ils existent
-	// en amont, les annuler serait faux.
-	vus := make(map[string]struct{}, len(seanceKeys))
-	for plcle := range seanceKeys {
-		vus[plcle] = struct{}{}
-	}
-	annulees, err := annulerSeancesDisparues(ctx, q, cycleStart, vus, promosOK, ac.Debut, ac.Fin)
-	if err != nil {
-		return fmt.Errorf("planning: annulation des séances disparues: %w", err)
-	}
-	log.Printf("planning: %d séances annulées (absentes du planning amont, annee=%d)", annulees, annee)
-	return nil
+	log.Printf("planning: %d groupes synchronisés depuis le planning (annee=%d)", count, annee)
+	return grcleToGroupeID, nil
 }
 
 // parisLoc est chargé une fois ; l'UTC est utilisé en fallback si la timezone est indisponible.
@@ -272,34 +256,47 @@ func parsePlanningTime(date, hhmm string) (time.Time, bool) {
 	return t, err == nil
 }
 
+// resultatSeances porte le bilan d'un passage de syncSeances.
+type resultatSeances struct {
+	count        int
+	ressuscitees int
+	// aRattacher : séances dont la couverture d'excuses doit être recalculée.
+	aRattacher []int64
+	// Créneaux présents en amont mais non transformés en séance. Comptés même
+	// sans dump : un écart entre les créneaux collectés et les séances écrites
+	// doit toujours apparaître au journal, jamais seulement dans un fichier de
+	// diagnostic qu'il faut penser à activer.
+	ecartesMatiere int
+	ecartesHoraire int
+}
+
 // syncSeances synchronise chaque créneau amont (identifié par PL = plcle stable)
 // dans public.seance + migration.seance_map.
 // Schéma : lookup seance_map par PL → trouvé : UPDATE ; absent : INSERT.
-//
-// Retourne le nombre de séances traitées et, parmi elles, celles qui étaient
-// annulées et que l'UPDATE vient de rétablir.
 func syncSeances(
 	ctx context.Context,
 	q *Queries,
-	seanceKeys map[string]source.Creneau,
+	c *collecte,
 	cocleToMatiereID map[string]int64,
 	grcleToGroupeID map[string]int64,
 	prcleToUserID map[string]int32,
-	promos []ListPromotionWebdfdIDsRow,
-) (int, int, error) {
-	p0cleToPromoID := make(map[string]int64, len(promos))
-	for _, p := range promos {
-		p0cleToPromoID[p.ExternalID] = p.InternalID
-	}
+	p0cleToPromoID map[string]int64,
+) (resultatSeances, error) {
+	var res resultatSeances
 
-	var count, ressuscitees int
-	for plcle, e := range seanceKeys {
+	for plcle, e := range c.creneaux {
 		matiereID, ok := cocleToMatiereID[e.Cocle]
 		if !ok {
+			// Le COCLE n'a pas produit de matière : nom vide côté amont, ou
+			// promotion de rattachement inconnue (cf. syncMatieres).
+			c.rejeter(rejetMatiereInconnue, e.P0cle, "COCLE="+e.Cocle, e)
+			res.ecartesMatiere++
 			continue
 		}
 		startsAt, ok := parsePlanningTime(e.Date, e.HD)
 		if !ok {
+			c.rejeter(rejetHoraireIllisble, e.P0cle, "date="+e.Date+" HD="+e.HD, e)
+			res.ecartesHoraire++
 			continue
 		}
 		var endsAt pgtype.Timestamptz
@@ -314,17 +311,25 @@ func syncSeances(
 		if v := grcleToGroupeID[e.Grcle]; v != 0 {
 			groupeID = pgtype.Int8{Int64: v, Valid: true}
 		}
-		salle := pgtype.Text{String: e.Salle, Valid: e.Salle != ""}
-		prof := pgtype.Text{String: e.Prof, Valid: e.Prof != ""}
 		var profID pgtype.Int4
 		if uid, found := prcleToUserID[e.Prcle]; found {
 			profID = pgtype.Int4{Int32: uid, Valid: true}
 		}
+		salle := pgtype.Text{String: e.Salle, Valid: e.Salle != ""}
+		prof := pgtype.Text{String: e.Prof, Valid: e.Prof != ""}
 		startsAtPg := pgtype.Timestamptz{Time: startsAt, Valid: true}
+
+		// grcleVide / prcleVide distinguent « l'amont dit qu'il n'y a pas de
+		// groupe / de prof » de « on n'a pas su le résoudre ». Sans cette
+		// distinction, un prof sans email suffisait à désaffecter toutes ses
+		// séances, et un GRCLE inconnu à élargir l'effectif attendu de la
+		// séance à la promotion entière.
+		grcleVide := e.Grcle == "" || e.Grcle == "0"
+		prcleVide := e.Prcle == ""
 
 		seanceID, err := q.GetSeanceBySource(ctx, GetSeanceBySourceParams{Source: source.Map, ExternalID: plcle})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return count, ressuscitees, fmt.Errorf("seance_map: lookup PL=%s: %w", plcle, err)
+			return res, fmt.Errorf("seance_map: lookup PL=%s: %w", plcle, err)
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			seanceID, err = q.CreateSeance(ctx, CreateSeanceParams{
@@ -337,9 +342,15 @@ func syncSeances(
 				GroupeID:    groupeID,
 				ProfID:      profID,
 			})
+			if err != nil {
+				return res, err
+			}
+			// Une séance neuve est toujours à rattacher : une excuse saisie
+			// avant sa création couvrirait sinon une plage où elle n'existait
+			// pas encore.
+			res.aRattacher = append(res.aRattacher, seanceID)
 		} else {
-			var ressuscitee bool
-			ressuscitee, err = q.UpdateSeance(ctx, UpdateSeanceParams{
+			row, err := q.UpdateSeance(ctx, UpdateSeanceParams{
 				SeanceID:    seanceID,
 				MatiereID:   matiereID,
 				StartsAt:    startsAtPg,
@@ -348,44 +359,38 @@ func syncSeances(
 				Prof:        prof,
 				PromotionID: promoID,
 				GroupeID:    groupeID,
+				GrcleVide:   grcleVide,
 				ProfID:      profID,
+				PrcleVide:   prcleVide,
 			})
-			if ressuscitee {
-				ressuscitees++
+			if err != nil {
+				return res, err
 			}
-		}
-		if err != nil {
-			return count, ressuscitees, err
-		}
-		// Rattrapage de la couverture des excuses : une séance créée (ou
-		// déplacée) après la saisie d'une excuse tomberait sinon hors de sa
-		// couverture, silencieusement. Idempotent (ON CONFLICT DO NOTHING).
-		//
-		// L'inverse n'est pas traité : une séance déplacée HORS d'une plage
-		// couverte y reste rattachée — justification_seance est append-only, on
-		// ne retire jamais une ligne. Le cas est marginal et la correction
-		// passe par la modification de l'excuse, qui recalcule sa couverture.
-		if err = q.AttacherJustificationsSeance(ctx, seanceID); err != nil {
-			return count, ressuscitees, fmt.Errorf("justification_seance: séance %d: %w", seanceID, err)
+			if row.Ressuscitee {
+				res.ressuscitees++
+			}
+			if row.Rattacher {
+				res.aRattacher = append(res.aRattacher, seanceID)
+			}
 		}
 		if err = q.UpsertSeanceMap(ctx, UpsertSeanceMapParams{
 			InternalID: seanceID,
 			Source:     source.Map,
 			ExternalID: plcle,
 		}); err != nil {
-			return count, ressuscitees, err
+			return res, err
 		}
-		count++
+		res.count++
 	}
-	return count, ressuscitees, nil
+	return res, nil
 }
 
 // firstSeanceByCocle parcourt les créneaux collectés et retourne, par COCLE
 // (matière amont), l'horaire de début de la première séance rencontrée.
 // Les créneaux dont la date/heure est illisible sont ignorés.
-func firstSeanceByCocle(seanceKeys map[string]source.Creneau) map[string]time.Time {
+func firstSeanceByCocle(creneaux map[string]source.Creneau) map[string]time.Time {
 	first := make(map[string]time.Time)
-	for _, e := range seanceKeys {
+	for _, e := range creneaux {
 		if e.Cocle == "" || e.Cocle == "0" {
 			continue
 		}

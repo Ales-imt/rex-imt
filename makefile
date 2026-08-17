@@ -28,7 +28,7 @@ EXPORT_CONTAINER=rex-export-webdfd
 # une mise en production devient un changement de version tracé dans ce fichier,
 # et non un redémarrage qui ramasse ce qui traîne au bout du tag `latest`.
 # Déployer = bumper IMAGE_TAG, `make release-prod`.
-IMAGE_TAG ?= 0.1.0
+IMAGE_TAG ?= 0.0.1
 
 include makefile.local
 include makefile.prod
@@ -37,7 +37,9 @@ include makefile.prod
 
 all:
 	@echo ""
-	@echo "Usage : make local — déploiement local"
+	@echo "Usage : make local — déploiement local (BD remise à zéro)"
+	@echo "        make release-local — build et lancement local, sans toucher aux BD"
+	@echo "        make help-local — détail des cibles locales (par service, par étape)"
 	@echo "        make first-deploy-prod  — déploiement production avec supression BD "
 	@echo "        make release-prod  — déploiement production"
 	@echo "        make fetch-freetsa-cert — télécharge le certificat racine FreeTSA"

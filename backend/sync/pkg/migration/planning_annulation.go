@@ -34,7 +34,7 @@ type seanceCandidate struct {
 //   - séance hors de la plage réellement interrogée [debut, fin] → intacte,
 //     car le cycle n'a rien demandé à son sujet ;
 //   - créneau revu pendant ce cycle → intact, même si last_seen_at le fait
-//     paraître périmé (décalage d'horloge entre l'application et la base).
+//     paraître périmé.
 func seancesPerimees(
 	candidates []seanceCandidate,
 	vus map[string]struct{},
@@ -45,6 +45,12 @@ func seancesPerimees(
 		return nil
 	}
 
+	// `fin` vient de public.annee.fin, une `date` : elle arrive donc à minuit.
+	// Comparée telle quelle, elle exclurait toutes les séances du dernier jour
+	// de l'année scolaire, qui ne seraient jamais annulables. La borne est
+	// portée à la fin de ce jour.
+	finInclusive := fin.AddDate(0, 0, 1)
+
 	var ids []int64
 	for _, c := range candidates {
 		if _, revu := vus[c.plcle]; revu {
@@ -53,7 +59,7 @@ func seancesPerimees(
 		if !promosOK[c.promoID] {
 			continue
 		}
-		if !c.hasStart || c.startsAt.Before(debut) || c.startsAt.After(fin) {
+		if !c.hasStart || c.startsAt.Before(debut) || !c.startsAt.Before(finInclusive) {
 			continue
 		}
 		ids = append(ids, c.id)
@@ -64,15 +70,22 @@ func seancesPerimees(
 // annulerSeancesDisparues confronte les séances webdfd non revues de ce cycle
 // aux promos effectivement récupérées, puis marque les périmées.
 // Retourne le nombre de séances annulées.
+//
+// cycleStart est l'horloge de la BASE, prise au début de la transaction
+// d'écriture (cf. Queries.Now). Le cycle s'exécutant tout entier dans cette
+// transaction, la requête voit ses propres écritures : les créneaux revus
+// portent déjà last_seen_at = now() = cycleStart et sont exclus par le
+// prédicat `<`, sans que la moindre dérive d'horloge entre l'application et le
+// serveur n'entre en jeu.
 func annulerSeancesDisparues(
 	ctx context.Context,
 	q *Queries,
-	cycleStart time.Time,
+	cycleStart pgtype.Timestamptz,
 	vus map[string]struct{},
 	promosOK map[int64]bool,
 	debut, fin time.Time,
 ) (int64, error) {
-	rows, err := q.ListSeancesWebdfdNonVues(ctx, pgtype.Timestamptz{Time: cycleStart, Valid: true})
+	rows, err := q.ListSeancesWebdfdNonVues(ctx, cycleStart)
 	if err != nil {
 		return 0, err
 	}
