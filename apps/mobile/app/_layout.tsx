@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
+import { EcranAttente } from '@/components/ecran-attente';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AgoraProvider } from '@/hooks/use-agora';
 import { useSession } from '@/hooks/use-session';
@@ -60,17 +61,32 @@ export function RootLayout() {
     document.body.style.backgroundColor = color;
   }, [colorScheme]);
 
+  // Tant que la validité du jeton n'est pas tranchée, l'application n'est pas
+  // montée du tout : ni écran protégé — qui peindrait le contenu de la session
+  // précédente et lancerait ses requêtes avant de se faire éjecter par un 401 —
+  // ni formulaire de connexion, qui clignoterait sous les yeux d'un utilisateur
+  // parfaitement connecté. Le navigateur n'entre en scène qu'une fois la
+  // réponse connue, et monte alors directement le bon écran.
+  if (session === 'inconnue') {
+    return (
+      <AgoraProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <EcranAttente />
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </AgoraProvider>
+    );
+  }
+
   return (
     <AgoraProvider>
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
-        {/* Écrans exigeant une session. Un chargement à froid sur l'un d'eux
-            sans jeton ne les monte pas : rien n'est peint, aucune requête ne
-            part. La garde ne se ferme que sur un état CONNU comme fermé —
-            'inconnue' laisse passer, sans quoi le rendu statique du web et la
-            lecture asynchrone du natif rejetteraient une session valide. */}
-        <Stack.Protected guard={session !== 'fermee'}>
+        {/* Écrans exigeant une session. Ici l'état est forcément tranché
+            (l'écran d'attente couvre 'inconnue') : sans session ils ne sont pas
+            montés, donc rien n'est peint et aucune requête ne part. */}
+        <Stack.Protected guard={session === 'ouverte'}>
           <Stack.Screen name="chat" options={{ title: 'Chat', headerBackVisible: false, headerLeft: () => null }} />
           <Stack.Screen name="agora" options={{ title: 'Agora', headerBackVisible: false, headerLeft: () => null }} />
           <Stack.Screen name="notes" options={{ title: 'Notes', headerBackVisible: false, headerLeft: () => null }} />

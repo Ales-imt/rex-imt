@@ -1,11 +1,11 @@
-import { Colors } from '@/constants/theme';
+import { LogoRex } from '@/components/logo-rex';
+import { Colors, PRIMARY } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { login, requestEmailCode, verifyEmailCode, type LoginResponse } from '@/services/auth';
 import { apiInstance } from '@/services/api';
-import { useSession } from '@/hooks/use-session';
-import { etatSessionCourant, getPseudo, saveRoles, saveTokens, type EtatSession } from '@/services/tokens';
+import { etatSessionCourant, getPseudo, saveRoles, saveTokens } from '@/services/tokens';
 import { Redirect, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -17,8 +17,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const PRIMARY = '#1976d2';
 
 // Domaine interne (LDAP) : mines-ales.fr et ses sous-domaines (etu.mines-ales.fr, ...).
 // Purement indicatif côté front — le backend ne fait jamais confiance à ce
@@ -91,13 +89,9 @@ export default function SignInScreen() {
   // Session telle qu'elle était à L'ARRIVÉE sur cet écran, et non telle
   // qu'elle est : une session qui s'ouvre pendant qu'on y est, c'est le login
   // lui-même, qui choisit sa destination (pseudo-setup, à-propos, programme)
-  // et ne doit pas être doublé par une redirection. La première valeur connue
-  // fait foi — elle arrive au montage sur web, un instant plus tard sur natif.
-  const session = useSession();
-  const [sessionArrivee, setSessionArrivee] = useState<EtatSession>(() => etatSessionCourant());
-  useEffect(() => {
-    if (sessionArrivee === 'inconnue' && session !== 'inconnue') setSessionArrivee(session);
-  }, [sessionArrivee, session]);
+  // et ne doit pas être doublé par une redirection. L'état est forcément
+  // tranché ici : le RootLayout ne monte cet écran qu'après vérification.
+  const [sessionArrivee] = useState(() => etatSessionCourant());
 
   const dynamicStyles = useMemo(() => StyleSheet.create({
     page: { backgroundColor: colors.pageBg },
@@ -202,9 +196,7 @@ export default function SignInScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={[styles.card, dynamicStyles.card]}>
             <View style={styles.logoContainer}>
-              <View style={styles.logo}>
-                <Text style={styles.logoText}>A</Text>
-              </View>
+              <LogoRex />
             </View>
 
             <Text style={[styles.title, { color: colors.textPrimary }]}>Connexion</Text>
@@ -320,19 +312,6 @@ const styles = StyleSheet.create({
   logoContainer: {
     alignItems: 'center',
     marginBottom: 16,
-  },
-  logo: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: PRIMARY,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '700',
   },
   title: {
     fontSize: 22,

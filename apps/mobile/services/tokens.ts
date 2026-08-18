@@ -31,43 +31,33 @@ const storage = {
 // SecureStore ne notifient de leurs changements : l'état est donc tenu ici, au
 // seul endroit qui écrit les jetons.
 //
-// 'inconnue' n'est pas 'fermee' : c'est « pas encore lu ». La distinction est
-// vitale — le rendu statique du web (web.output = 'static') comme le stockage
-// asynchrone du natif produisent cet état, et le confondre avec une absence de
-// session éjecterait vers le login des utilisateurs parfaitement connectés.
+// 'inconnue' n'est pas 'fermee' : c'est « pas encore tranché ». La distinction
+// est vitale — c'est l'état du démarrage, celui pendant lequel le RootLayout
+// n'affiche que l'écran d'attente, et le confondre avec une absence de session
+// éjecterait vers le login des utilisateurs parfaitement connectés.
+//
+// Cet état n'est levé que par verifierSession() (services/session.ts) : la
+// présence d'un jeton dans le stockage ne suffit pas à conclure 'ouverte', un
+// jeton pouvant être expiré ou sa session révoquée côté serveur.
 export type EtatSession = 'inconnue' | 'ouverte' | 'fermee';
 
 let etatSession: EtatSession = 'inconnue';
 const abonnesSession = new Set<() => void>();
 
-function publierSession(etat: EtatSession): void {
+export function publierSession(etat: EtatSession): void {
   if (etat === etatSession) return;
   etatSession = etat;
   abonnesSession.forEach(cb => cb());
 }
 
-/**
- * État courant. Côté navigateur, il est lu paresseusement dans localStorage au
- * premier appel : lecture synchrone, donc session connue dès le premier rendu
- * client. Pendant le rendu statique (Node, pas de localStorage) et sur natif,
- * il reste 'inconnue' jusqu'à resoudreSession().
- */
+/** État courant, lisible pendant le rendu (cf. hooks/use-session.ts). */
 export function etatSessionCourant(): EtatSession {
-  if (etatSession === 'inconnue' && Platform.OS === 'web' && typeof localStorage !== 'undefined') {
-    etatSession = localStorage.getItem(ACCESS_KEY) ? 'ouverte' : 'fermee';
-  }
   return etatSession;
 }
 
 export function abonnerSession(cb: () => void): () => void {
   abonnesSession.add(cb);
   return () => { abonnesSession.delete(cb); };
-}
-
-/** Lève l'état 'inconnue' du natif, où le stockage sécurisé est asynchrone. */
-export async function resoudreSession(): Promise<void> {
-  if (etatSessionCourant() !== 'inconnue') return;
-  publierSession((await storage.getItem(ACCESS_KEY)) ? 'ouverte' : 'fermee');
 }
 
 export function generateUUID(): string {

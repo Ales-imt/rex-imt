@@ -1,4 +1,5 @@
-import { abonnerSession, etatSessionCourant, resoudreSession, type EtatSession } from '@/services/tokens';
+import { verifierSession } from '@/services/session';
+import { abonnerSession, etatSessionCourant, type EtatSession } from '@/services/tokens';
 import { useEffect, useSyncExternalStore } from 'react';
 
 /**
@@ -10,11 +11,13 @@ import { useEffect, useSyncExternalStore } from 'react';
  * ne soit monté, au lieu de le démonter après coup.
  *
  * Le troisième argument est le snapshot du rendu statique : il y renvoie
- * 'inconnue', l'état étant illisible hors du navigateur.
+ * 'inconnue', l'état étant illisible hors du navigateur — le HTML statique est
+ * donc celui de l'écran d'attente, et non celui du formulaire de connexion.
  */
 export function useSession(): EtatSession {
   const etat = useSyncExternalStore(abonnerSession, etatSessionCourant, () => 'inconnue' as EtatSession);
-  // Sur natif, la première lecture est asynchrone ; sur web, no-op.
-  useEffect(() => { void resoudreSession(); }, []);
+  // Lève l'état 'inconnue' du démarrage : lecture du stockage puis contrôle du
+  // jeton auprès du serveur. Idempotent, quel que soit le nombre d'appelants.
+  useEffect(() => { void verifierSession(); }, []);
   return etat;
 }

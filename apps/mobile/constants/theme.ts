@@ -8,6 +8,10 @@ import { Platform } from 'react-native';
 const tintColorLight = '#0a7ea4';
 const tintColorDark = '#fff';
 
+// Bleu de la marque : logo et actions principales, identique en clair et en
+// sombre. Partagé par l'écran de connexion et l'écran d'attente.
+export const PRIMARY = '#1976d2';
+
 export const Colors = {
   light: {
     text: '#11181C',

@@ -36,8 +36,17 @@ function setupAxiosInterceptors() {
       if (current) {
         config.headers.Authorization = `Bearer ${current}`;
       }
-    } catch {
-      await clearTokens();
+    } catch (e) {
+      // Seul un refus du serveur (4xx : jeton de renouvellement inconnu,
+      // révoqué, compte banni) clôt la session. Une panne réseau ne dit rien
+      // de sa validité : effacer les jetons renverrait au login un utilisateur
+      // valide passé hors ligne. La requête part alors sans en-tête, échoue,
+      // et sera rejouée plus tard — c'est réversible, la déconnexion non.
+      const statut = axios.isAxiosError(e) ? e.response?.status : undefined;
+      const panneReseau = axios.isAxiosError(e) && !e.response;
+      if (!panneReseau && (statut === undefined || statut < 500)) {
+        await clearTokens();
+      }
     }
     return config;
   });
