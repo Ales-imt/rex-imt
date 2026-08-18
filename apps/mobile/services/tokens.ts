@@ -24,6 +24,52 @@ const storage = {
   },
 };
 
+// ─── État de session observable ─────────────────────────────────────────────
+//
+// La garde de navigation (cf. app/_layout.tsx) doit savoir s'il existe une
+// session AVANT qu'un écran protégé ne soit monté. Ni localStorage ni
+// SecureStore ne notifient de leurs changements : l'état est donc tenu ici, au
+// seul endroit qui écrit les jetons.
+//
+// 'inconnue' n'est pas 'fermee' : c'est « pas encore lu ». La distinction est
+// vitale — le rendu statique du web (web.output = 'static') comme le stockage
+// asynchrone du natif produisent cet état, et le confondre avec une absence de
+// session éjecterait vers le login des utilisateurs parfaitement connectés.
+export type EtatSession = 'inconnue' | 'ouverte' | 'fermee';
+
+let etatSession: EtatSession = 'inconnue';
+const abonnesSession = new Set<() => void>();
+
+function publierSession(etat: EtatSession): void {
+  if (etat === etatSession) return;
+  etatSession = etat;
+  abonnesSession.forEach(cb => cb());
+}
+
+/**
+ * État courant. Côté navigateur, il est lu paresseusement dans localStorage au
+ * premier appel : lecture synchrone, donc session connue dès le premier rendu
+ * client. Pendant le rendu statique (Node, pas de localStorage) et sur natif,
+ * il reste 'inconnue' jusqu'à resoudreSession().
+ */
+export function etatSessionCourant(): EtatSession {
+  if (etatSession === 'inconnue' && Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+    etatSession = localStorage.getItem(ACCESS_KEY) ? 'ouverte' : 'fermee';
+  }
+  return etatSession;
+}
+
+export function abonnerSession(cb: () => void): () => void {
+  abonnesSession.add(cb);
+  return () => { abonnesSession.delete(cb); };
+}
+
+/** Lève l'état 'inconnue' du natif, où le stockage sécurisé est asynchrone. */
+export async function resoudreSession(): Promise<void> {
+  if (etatSessionCourant() !== 'inconnue') return;
+  publierSession((await storage.getItem(ACCESS_KEY)) ? 'ouverte' : 'fermee');
+}
+
 export function generateUUID(): string {
   const bytes = Crypto.getRandomValues(new Uint8Array(16));
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
@@ -93,6 +139,7 @@ export async function getOrCreatePseudo(): Promise<string> {
 export async function saveTokens(access: string, refresh: string): Promise<void> {
   await storage.setItem(ACCESS_KEY, access);
   await storage.setItem(REFRESH_KEY, refresh);
+  publierSession('ouverte');
 }
 
 export async function getAccessToken(): Promise<string | null> {
@@ -129,6 +176,7 @@ export async function clearTokens(): Promise<void> {
   // échec de rafraîchissement) : le cache du planning part avec elle, sans quoi
   // le compte suivant sur l'appareil verrait le planning du précédent.
   viderProgrammeCache();
+  publierSession('fermee');
 }
 
 export function isExpiringSoon(token: string, thresholdSec = 30): boolean {

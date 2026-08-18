@@ -1,5 +1,5 @@
 import { useTheme } from '@/hooks/use-theme';
-import { apiInstance, setupAxiosInterceptors } from '@/services/api';
+import { apiInstance } from '@/services/api';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -134,7 +134,6 @@ export default function SeanceDetailScreen() {
   // ouverte ; tout est nettoyé à la perte de focus.
   useFocusEffect(
     useCallback(() => {
-      setupAxiosInterceptors();
       chargerPresence();
       if (!closed) {
         presenceTimer.current = setInterval(chargerPresence, 5_000);

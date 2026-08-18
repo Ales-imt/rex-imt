@@ -389,6 +389,10 @@ export const ProgrammeScreen = () => {
       .get<ApiCours[]>(`/programme?start=${start}&end=${end}`)
       .then(res => {
         if (!active) return;
+        // Une requête qui aboutit efface l'erreur : sans cela, un échec
+        // resterait affiché jusqu'au prochain changement de semaine, même
+        // après que le sondage a rechargé un planning correct.
+        setError('');
         const data = res.data ?? [];
         ecrireProgrammeCache(weekStart, data);
         if (JSON.stringify(data) !== JSON.stringify(coursRef.current)) {
@@ -473,7 +477,7 @@ export const ProgrammeScreen = () => {
 
           {loading ? (
             <ActivityIndicator color={colors.tint} style={{ marginTop: 20 }} />
-          ) : error ? (
+          ) : error && cours.length === 0 ? (
             <Text style={[styles.empty, { color: 'red' }]}>{error}</Text>
           ) : dayEvents.length === 0 ? (
             <Text style={[styles.empty, { color: colors.textSecondary }]}>Aucun cours ce jour</Text>

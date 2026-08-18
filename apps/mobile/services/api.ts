@@ -7,7 +7,6 @@ export const apiInstance = axios.create({
   baseURL: API_BASE,
 });
 
-let axiosInit = false;
 let refreshPromise: Promise<void> | null = null;
 
 async function doRefresh(): Promise<void> {
@@ -17,9 +16,13 @@ async function doRefresh(): Promise<void> {
   await saveTokens(res.data.accessToken, res.data.refreshToken);
 }
 
-export function setupAxiosInterceptors() {
-  if (axiosInit) return;
-
+// Intercepteurs posés à l'import du module, et non depuis un effet d'écran :
+// React vide les effets des enfants avant ceux du parent, si bien qu'un écran
+// monté à froid lançait sa requête avant que le RootLayout n'ait installé quoi
+// que ce soit — donc sans Authorization, donc 401 sur une session valide.
+// L'import précède forcément le premier appel, l'ordre de montage n'entre plus
+// en jeu. Poser un intercepteur n'a pas d'autre effet de bord.
+function setupAxiosInterceptors() {
   apiInstance.interceptors.request.use(async (config) => {
     try {
       const token = await getAccessToken();
@@ -50,5 +53,6 @@ export function setupAxiosInterceptors() {
     }
   );
 
-  axiosInit = true;
 }
+
+setupAxiosInterceptors();

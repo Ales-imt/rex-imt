@@ -2,7 +2,7 @@ import { HeaderMenu } from '@/components/header-menu';
 import { ZenBackground } from '@/components/zen-background';
 import { useNavMenu } from '@/hooks/use-nav-menu';
 import { useTheme } from '@/hooks/use-theme';
-import { apiInstance, setupAxiosInterceptors } from '@/services/api';
+import { apiInstance } from '@/services/api';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -130,7 +130,6 @@ export const NotesScreen = () => {
     const [error, setError] = useState('');
 
     useEffect(() => {
-        setupAxiosInterceptors();
         apiInstance
             .get<Periode[]>('/note')
             .then(res => setPeriodes((res.data ?? []).reverse()))

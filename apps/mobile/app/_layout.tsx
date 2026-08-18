@@ -1,17 +1,26 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AgoraProvider } from '@/hooks/use-agora';
-import { setupAxiosInterceptors } from '@/services/api';
+import { useSession } from '@/hooks/use-session';
 
 export function RootLayout() {
   const colorScheme = useColorScheme();
+  const session = useSession();
+  const pathname = usePathname();
+  const router = useRouter();
 
-  useEffect(() => { setupAxiosInterceptors(); }, []);
+  // Retirer l'écran du navigateur suffit à ne pas le peindre, mais l'URL, elle,
+  // reste sur la route protégée : ce recalage ramène explicitement au login.
+  // L'intercepteur 401 (services/api.ts) reste le filet pour une session qui
+  // expire en cours d'usage — ici on ne traite que l'absence de session.
+  useEffect(() => {
+    if (session === 'fermee' && pathname !== '/') router.replace('/');
+  }, [session, pathname, router]);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -56,16 +65,23 @@ export function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="chat" options={{ title: 'Chat', headerBackVisible: false, headerLeft: () => null }} />
-        <Stack.Screen name="agora" options={{ title: 'Agora', headerBackVisible: false, headerLeft: () => null }} />
-        <Stack.Screen name="notes" options={{ title: 'Notes', headerBackVisible: false, headerLeft: () => null }} />
-        <Stack.Screen name="programme" options={{ title: 'Programme', headerBackVisible: false, headerLeft: () => null }} />
-        <Stack.Screen name="presence" options={{ title: 'Présence', headerBackVisible: false, headerLeft: () => null }} />
-        <Stack.Screen name="pointage" options={{ title: 'Pointage', headerBackVisible: false, headerLeft: () => null }} />
-        <Stack.Screen name="apropos" options={{ title: 'A propos' }} />
-        <Stack.Screen name="apropos-first-login" options={{ title: 'À propos', headerBackVisible: false, headerLeft: () => null }} />
-        <Stack.Screen name="pseudo-setup" options={{ headerShown: false }} />
-        <Stack.Screen name="evaluation" options={{ title: 'Évaluations', headerBackVisible: false, headerLeft: () => null }} />
+        {/* Écrans exigeant une session. Un chargement à froid sur l'un d'eux
+            sans jeton ne les monte pas : rien n'est peint, aucune requête ne
+            part. La garde ne se ferme que sur un état CONNU comme fermé —
+            'inconnue' laisse passer, sans quoi le rendu statique du web et la
+            lecture asynchrone du natif rejetteraient une session valide. */}
+        <Stack.Protected guard={session !== 'fermee'}>
+          <Stack.Screen name="chat" options={{ title: 'Chat', headerBackVisible: false, headerLeft: () => null }} />
+          <Stack.Screen name="agora" options={{ title: 'Agora', headerBackVisible: false, headerLeft: () => null }} />
+          <Stack.Screen name="notes" options={{ title: 'Notes', headerBackVisible: false, headerLeft: () => null }} />
+          <Stack.Screen name="programme" options={{ title: 'Programme', headerBackVisible: false, headerLeft: () => null }} />
+          <Stack.Screen name="presence" options={{ title: 'Présence', headerBackVisible: false, headerLeft: () => null }} />
+          <Stack.Screen name="pointage" options={{ title: 'Pointage', headerBackVisible: false, headerLeft: () => null }} />
+          <Stack.Screen name="apropos" options={{ title: 'A propos' }} />
+          <Stack.Screen name="apropos-first-login" options={{ title: 'À propos', headerBackVisible: false, headerLeft: () => null }} />
+          <Stack.Screen name="pseudo-setup" options={{ headerShown: false }} />
+          <Stack.Screen name="evaluation" options={{ title: 'Évaluations', headerBackVisible: false, headerLeft: () => null }} />
+        </Stack.Protected>
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

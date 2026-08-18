@@ -2,9 +2,10 @@ import { Colors } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { login, requestEmailCode, verifyEmailCode, type LoginResponse } from '@/services/auth';
 import { apiInstance } from '@/services/api';
-import { getPseudo, saveRoles, saveTokens } from '@/services/tokens';
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useSession } from '@/hooks/use-session';
+import { etatSessionCourant, getPseudo, saveRoles, saveTokens, type EtatSession } from '@/services/tokens';
+import { Redirect, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -87,6 +88,17 @@ export default function SignInScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Session telle qu'elle était à L'ARRIVÉE sur cet écran, et non telle
+  // qu'elle est : une session qui s'ouvre pendant qu'on y est, c'est le login
+  // lui-même, qui choisit sa destination (pseudo-setup, à-propos, programme)
+  // et ne doit pas être doublé par une redirection. La première valeur connue
+  // fait foi — elle arrive au montage sur web, un instant plus tard sur natif.
+  const session = useSession();
+  const [sessionArrivee, setSessionArrivee] = useState<EtatSession>(() => etatSessionCourant());
+  useEffect(() => {
+    if (sessionArrivee === 'inconnue' && session !== 'inconnue') setSessionArrivee(session);
+  }, [sessionArrivee, session]);
+
   const dynamicStyles = useMemo(() => StyleSheet.create({
     page: { backgroundColor: colors.pageBg },
     card: { backgroundColor: colors.cardBg, borderColor: colors.cardBorder },
@@ -96,6 +108,10 @@ export default function SignInScreen() {
   async function afterLoginSuccess(resp: LoginResponse) {
     await saveTokens(resp.access_token, resp.refresh_token);
     await saveRoles(resp.roles ?? []);
+    // Laisser React appliquer l'ouverture de session avant de naviguer : les
+    // écrans protégés du _layout n'entrent dans le navigateur qu'au rendu
+    // suivant, et une navigation vers un écran encore absent serait perdue.
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
     const pseudo = await getPseudo();
     if (!pseudo) {
       router.replace('/pseudo-setup');
@@ -172,6 +188,10 @@ export default function SignInScreen() {
     setCode('');
     setStep('identify');
   }
+
+  // Déjà connecté en arrivant ici (favori sur la racine, URL tapée) : le
+  // formulaire n'a rien à demander.
+  if (sessionArrivee === 'ouverte') return <Redirect href="/programme" />;
 
   return (
     <SafeAreaView style={[styles.page, dynamicStyles.page]} edges={['top', 'bottom']}>

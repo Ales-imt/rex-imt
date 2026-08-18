@@ -3,7 +3,7 @@ import { PresenceScanner } from '@/components/presence-scanner';
 import { ZenBackground } from '@/components/zen-background';
 import { useNavMenu } from '@/hooks/use-nav-menu';
 import { useTheme } from '@/hooks/use-theme';
-import { apiInstance, setupAxiosInterceptors } from '@/services/api';
+import { apiInstance } from '@/services/api';
 import * as Haptics from 'expo-haptics';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -37,7 +37,6 @@ export const PresenceScreen = () => {
 
     useFocusEffect(
         useCallback(() => {
-            setupAxiosInterceptors();
             setFocused(true);
             return () => {
                 setFocused(false);

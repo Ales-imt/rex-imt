@@ -3,7 +3,7 @@ import { ZenBackground } from '@/components/zen-background';
 import { useAgora } from '@/hooks/use-agora';
 import { useNavMenu } from '@/hooks/use-nav-menu';
 import { useTheme } from '@/hooks/use-theme';
-import { apiInstance, setupAxiosInterceptors } from '@/services/api';
+import { apiInstance } from '@/services/api';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -219,7 +219,6 @@ export default function AgoraScreen() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        setupAxiosInterceptors();
         apiInstance
             .get<string[]>('/postit/promotions')
             .then(res => setPromotions(res.data))

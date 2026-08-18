@@ -1,5 +1,5 @@
 import { useTheme } from '@/hooks/use-theme';
-import { apiInstance, setupAxiosInterceptors } from '@/services/api';
+import { apiInstance } from '@/services/api';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -119,7 +119,6 @@ export default function PointageScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setupAxiosInterceptors();
       charger();
     }, [charger])
   );
