@@ -71,10 +71,11 @@ func TestProfsEtEleves(t *testing.T) {
 }
 
 func TestPlanning(t *testing.T) {
-	// Ligne réelle du flux, tronquée après les champs consommés.
+	// Ligne réelle du flux, tronquée après les champs consommés. NOTE est la
+	// CLÉ de la note amont, LANOTE son texte ("R\xe9union" : Windows-1252).
 	src := serveur(t, "PL;20052;P0CLE;95;PRCLE;345;COCLE;2108;GRCLE;1734;SACLE;2;DATE;20260901;"+
 		"HD;0800;HF;1000;TYPE; ;COURS;DPPA ;SALLE;A - BAUJON - CLAV ;PROMO;1A MKX 2026-27 ;"+
-		"PROF;M. VIELJUS ;GROUPE;- \nEOT\n")
+		"PROF;M. VIELJUS ;GROUPE;- ;NOTE;652288;LANOTE;R\xe9union DRDV \nEOT\n")
 
 	entries, err := src.Planning("95", "20260801", "20260930")
 	if err != nil {
@@ -97,6 +98,10 @@ func TestPlanning(t *testing.T) {
 	}
 	if e.Cours != "DPPA" || e.Salle != "A - BAUJON - CLAV" || e.Groupe != "-" {
 		t.Errorf("libellés %+v", e)
+	}
+	// La note vient de LANOTE, jamais de NOTE (qui n'est que sa clé).
+	if e.Note != "Réunion DRDV" {
+		t.Errorf("note %q", e.Note)
 	}
 }
 

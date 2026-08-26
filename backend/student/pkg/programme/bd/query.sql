@@ -34,7 +34,8 @@ SELECT s.id, s.matiere_id, m.name AS matiere_name,
        COALESCE(s.salle, '') AS salle,
        COALESCE(s.prof, '')  AS prof,
        COALESCE(pr.name, '') AS promo,
-       COALESCE(CASE WHEN s.groupe_id IS NOT NULL THEN g.name END, '')::text AS groupe
+       COALESCE(CASE WHEN s.groupe_id IS NOT NULL THEN g.name END, '')::text AS groupe,
+       COALESCE(s.remarque, '') AS remarque
 FROM seance s
 JOIN matiere m       ON m.id = s.matiere_id
 JOIN periode pe      ON pe.id = m.periode_id
@@ -63,7 +64,8 @@ SELECT s.id, s.matiere_id, m.name AS matiere_name,
        COALESCE(s.salle, '') AS salle,
        COALESCE(s.prof, '')  AS prof,
        COALESCE(prs.name, prp.name, '') AS promo,
-       COALESCE(g.name, '') AS groupe
+       COALESCE(g.name, '') AS groupe,
+       COALESCE(s.remarque, '') AS remarque
 FROM seance s
 JOIN matiere m          ON m.id = s.matiere_id
 LEFT JOIN promotion prs ON prs.id = s.promotion_id
@@ -83,7 +85,8 @@ SELECT s.id, s.matiere_id, m.name AS matiere_name,
        COALESCE(s.salle, '') AS salle,
        COALESCE(s.prof, '')  AS prof,
        COALESCE(prs.name, prp.name, '') AS promo,
-       COALESCE(g.name, '') AS groupe
+       COALESCE(g.name, '') AS groupe,
+       COALESCE(s.remarque, '') AS remarque
 FROM seance s
 JOIN matiere m          ON m.id = s.matiere_id
 LEFT JOIN promotion prs ON prs.id = s.promotion_id

@@ -148,11 +148,18 @@ func TestHFSQLPlanningJointures(t *testing.T) {
 	if pl4.Groupe != "3/3" {
 		t.Errorf("groupe %q", pl4.Groupe)
 	}
+	// La note, elle, arrive en clair dans l'export (pas de jointure à faire).
+	if pl4.Note != "Réunion de rentrée" {
+		t.Errorf("note %q", pl4.Note)
+	}
 
 	// Une clé à 0 vaut « pas de valeur » : le libellé doit rester vide plutôt
 	// que de désigner la salle ou le prof numéro zéro.
 	if pl8.Salle != "" || pl8.Prof != "" {
 		t.Errorf("PL=8 : salle %q / prof %q, attendus vides", pl8.Salle, pl8.Prof)
+	}
+	if pl8.Note != "" {
+		t.Errorf("PL=8 : note %q, attendue vide", pl8.Note)
 	}
 }
 

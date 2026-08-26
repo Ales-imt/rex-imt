@@ -79,6 +79,7 @@ type (
 		Jour       string `json:"jour"`
 		Heuredebut string `json:"heuredebut"`
 		Heurefin   string `json:"heurefin"`
+		Note       string `json:"note"`
 	}
 )
 
@@ -194,6 +195,7 @@ func (s *Source) creneau(c hfPlanning) source.Creneau {
 		HF:     champ(c.Heurefin),
 		Salle:  s.salles[c.SACLEUNIK.String()],
 		Prof:   s.profsNoms[c.PRCLEUNIK.String()],
+		Note:   champ(c.Note),
 	}
 }
 

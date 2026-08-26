@@ -50,6 +50,7 @@ type ligne struct {
 	prof        string
 	promo       string
 	groupe      string
+	remarque    string
 }
 
 func (c *Connector) GetProgramme(ctx context.Context, d programme.Demandeur, debut, fin time.Time) ([]programme.Cours, error) {
@@ -67,7 +68,7 @@ func (c *Connector) GetProgramme(ctx context.Context, d programme.Demandeur, deb
 			return nil, fmt.Errorf("programme: lecture planning gestionnaire: %w", err)
 		}
 		for _, r := range rows {
-			lignes = append(lignes, ligne{r.MatiereID, r.MatiereName, r.StartsAt, r.EndsAt, r.Salle, r.Prof, r.Promo, r.Groupe})
+			lignes = append(lignes, ligne{r.MatiereID, r.MatiereName, r.StartsAt, r.EndsAt, r.Salle, r.Prof, r.Promo, r.Groupe, r.Remarque})
 		}
 	case slices.Contains(d.Roles, auth.RoleProf):
 		rows, err := q.ListProgrammeProf(ctx, gen.ListProgrammeProfParams{
@@ -79,7 +80,7 @@ func (c *Connector) GetProgramme(ctx context.Context, d programme.Demandeur, deb
 			return nil, fmt.Errorf("programme: lecture planning prof %d: %w", d.UserID, err)
 		}
 		for _, r := range rows {
-			lignes = append(lignes, ligne{r.MatiereID, r.MatiereName, r.StartsAt, r.EndsAt, r.Salle, r.Prof, r.Promo, r.Groupe})
+			lignes = append(lignes, ligne{r.MatiereID, r.MatiereName, r.StartsAt, r.EndsAt, r.Salle, r.Prof, r.Promo, r.Groupe, r.Remarque})
 		}
 	default:
 		rows, err := q.ListProgrammeEleve(ctx, gen.ListProgrammeEleveParams{
@@ -91,7 +92,7 @@ func (c *Connector) GetProgramme(ctx context.Context, d programme.Demandeur, deb
 			return nil, fmt.Errorf("programme: lecture planning élève %d: %w", d.UserID, err)
 		}
 		for _, r := range rows {
-			lignes = append(lignes, ligne{r.MatiereID, r.MatiereName, r.StartsAt, r.EndsAt, r.Salle, r.Prof, r.Promo, r.Groupe})
+			lignes = append(lignes, ligne{r.MatiereID, r.MatiereName, r.StartsAt, r.EndsAt, r.Salle, r.Prof, r.Promo, r.Groupe, r.Remarque})
 		}
 	}
 
@@ -107,6 +108,7 @@ func (c *Connector) GetProgramme(ctx context.Context, d programme.Demandeur, deb
 			Prof:      l.prof,
 			Promo:     l.promo,
 			Groupe:    l.groupe,
+			Remarque:  l.remarque,
 		})
 	}
 	return cours, nil

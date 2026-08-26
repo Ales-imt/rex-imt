@@ -52,7 +52,7 @@ function toEvent(r: ReservationDetail, colorMode: ColorMode) {
         end: r.horaire.Upper,
         backgroundColor: color,
         borderColor: color,
-        extendedProps: { intervenantsLabel },
+        extendedProps: { intervenantsLabel, remarque: r.remarque ?? '' },
     };
 }
 
@@ -121,6 +121,9 @@ export function Planning() {
                             <strong>{info.event.title}</strong>
                             {info.event.extendedProps.intervenantsLabel && (
                                 <div>{info.event.extendedProps.intervenantsLabel}</div>
+                            )}
+                            {info.event.extendedProps.remarque && (
+                                <div style={{ fontStyle: 'italic' }}>{info.event.extendedProps.remarque}</div>
                             )}
                         </Box>
                     )}

@@ -152,8 +152,8 @@ SELECT internal_id FROM migration.seance_map WHERE source = $1 AND external_id =
 
 -- name: CreateSeance :one
 INSERT INTO public.seance
-  (matiere_id, starts_at, ends_at, salle, prof, promotion_id, groupe_id, prof_id, opened_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $2)
+  (matiere_id, starts_at, ends_at, salle, prof, promotion_id, groupe_id, prof_id, remarque, opened_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $2)
 RETURNING id;
 
 -- name: AttacherJustificationsSeance :exec
@@ -212,6 +212,7 @@ SET matiere_id   = @matiere_id,
     promotion_id = @promotion_id,
     groupe_id    = COALESCE(@groupe_id, CASE WHEN @grcle_vide::bool THEN NULL ELSE avant.groupe_id END),
     prof_id      = COALESCE(@prof_id,   CASE WHEN @prcle_vide::bool THEN NULL ELSE avant.prof_id   END),
+    remarque     = @remarque,
     cancelled_at = NULL
 FROM avant
 WHERE s.id = avant.id

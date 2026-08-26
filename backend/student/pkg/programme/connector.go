@@ -47,4 +47,7 @@ type Cours struct {
 	// Groupe : nom du groupe (TD/TP) ciblé par la séance, vide si elle
 	// s'adresse à la promotion entière.
 	Groupe string `json:"groupe"`
+	// Remarque : note libre portée par le créneau amont (LANOTE webdfd),
+	// vide s'il n'en a pas.
+	Remarque string `json:"remarque"`
 }

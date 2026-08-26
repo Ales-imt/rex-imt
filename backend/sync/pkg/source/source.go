@@ -40,6 +40,7 @@ type Creneau struct {
 	HF     string `json:"hf"`     // HHMM heure de fin
 	Salle  string `json:"salle"`  // salle
 	Prof   string `json:"prof"`   // nom d'affichage du professeur
+	Note   string `json:"note"`   // note libre du créneau (LANOTE / note), vide si absente
 }
 
 // Promo est une promotion du référentiel amont.

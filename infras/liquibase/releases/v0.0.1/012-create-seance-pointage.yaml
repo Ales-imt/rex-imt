@@ -141,6 +141,28 @@ databaseChangeLog:
             tableName: seance
             schemaName: public
 
+  # ---- public.seance.remarque ----------------------------------------------
+  # Note libre du créneau amont (LANOTE côté webdfd, `note` dans l'export
+  # HFSQL) : « Réunion DRDV », consigne de salle… NULL quand l'amont n'en
+  # porte pas. Changeset séparé : 012a a déjà tourné, le modifier casserait
+  # la validation de checksum liquibase.
+  - changeSet:
+      id: v0.0.1-012e-seance-remarque
+      author: vjo
+      changes:
+        - addColumn:
+            tableName: seance
+            schemaName: public
+            columns:
+              - column:
+                  name: remarque
+                  type: text
+      rollback:
+        - dropColumn:
+            tableName: seance
+            schemaName: public
+            columnName: remarque
+
   # ---- public.pointage ----------------------------------------------------
   - changeSet:
       id: v0.0.1-012b-create-table-pointage

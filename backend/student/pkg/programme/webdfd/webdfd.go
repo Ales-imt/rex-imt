@@ -135,6 +135,8 @@ func (c *Connector) GetProgramme(ctx context.Context, d programme.Demandeur, deb
 			Salle: kv["SALLE"],
 			Prof:  kv["PROF"],
 			Promo: kv["PROMO"],
+			// NOTE est la clé de la note amont ; son texte voyage dans LANOTE.
+			Remarque: kv["LANOTE"],
 		})
 	}
 	if cours == nil {

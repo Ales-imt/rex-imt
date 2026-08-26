@@ -31,4 +31,5 @@ export interface ReservationDetail {
     salles: SalleRef[];
     intervenants: IntervenantRef[];
     groupes: GroupeRef[];
+    remarque?: string | null;
 }

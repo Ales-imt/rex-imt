@@ -17,6 +17,7 @@ type ApiCours = {
   prof: string;
   promo: string;
   groupe: string;
+  remarque: string;
 };
 
 type Event = {
@@ -27,6 +28,7 @@ type Event = {
   prof: string;
   promo: string;
   groupe: string;
+  remarque: string;
 };
 
 type EventMap = Record<string, Event[]>;
@@ -62,6 +64,7 @@ function toEventMap(data: ApiCours[]): EventMap {
       prof: c.prof,
       promo: c.promo,
       groupe: c.groupe,
+      remarque: c.remarque,
     });
     map[c.date].sort((a, b) => a.time.localeCompare(b.time));
   }
@@ -500,6 +503,11 @@ export const ProgrammeScreen = () => {
                   <Text style={[styles.eventMeta, { color: colors.textSecondary }]}>
                     {[event.room, event.prof, event.groupe].filter(Boolean).join(' · ')}
                   </Text>
+                  {!!event.remarque && (
+                    <Text style={[styles.eventRemarque, { color: colors.textSecondary }]}>
+                      {event.remarque}
+                    </Text>
+                  )}
                 </View>
               </View>
             ))
@@ -545,6 +553,7 @@ const styles = StyleSheet.create({
   eventBody: { flex: 1 },
   eventTitle: { fontSize: 15, fontWeight: '500', marginBottom: 2 },
   eventMeta: { fontSize: 12 },
+  eventRemarque: { fontSize: 12, fontStyle: 'italic', marginTop: 2 },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',

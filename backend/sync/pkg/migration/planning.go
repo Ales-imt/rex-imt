@@ -317,6 +317,7 @@ func syncSeances(
 		}
 		salle := pgtype.Text{String: e.Salle, Valid: e.Salle != ""}
 		prof := pgtype.Text{String: e.Prof, Valid: e.Prof != ""}
+		remarque := pgtype.Text{String: e.Note, Valid: e.Note != ""}
 		startsAtPg := pgtype.Timestamptz{Time: startsAt, Valid: true}
 
 		// grcleVide / prcleVide distinguent « l'amont dit qu'il n'y a pas de
@@ -341,6 +342,7 @@ func syncSeances(
 				PromotionID: promoID,
 				GroupeID:    groupeID,
 				ProfID:      profID,
+				Remarque:    remarque,
 			})
 			if err != nil {
 				return res, err
@@ -362,6 +364,7 @@ func syncSeances(
 				GrcleVide:   grcleVide,
 				ProfID:      profID,
 				PrcleVide:   prcleVide,
+				Remarque:    remarque,
 			})
 			if err != nil {
 				return res, err

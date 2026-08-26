@@ -9,7 +9,8 @@ SELECT
     s.prof       AS prof,
     s.prof_id    AS prof_id,
     s.groupe_id  AS groupe_id,
-    g.name       AS groupe_name
+    g.name       AS groupe_name,
+    s.remarque   AS remarque
 FROM seance s
 JOIN matiere m ON m.id = s.matiere_id
 LEFT JOIN groupe g ON g.id = s.groupe_id

@@ -21,7 +21,7 @@ const CLE_WEB = 'programme.cache';
 
 // Incrémenter à tout changement de forme d'ApiCours : un cache écrit par une
 // version antérieure serait sinon relu comme s'il était valide.
-const VERSION = 2;
+const VERSION = 3;
 
 type Cache = {
     version: number;

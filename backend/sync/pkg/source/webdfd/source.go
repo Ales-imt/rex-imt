@@ -213,6 +213,9 @@ func (s *Source) Planning(p0cle, debut, fin string) ([]source.Creneau, error) {
 			HF:     strings.TrimSpace(kv["HF"]),
 			Salle:  strings.TrimSpace(kv["SALLE"]),
 			Prof:   strings.TrimSpace(kv["PROF"]),
+			// NOTE est la CLÉ de la note dans le référentiel amont ;
+			// son texte voyage dans LANOTE.
+			Note: strings.TrimSpace(kv["LANOTE"]),
 		})
 	})
 	return entries, nil

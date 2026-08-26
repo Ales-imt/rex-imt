@@ -49,6 +49,7 @@ type reservationDetail struct {
 	Salles       []salleRef       `json:"salles"`
 	Intervenants []intervenantRef `json:"intervenants"`
 	Groupes      []groupeRef      `json:"groupes"`
+	Remarque     *string          `json:"remarque"`
 }
 
 // heuresItem : une entrée de répartition (par matière, groupe ou prof).
@@ -136,6 +137,9 @@ func GetReservations(w http.ResponseWriter, r *http.Request) {
 				name = row.GroupeName.String
 			}
 			res.Groupes = append(res.Groupes, groupeRef{ID: row.GroupeID.Int64, Name: name, OptionID: 0})
+		}
+		if row.Remarque.Valid && row.Remarque.String != "" {
+			res.Remarque = &row.Remarque.String
 		}
 
 		result = append(result, res)
