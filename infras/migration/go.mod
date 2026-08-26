@@ -9,6 +9,6 @@ require gopkg.in/yaml.v3 v3.0.1
 require (
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/lib/pq v1.12.3
-	golang.org/x/crypto v0.45.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 )
