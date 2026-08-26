@@ -55,3 +55,6 @@ data
 **/exe
 
 
+
+# Artefacts de session Playwright MCP (exploration navigateur)
+.playwright-mcp/
