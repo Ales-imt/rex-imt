@@ -16,6 +16,7 @@ type ApiCours = {
   salle: string;
   prof: string;
   promo: string;
+  groupe: string;
 };
 
 type Event = {
@@ -24,6 +25,8 @@ type Event = {
   endTime: string;
   room: string;
   prof: string;
+  promo: string;
+  groupe: string;
 };
 
 type EventMap = Record<string, Event[]>;
@@ -57,6 +60,8 @@ function toEventMap(data: ApiCours[]): EventMap {
       endTime: c.hf,
       room: c.salle,
       prof: c.prof,
+      promo: c.promo,
+      groupe: c.groupe,
     });
     map[c.date].sort((a, b) => a.time.localeCompare(b.time));
   }
@@ -493,7 +498,7 @@ export const ProgrammeScreen = () => {
                     {event.title}
                   </Text>
                   <Text style={[styles.eventMeta, { color: colors.textSecondary }]}>
-                    {[event.room, event.prof].filter(Boolean).join(' · ')}
+                    {[event.room, event.prof, event.groupe].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
               </View>

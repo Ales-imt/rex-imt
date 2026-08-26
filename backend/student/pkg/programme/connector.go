@@ -44,4 +44,7 @@ type Cours struct {
 	Salle     string `json:"salle"`
 	Prof      string `json:"prof"`
 	Promo     string `json:"promo"`
+	// Groupe : nom du groupe (TD/TP) ciblé par la séance, vide si elle
+	// s'adresse à la promotion entière.
+	Groupe string `json:"groupe"`
 }
