@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ensureRefreshed } from './api';
 import { API_BASE } from './auth';
 import {
   clearTokens,
@@ -7,7 +8,6 @@ import {
   isExpiringSoon,
   publierSession,
   saveRoles,
-  saveTokens,
 } from './tokens';
 
 // Le démarrage attend cette vérification : mieux vaut la déclarer perdue et
@@ -64,12 +64,11 @@ async function rafraichir(): Promise<void> {
   }
 
   try {
-    const res = await axios.post(
-      `${API_BASE}/auth/refresh`,
-      { refreshToken: renouvellement },
-      { timeout: TIMEOUT_MS },
-    );
-    await saveTokens(res.data.accessToken, res.data.refreshToken); // publie 'ouverte'
+    // Passe par le mutex de services/api.ts : si une requête d'écran a déjà
+    // déclenché son propre rafraîchissement au même instant, on attend le
+    // sien plutôt que d'en tirer un second sur le même refresh token à usage
+    // unique. saveTokens (côté doRefresh) publie 'ouverte'.
+    await ensureRefreshed();
   } catch (e) {
     // Un refus du serveur (4xx : jeton inconnu, révoqué, compte banni) clôt
     // vraiment la session. Une panne — réseau coupé, serveur en carafe — ne

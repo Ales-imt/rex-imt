@@ -7,12 +7,26 @@ export const apiInstance = axios.create({
   baseURL: API_BASE,
 });
 
+// Mutex partagé avec services/session.ts (rafraichir()) : au redémarrage de
+// l'app, la garde de navigation (verifierSession) et la première requête d'un
+// écran peuvent toutes deux voir l'access token expirant au même instant.
+// Le refresh token est à usage unique côté serveur (rotation stricte, sans
+// grâce) : deux appels concurrents à /auth/refresh font perdre l'un des deux,
+// qui recevrait un refus et effacerait une session que l'autre vient
+// pourtant de renouveler avec succès.
 let refreshPromise: Promise<void> | null = null;
+
+export async function ensureRefreshed(): Promise<void> {
+  if (!refreshPromise) {
+    refreshPromise = doRefresh().finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+}
 
 async function doRefresh(): Promise<void> {
   const refreshToken = await getRefreshToken();
   if (!refreshToken) throw new Error('No refresh token');
-  const res = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken });
+  const res = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken }, { timeout: 8_000 });
   await saveTokens(res.data.accessToken, res.data.refreshToken);
 }
 
@@ -27,10 +41,7 @@ function setupAxiosInterceptors() {
     try {
       const token = await getAccessToken();
       if (token && isExpiringSoon(token)) {
-        if (!refreshPromise) {
-          refreshPromise = doRefresh().finally(() => { refreshPromise = null; });
-        }
-        await refreshPromise;
+        await ensureRefreshed();
       }
       const current = await getAccessToken();
       if (current) {
