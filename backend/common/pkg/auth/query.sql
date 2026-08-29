@@ -8,8 +8,12 @@ SELECT *
         FROM refresh_tokens
         WHERE token = @token;
 
--- name: DeleteRefreshToken :exec
-DELETE FROM refresh_tokens WHERE token = @token;
+-- name: ConsumeRefreshToken :one
+-- Consommation ATOMIQUE du jeton de renouvellement : suppression et lecture en
+-- une seule instruction. De deux requêtes concurrentes portant le même jeton,
+-- une seule obtient la ligne ; l'autre reçoit zéro ligne (ErrNoRows) et doit
+-- refuser. Un SELECT puis DELETE séparés laissaient les deux passer.
+DELETE FROM refresh_tokens WHERE token = @token RETURNING *;
 
 -- name: GetRefreshTokenBySession :one
 SELECT *
