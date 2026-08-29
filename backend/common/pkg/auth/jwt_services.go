@@ -102,10 +102,19 @@ func generateRefreshToken(oldRefreshToken *RefreshToken, subject string, jwtCfg 
 	info.Expiration = time.Now().Add(jwtCfg.RefreshTokenExpiresIn)
 	rtClaims["exp"] = info.Expiration.Unix()
 
-	info.Session = uuid.New().String()
+	// La session est l'identité STABLE d'un login : créée ici une seule fois,
+	// elle traverse ensuite toutes les rotations — c'est ce qui donne un sens
+	// au compteur de version, et ce sur quoi reposent le logout
+	// (DeleteRefreshTokenBySession) et le contrôle de session du middleware
+	// Security. La régénérer à chaque rotation faisait recevoir un 401
+	// « session révoquée » à tout access token émis avant la rotation, encore
+	// valide pourtant — une requête en vol pendant un refresh mourait en 401,
+	// et le client effaçait sa session toute neuve.
 	if oldRefreshToken == nil {
+		info.Session = uuid.New().String()
 		info.Version = 0
 	} else {
+		info.Session = oldRefreshToken.Session
 		info.Version = int(oldRefreshToken.TokenVersion.Int32) + 1
 	}
 

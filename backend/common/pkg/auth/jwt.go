@@ -31,11 +31,12 @@ func logRefusRefresh(ctx context.Context, r *http.Request, raison string, attrs 
 // jeton reçu est un JWT : sa signature dit s'il vient bien de nous, et ses
 // claims (sub, session_id, version, exp) donnent de quoi corréler.
 //
-// session_id ne permet PAS de retrouver la rotation suivante en base : chaque
-// rotation émet une session neuve (generateRefreshToken). Le départ entre
-// « déjà consommé » et « session fermée » n'est donc pas décidable ici ; l'exp
-// sépare en revanche le jeton périmé (purgé par CleanUpTokens) du reste.
-func logJetonInconnu(ctx context.Context, r *http.Request, secret string, brut string) {
+// La session étant stable à travers les rotations (generateRefreshToken), une
+// lecture par session tranche entre « déjà consommé » (la session vit avec un
+// jeton plus récent : replay ou course perdue) et « session fermée » (logout,
+// révocation). Lecture SEULE : la révocation de famille sur replay reste le
+// lot token_version.
+func logJetonInconnu(ctx context.Context, r *http.Request, q *Queries, secret string, brut string) {
 	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
 	tok, err := parser.Parse(brut, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -62,9 +63,15 @@ func logJetonInconnu(ctx context.Context, r *http.Request, secret string, brut s
 			return
 		}
 	}
-	logRefusRefresh(ctx, r,
-		"jeton authentique absent de la base : déjà consommé (rotation antérieure ou requête concurrente) ou session fermée (logout)",
-		attrs...)
+
+	enBase, err := q.GetRefreshTokenBySession(ctx, session)
+	if err == nil {
+		logRefusRefresh(ctx, r,
+			"jeton déjà consommé : la session porte un jeton plus récent (replay après rotation, ou course perdue)",
+			append(attrs, "version_en_base", enBase.TokenVersion.Int32)...)
+		return
+	}
+	logRefusRefresh(ctx, r, "session fermée (logout ou révocation)", attrs...)
 }
 
 // RefreshAccessToken tourne le refresh token (rotation stricte, usage unique).
@@ -100,7 +107,8 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 	if err == pgx.ErrNoRows {
 		// Jeton inconnu, déjà tourné, ou perdu face à une requête concurrente :
 		// le log qualifie, le client reçoit un 400 volontairement opaque.
-		logJetonInconnu(ctx, r, jwtConfig.Secret, body.RefreshToken)
+		// Lecture via le pool : la transaction sera annulée par le defer.
+		logJetonInconnu(ctx, r, New(pgCtx.Db), jwtConfig.Secret, body.RefreshToken)
 		services.InvalidRequestError(w, r, "Refresh token inconnu", services.NO_INFORMATION, nil)
 		return
 	}
