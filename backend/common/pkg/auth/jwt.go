@@ -2,6 +2,8 @@ package auth
 
 import (
 	"back-rex-common/pkg/services"
+	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -14,6 +16,56 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 )
+
+// logRefusRefresh trace tout refus de /auth/refresh en Warn : les 400 partent
+// sinon en Debug (cf. services.RenderError), invisibles en production — un
+// utilisateur déconnecté « sans raison » ne laissait aucune trace exploitable.
+// Le jeton lui-même n'est JAMAIS logué, même haché.
+func logRefusRefresh(ctx context.Context, r *http.Request, raison string, attrs ...any) {
+	args := append([]any{"raison", raison, "user_agent", r.UserAgent()}, attrs...)
+	slog.WarnContext(ctx, "refresh refusé", args...)
+}
+
+// logJetonInconnu qualifie un « Refresh token inconnu » : le 400 rendu au
+// client reste volontairement opaque, mais le log distingue les causes. Le
+// jeton reçu est un JWT : sa signature dit s'il vient bien de nous, et ses
+// claims (sub, session_id, version, exp) donnent de quoi corréler.
+//
+// session_id ne permet PAS de retrouver la rotation suivante en base : chaque
+// rotation émet une session neuve (generateRefreshToken). Le départ entre
+// « déjà consommé » et « session fermée » n'est donc pas décidable ici ; l'exp
+// sépare en revanche le jeton périmé (purgé par CleanUpTokens) du reste.
+func logJetonInconnu(ctx context.Context, r *http.Request, secret string, brut string) {
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+	tok, err := parser.Parse(brut, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("méthode de signature inattendue %v", t.Header["alg"])
+		}
+		return []byte(secret), nil
+	})
+	if err != nil || !tok.Valid {
+		logRefusRefresh(ctx, r, "jeton étranger ou corrompu (signature invalide)")
+		return
+	}
+
+	claims, _ := tok.Claims.(jwt.MapClaims)
+	sub, _ := claims["sub"].(string)
+	session, _ := claims["session_id"].(string)
+	version, _ := claims["version"].(float64)
+
+	exp, expErr := claims.GetExpirationTime()
+	attrs := []any{"user", sub, "session", session, "version_jeton", int(version)}
+	if expErr == nil && exp != nil {
+		attrs = append(attrs, "exp_jeton", exp.Time.Format(time.RFC3339))
+		if time.Now().After(exp.Time) {
+			logRefusRefresh(ctx, r, "jeton périmé, vraisemblablement purgé (CleanUpTokens)", attrs...)
+			return
+		}
+	}
+	logRefusRefresh(ctx, r,
+		"jeton authentique absent de la base : déjà consommé (rotation antérieure ou requête concurrente) ou session fermée (logout)",
+		attrs...)
+}
 
 // RefreshAccessToken tourne le refresh token (rotation stricte, usage unique).
 //
@@ -31,6 +83,7 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 
 	var body refreshBody
 	if err := render.DecodeJSON(r.Body, &body); err != nil || body.RefreshToken == "" {
+		logRefusRefresh(ctx, r, "refresh token manquant dans le corps de la requête")
 		services.InvalidRequestError(w, r, "refresh token manquant", services.NO_INFORMATION, nil)
 		return
 	}
@@ -45,7 +98,9 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 
 	oldRefreshToken, err := qtx.ConsumeRefreshToken(ctx, hashToken(body.RefreshToken))
 	if err == pgx.ErrNoRows {
-		// Jeton inconnu, déjà tourné, ou perdu face à une requête concurrente.
+		// Jeton inconnu, déjà tourné, ou perdu face à une requête concurrente :
+		// le log qualifie, le client reçoit un 400 volontairement opaque.
+		logJetonInconnu(ctx, r, jwtConfig.Secret, body.RefreshToken)
 		services.InvalidRequestError(w, r, "Refresh token inconnu", services.NO_INFORMATION, nil)
 		return
 	}
@@ -57,16 +112,23 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 	// Refus AVANT commit : le rollback du defer restitue la ligne, un jeton
 	// révoqué ou expiré reste donc visible en base, comme avant ce correctif.
 	if oldRefreshToken.Revoked {
+		logRefusRefresh(ctx, r, "jeton révoqué",
+			"user", oldRefreshToken.UserID, "session", oldRefreshToken.Session)
 		services.InvalidRequestError(w, r, "token has been revoked", services.NO_INFORMATION, nil)
 		return
 	}
 	if time.Now().After(oldRefreshToken.ExpiresAt.Time) {
+		logRefusRefresh(ctx, r, "jeton expiré",
+			"user", oldRefreshToken.UserID, "session", oldRefreshToken.Session,
+			"expire_depuis", time.Since(oldRefreshToken.ExpiresAt.Time).Round(time.Minute).String())
 		services.InvalidRequestError(w, r, "token has been expires", services.NO_INFORMATION, nil)
 		return
 	}
 
 	user, err := qtx.GetUserById(ctx, oldRefreshToken.UserID)
 	if err == pgx.ErrNoRows {
+		logRefusRefresh(ctx, r, "utilisateur du jeton absent de la base",
+			"user", oldRefreshToken.UserID)
 		services.InvalidRequestError(w, r, "Utilisateur inconnu", services.NO_INFORMATION, nil)
 		return
 	}
@@ -76,6 +138,7 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 	}
 
 	if user.Blame.Valid && user.Blame.Bool {
+		logRefusRefresh(ctx, r, "utilisateur banni", "user", oldRefreshToken.UserID)
 		services.AuthorizationError(w, r, "Utilisateur banni", services.NO_INFORMATION, nil)
 		return
 	}
