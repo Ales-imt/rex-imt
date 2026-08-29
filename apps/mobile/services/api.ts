@@ -23,7 +23,26 @@ export async function ensureRefreshed(): Promise<void> {
   return refreshPromise;
 }
 
+// Sur web, le mutex ci-dessus ne protège qu'UN onglet : localStorage est
+// partagé mais chaque onglet a son propre runtime. Deux onglets rafraîchissant
+// ensemble consommeraient le même refresh token (usage unique côté serveur) :
+// le perdant recevrait un 400 et son intercepteur effacerait la session que le
+// gagnant vient pourtant d'écrire — déconnexion des deux onglets. Web Locks
+// sérialise les onglets sur un même verrou nommé ; une fois le verrou obtenu,
+// on REVÉRIFIE le jeton : si un autre onglet a rafraîchi pendant l'attente, le
+// jeton relu de localStorage est frais et il n'y a plus rien à faire.
+// Sur natif, navigator.locks n'existe pas — un seul runtime, le mutex suffit.
 async function doRefresh(): Promise<void> {
+  const locks: LockManager | undefined = (globalThis.navigator as Navigator | undefined)?.locks;
+  if (!locks) return appelRefresh();
+  return locks.request('rex-auth-refresh', async () => {
+    const token = await getAccessToken();
+    if (token && !isExpiringSoon(token)) return;
+    await appelRefresh();
+  });
+}
+
+async function appelRefresh(): Promise<void> {
   const refreshToken = await getRefreshToken();
   if (!refreshToken) throw new Error('No refresh token');
   const res = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken }, { timeout: 8_000 });
