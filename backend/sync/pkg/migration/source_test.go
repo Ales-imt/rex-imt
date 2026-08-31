@@ -10,6 +10,7 @@ type sourceFixe struct {
 	profs    []source.Personne
 	eleves   []source.Personne
 	cours    map[string]string
+	salles   []source.Salle
 	planning map[string][]source.Creneau
 	membres  map[string][]string
 }
@@ -18,6 +19,7 @@ func (s sourceFixe) Promos() ([]source.Promo, error)       { return s.promos, ni
 func (s sourceFixe) Profs() ([]source.Personne, error)     { return s.profs, nil }
 func (s sourceFixe) Eleves() ([]source.Personne, error)    { return s.eleves, nil }
 func (s sourceFixe) CoursNoms() (map[string]string, error) { return s.cours, nil }
+func (s sourceFixe) Salles() ([]source.Salle, error)       { return s.salles, nil }
 
 func (s sourceFixe) Planning(p0cle, debut, fin string) ([]source.Creneau, error) {
 	var out []source.Creneau

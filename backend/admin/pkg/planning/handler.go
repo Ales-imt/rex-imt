@@ -68,6 +68,39 @@ type heuresBreakdown struct {
 	Prof    []heuresItem `json:"prof"`
 }
 
+// occupationSalle : le bilan d'une salle sur la plage demandée. Le taux
+// d'occupation n'est PAS calculé ici : il dépend d'une amplitude d'ouverture
+// (8h-18h × 5 jours…) qui est une convention d'établissement, paramétrable
+// côté front sans redéploiement.
+type occupationSalle struct {
+	SalleID   int64   `json:"salle_id"`
+	SalleName string  `json:"salle_name"`
+	Capacite  *int32  `json:"capacite"`
+	Type      *string `json:"type"`
+	NbSeances int64   `json:"nb_seances"`
+	Heures    float64 `json:"heures"`
+}
+
+// creneauSalle : un créneau réservé, pour la vue calendrier.
+type creneauSalle struct {
+	SalleID       int64   `json:"salle_id"`
+	SalleName     string  `json:"salle_name"`
+	SeanceID      int64   `json:"seance_id"`
+	StartsAt      string  `json:"starts_at"`
+	EndsAt        string  `json:"ends_at"`
+	MatiereName   string  `json:"matiere_name"`
+	Prof          *string `json:"prof"`
+	GroupeName    *string `json:"groupe_name"`
+	PromotionName *string `json:"promotion_name"`
+}
+
+// salleNonResolue : un libellé de salle que le référentiel ne connaît pas —
+// des heures qui manquent au bilan d'occupation.
+type salleNonResolue struct {
+	Libelle   string `json:"libelle"`
+	NbSeances int64  `json:"nb_seances"`
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
 // parsePeriodeID lit et valide le paramètre ?periode_id=.
@@ -85,6 +118,42 @@ func isoOrEmpty(ts pgtype.Timestamptz) string {
 		return ""
 	}
 	return ts.Time.Format(time.RFC3339)
+}
+
+// parisLoc : les bornes en date seule (« 2026-09-01 ») s'entendent à minuit
+// heure de l'établissement, pas UTC — le fallback UTC ne décale les bornes que
+// si la timezone est indisponible sur la machine.
+var parisLoc = func() *time.Location {
+	l, err := time.LoadLocation("Europe/Paris")
+	if err != nil {
+		return time.UTC
+	}
+	return l
+}()
+
+// parsePlage lit les paramètres ?debut=&fin= — RFC 3339, ou date seule
+// AAAA-MM-JJ interprétée à minuit Europe/Paris. La plage est [debut, fin[ :
+// pour une semaine, fin est le lundi suivant.
+func parsePlage(r *http.Request) (debut, fin pgtype.Timestamptz, ok bool) {
+	parse := func(raw string) (pgtype.Timestamptz, bool) {
+		if t, err := time.Parse(time.RFC3339, raw); err == nil {
+			return pgtype.Timestamptz{Time: t, Valid: true}, true
+		}
+		if t, err := time.ParseInLocation("2006-01-02", raw, parisLoc); err == nil {
+			return pgtype.Timestamptz{Time: t, Valid: true}, true
+		}
+		return pgtype.Timestamptz{}, false
+	}
+	debut, okD := parse(r.URL.Query().Get("debut"))
+	fin, okF := parse(r.URL.Query().Get("fin"))
+	return debut, fin, okD && okF && debut.Time.Before(fin.Time)
+}
+
+func textOrNil(t pgtype.Text) *string {
+	if !t.Valid || t.String == "" {
+		return nil
+	}
+	return &t.String
 }
 
 // ─── Handlers ───────────────────────────────────────────────────────────────────
@@ -145,6 +214,97 @@ func GetReservations(w http.ResponseWriter, r *http.Request) {
 		result = append(result, res)
 	}
 
+	render.JSON(w, r, result)
+}
+
+// GetOccupation rend les heures réservées par salle sur [debut, fin[. La
+// requête part des SALLES : une salle jamais réservée sort à 0h, et c'est
+// précisément l'information qu'une liste construite depuis seance ne pouvait
+// pas donner.
+func GetOccupation(w http.ResponseWriter, r *http.Request) {
+	debut, fin, ok := parsePlage(r)
+	if !ok {
+		services.InvalidRequestError(w, r, "debut/fin invalides (RFC 3339 ou AAAA-MM-JJ, debut < fin)", services.NO_INFORMATION, nil)
+		return
+	}
+
+	q := New(services.GetPgCtx(r.Context()).Db)
+	rows, err := q.GetOccupationSalles(context.Background(), GetOccupationSallesParams{Debut: debut, Fin: fin})
+	if err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+
+	result := make([]occupationSalle, 0, len(rows))
+	for _, row := range rows {
+		o := occupationSalle{
+			SalleID:   row.SalleID,
+			SalleName: row.SalleName,
+			Type:      textOrNil(row.Type),
+			NbSeances: row.NbSeances,
+			Heures:    row.Heures,
+		}
+		if row.Capacite.Valid {
+			o.Capacite = &row.Capacite.Int32
+		}
+		result = append(result, o)
+	}
+	render.JSON(w, r, result)
+}
+
+// GetCreneaux rend le détail des créneaux par salle, pour la vue calendrier.
+func GetCreneaux(w http.ResponseWriter, r *http.Request) {
+	debut, fin, ok := parsePlage(r)
+	if !ok {
+		services.InvalidRequestError(w, r, "debut/fin invalides (RFC 3339 ou AAAA-MM-JJ, debut < fin)", services.NO_INFORMATION, nil)
+		return
+	}
+
+	q := New(services.GetPgCtx(r.Context()).Db)
+	rows, err := q.GetCreneauxSalles(context.Background(), GetCreneauxSallesParams{Debut: debut, Fin: fin})
+	if err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+
+	result := make([]creneauSalle, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, creneauSalle{
+			SalleID:       row.SalleID,
+			SalleName:     row.SalleName,
+			SeanceID:      row.SeanceID,
+			StartsAt:      isoOrEmpty(row.StartsAt),
+			EndsAt:        isoOrEmpty(row.EndsAt),
+			MatiereName:   row.MatiereName,
+			Prof:          textOrNil(row.Prof),
+			GroupeName:    textOrNil(row.GroupeName),
+			PromotionName: textOrNil(row.PromotionName),
+		})
+	}
+	render.JSON(w, r, result)
+}
+
+// GetNonResolues rend les libellés de salle que le référentiel ne connaît pas.
+// Écran de supervision : une entrée ici est soit une salle nouvelle en amont,
+// soit un rattachement cassé — dans les deux cas, des heures hors bilan.
+func GetNonResolues(w http.ResponseWriter, r *http.Request) {
+	debut, fin, ok := parsePlage(r)
+	if !ok {
+		services.InvalidRequestError(w, r, "debut/fin invalides (RFC 3339 ou AAAA-MM-JJ, debut < fin)", services.NO_INFORMATION, nil)
+		return
+	}
+
+	q := New(services.GetPgCtx(r.Context()).Db)
+	rows, err := q.GetSallesNonResolues(context.Background(), GetSallesNonResoluesParams{Debut: debut, Fin: fin})
+	if err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+
+	result := make([]salleNonResolue, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, salleNonResolue{Libelle: row.Libelle, NbSeances: row.NbSeances})
+	}
 	render.JSON(w, r, result)
 }
 

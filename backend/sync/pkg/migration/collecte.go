@@ -26,6 +26,12 @@ type collecte struct {
 	eleves    []source.Personne
 	coursNoms map[string]string
 
+	// salles : référentiel amont des salles. sallesOK distingue « l'amont dit
+	// qu'il n'y en a aucune » de « l'amont n'a pas répondu » — sans quoi une
+	// panne de salles_txt effacerait tous les rattachements en base.
+	salles   []source.Salle
+	sallesOK bool
+
 	// creneaux : PL → créneau. Le PL (PLCLEUNIK) est l'identifiant stable du
 	// créneau amont, et l'unicité de seance_map. Un même PL vu sous deux promos
 	// n'est retenu qu'une fois — cf. coclesMultiPromo pour la trace.
@@ -140,6 +146,16 @@ func collecter(src source.Source, ac anneeCourante, anneeOK, tracer bool) (*coll
 		return nil, err
 	}
 	log.Printf("collecte: %d promotions, %d profs, %d élèves", len(c.promos), len(c.profs), len(c.eleves))
+
+	// Une erreur ici n'interrompt pas le cycle : les salles enrichissent le
+	// planning, elles ne le conditionnent pas. Même politique que pour une
+	// promo inaccessible — on journalise et on laisse la base en l'état.
+	if c.salles, err = src.Salles(); err != nil {
+		log.Printf("salle: référentiel inaccessible: %v — rattachements conservés en l'état", err)
+		c.salles = nil
+	} else {
+		c.sallesOK = true
+	}
 
 	if !anneeOK {
 		return c, nil
@@ -297,9 +313,9 @@ func (c *collecte) evsVus() map[string]bool {
 // seul endroit d'où l'on voit d'un coup d'œil si un cycle s'est appuyé sur un
 // amont complet ou dégradé.
 func (c *collecte) journaliser(debut time.Time) {
-	log.Printf("collecte: %d promos (%d planning OK), %d créneaux, %d matières, %d groupes (%d listes OK), %d profs, %d élèves — %s",
+	log.Printf("collecte: %d promos (%d planning OK), %d créneaux, %d matières, %d groupes (%d listes OK), %d profs, %d élèves, %d salles — %s",
 		len(c.promos), len(c.promosOK), len(c.creneaux), len(c.cocles),
-		len(c.grcles), len(c.groupesOK), len(c.profs), len(c.eleves),
+		len(c.grcles), len(c.groupesOK), len(c.profs), len(c.eleves), len(c.salles),
 		time.Since(debut).Round(time.Millisecond))
 
 	for cocle, promos := range c.coclesMultiPromo {

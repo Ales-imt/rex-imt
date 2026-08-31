@@ -21,7 +21,7 @@ import (
 // (créées, rétablies, déplacées, ou dont l'effectif attendu a changé). Le
 // rattachement lui-même est fait plus tard, une fois eleve_groupe à jour — cf.
 // rattacherJustifications.
-func syncPlanning(ctx context.Context, q *Queries, c *collecte, ac anneeCourante, cycleStart pgtype.Timestamptz) ([]int64, error) {
+func syncPlanning(ctx context.Context, q *Queries, c *collecte, ac anneeCourante, cycleStart pgtype.Timestamptz, resSalle resolveurSalle) ([]int64, error) {
 	annee := ac.Annee
 
 	// Traduction des identifiants amont en identifiants internes : les
@@ -66,11 +66,18 @@ func syncPlanning(ctx context.Context, q *Queries, c *collecte, ac anneeCourante
 	}
 
 	// --- Séances ---
-	res, err := syncSeances(ctx, q, c, cocleToMatiereID, grcleToGroupeID, prcleToUserID, p0cleToPromoID)
+	res, err := syncSeances(ctx, q, c, cocleToMatiereID, grcleToGroupeID, prcleToUserID, p0cleToPromoID, resSalle)
 	log.Printf("planning: %d séances synchronisées, %d rétablies (annee=%d)", res.count, res.ressuscitees, annee)
 	if res.ecartesMatiere > 0 || res.ecartesHoraire > 0 {
 		log.Printf("planning: ATTENTION %d créneaux collectés n'ont pas produit de séance (%d matière inconnue, %d horaire illisible)",
 			res.ecartesMatiere+res.ecartesHoraire, res.ecartesMatiere, res.ecartesHoraire)
+	}
+	// Ce compteur n'est pas un ornement : sans lui, un SACLE qui cesse d'être
+	// servi en amont fait silencieusement chuter l'occupation de toutes les
+	// salles à zéro, et l'écran affiche un établissement vide au lieu d'une
+	// erreur.
+	if res.sallesNonResolues > 0 {
+		log.Printf("planning: %d séance(s) dont le SACLE ne résout pas — libellé amont conservé, hors bilan d'occupation", res.sallesNonResolues)
 	}
 	if err != nil {
 		return res.aRattacher, err
@@ -268,6 +275,10 @@ type resultatSeances struct {
 	// diagnostic qu'il faut penser à activer.
 	ecartesMatiere int
 	ecartesHoraire int
+	// sallesNonResolues : séances dont le créneau annonce une salle que le
+	// référentiel ne connaît pas. Écrites quand même, avec le libellé amont,
+	// mais elles sortent du bilan d'occupation. Compté, pas ignoré.
+	sallesNonResolues int
 }
 
 // syncSeances synchronise chaque créneau amont (identifié par PL = plcle stable)
@@ -281,6 +292,7 @@ func syncSeances(
 	grcleToGroupeID map[string]int64,
 	prcleToUserID map[string]int32,
 	p0cleToPromoID map[string]int64,
+	resSalle resolveurSalle,
 ) (resultatSeances, error) {
 	var res resultatSeances
 
@@ -315,7 +327,14 @@ func syncSeances(
 		if uid, found := prcleToUserID[e.Prcle]; found {
 			profID = pgtype.Int4{Int32: uid, Valid: true}
 		}
-		salle := pgtype.Text{String: e.Salle, Valid: e.Salle != ""}
+		// salle et salle_id sortent du MÊME appel au résolveur : le texte est le
+		// name de la salle résolue par le SACLE, et ne retombe sur le libellé du
+		// créneau que lorsque la clé ne résout pas. Les faire diverger rouvrirait
+		// deux vocabulaires pour la même salle, selon l'écran.
+		salleID, salle := resSalle.resoudre(e.Sacle, e.Salle)
+		if !salleID.Valid && strings.TrimSpace(e.Salle) != "" {
+			res.sallesNonResolues++
+		}
 		prof := pgtype.Text{String: e.Prof, Valid: e.Prof != ""}
 		remarque := pgtype.Text{String: e.Note, Valid: e.Note != ""}
 		startsAtPg := pgtype.Timestamptz{Time: startsAt, Valid: true}
@@ -338,6 +357,7 @@ func syncSeances(
 				StartsAt:    startsAtPg,
 				EndsAt:      endsAt,
 				Salle:       salle,
+				SalleID:     salleID,
 				Prof:        prof,
 				PromotionID: promoID,
 				GroupeID:    groupeID,
@@ -358,6 +378,7 @@ func syncSeances(
 				StartsAt:    startsAtPg,
 				EndsAt:      endsAt,
 				Salle:       salle,
+				SalleID:     salleID,
 				Prof:        prof,
 				PromotionID: promoID,
 				GroupeID:    groupeID,

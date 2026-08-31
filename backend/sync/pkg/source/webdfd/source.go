@@ -169,6 +169,53 @@ func personnes(body, cle string) []source.Personne {
 	return out
 }
 
+func (s *Source) Salles() ([]source.Salle, error) {
+	body, err := fetchTexte(s.BaseURL + "?TYPE=salles_txt")
+	if err != nil {
+		return nil, fmt.Errorf("webdfd: salles_txt inaccessible: %w", err)
+	}
+
+	var salles []source.Salle
+	lignesKV(body, func(kv map[string]string) {
+		sa := strings.TrimSpace(kv["SA"])
+		if sa == "" {
+			return
+		}
+		// Un SA non numérique est une ligne de service, pas une salle.
+		// Même garde que dans Promos.
+		if _, err := strconv.ParseInt(sa, 10, 64); err != nil {
+			return
+		}
+		nom := nomSalle(kv["NOM"])
+		if nom == "" {
+			return
+		}
+		// Une capacité illisible est traitée comme absente : la valeur est
+		// indicative, elle ne justifie pas d'écarter la salle du référentiel.
+		capacite, _ := strconv.Atoi(strings.TrimSpace(kv["CAPACITE"]))
+
+		salles = append(salles, source.Salle{
+			ExternalID: sa,
+			Nom:        nom,
+			Capacite:   capacite,
+			Type:       strings.TrimSpace(kv["TYPE"]),
+		})
+	})
+	return salles, nil
+}
+
+// nomSalle retire les parenthèses dont cgiempt entoure le libellé dans
+// salles_txt — « (O. DE GOUGES - CLAV) ». Choix d'affichage, sans effet sur le
+// rattachement, qui passe par le SACLE : ce nom est celui que porteront
+// seance.salle, les exports et les PDF de présence.
+func nomSalle(v string) string {
+	v = strings.TrimSpace(v)
+	if strings.HasPrefix(v, "(") && strings.HasSuffix(v, ")") {
+		v = strings.TrimSpace(v[1 : len(v)-1])
+	}
+	return v
+}
+
 func (s *Source) CoursNoms() (map[string]string, error) {
 	body, err := fetchTexte(s.BaseURL + "?TYPE=cours_txt")
 	if err != nil {
@@ -211,6 +258,7 @@ func (s *Source) Planning(p0cle, debut, fin string) ([]source.Creneau, error) {
 			Date:   strings.TrimSpace(kv["DATE"]),
 			HD:     strings.TrimSpace(kv["HD"]),
 			HF:     strings.TrimSpace(kv["HF"]),
+			Sacle:  strings.TrimSpace(kv["SACLE"]),
 			Salle:  strings.TrimSpace(kv["SALLE"]),
 			Prof:   strings.TrimSpace(kv["PROF"]),
 			// NOTE est la CLÉ de la note dans le référentiel amont ;

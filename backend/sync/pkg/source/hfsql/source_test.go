@@ -91,6 +91,24 @@ func TestHFSQLCoursNoms(t *testing.T) {
 	}
 }
 
+func TestHFSQLSalles(t *testing.T) {
+	salles, err := monter(t).Salles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(salles) != 1 {
+		t.Fatalf("%d salles, attendu 1 : %+v", len(salles), salles)
+	}
+	sa := salles[0]
+	// Largeur fixe HFSQL : nom et type arrivent complétés d'espaces.
+	if sa.ExternalID != "376" || sa.Nom != "A - PEYRE - CLAV" {
+		t.Errorf("salle %+v", sa)
+	}
+	if sa.Capacite != 80 || sa.Type != "Amphithéâtre" {
+		t.Errorf("capacité/type %+v", sa)
+	}
+}
+
 // L'export livre le planning de toutes les promotions et de toutes les années
 // d'un bloc ; le filtrage que webdfd délègue au serveur se fait ici en mémoire.
 func TestHFSQLPlanningFiltre(t *testing.T) {
@@ -137,6 +155,11 @@ func TestHFSQLPlanningJointures(t *testing.T) {
 	}
 	if pl4.Salle != "A - PEYRE - CLAV" {
 		t.Errorf("salle %q", pl4.Salle)
+	}
+	// Le SACLE voyage à côté du libellé : c'est lui qui rattache la séance au
+	// référentiel des salles.
+	if pl4.Sacle != "376" {
+		t.Errorf("sacle %q, attendu %q", pl4.Sacle, "376")
 	}
 	// Format du champ PROF de webdfd : civilité + NOM, sans prénom.
 	if pl4.Prof != "M. LECOEUCHE" {

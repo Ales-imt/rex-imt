@@ -70,6 +70,40 @@ func TestProfsEtEleves(t *testing.T) {
 	}
 }
 
+func TestSalles(t *testing.T) {
+	// Lignes au format salles_txt : le NOM arrive entre parenthèses, la
+	// dernière paire des lignes sans type est « TYPE; » (valeur vide), et
+	// l'encodage est Windows-1252 ("\xe9" est le é).
+	src := serveur(t, "SA;2;NOM;(A - BAUJON - CLAV) ;CAPACITE;120;TYPE;Amphith\xe9\xe2tre \n"+
+		"SA;376;NOM;(O. DE GOUGES - CLAV) ;CAPACITE;0;TYPE;\n"+
+		"SA;;NOM;(sans identifiant)\n"+
+		"SA;abc;NOM;(identifiant non numérique)\n"+
+		"SA;99;NOM;\n"+
+		"EOT\n")
+
+	salles, err := src.Salles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(salles) != 2 {
+		t.Fatalf("%d salles, attendu 2 : %+v", len(salles), salles)
+	}
+	// Les parenthèses de cgiempt sont retirées : ce nom est celui qui
+	// s'affichera partout, planning, exports et PDF compris.
+	if salles[0].ExternalID != "2" || salles[0].Nom != "A - BAUJON - CLAV" {
+		t.Errorf("salle %+v", salles[0])
+	}
+	if salles[0].Capacite != 120 || salles[0].Type != "Amphithéâtre" {
+		t.Errorf("capacité/type %+v", salles[0])
+	}
+	// Capacité 0 et type vide sont rendus tels quels : la distinction
+	// « non renseigné » se fait à l'écriture, pas au parsing.
+	if salles[1].ExternalID != "376" || salles[1].Nom != "O. DE GOUGES - CLAV" ||
+		salles[1].Capacite != 0 || salles[1].Type != "" {
+		t.Errorf("salle %+v", salles[1])
+	}
+}
+
 func TestPlanning(t *testing.T) {
 	// Ligne réelle du flux, tronquée après les champs consommés. NOTE est la
 	// CLÉ de la note amont, LANOTE son texte ("R\xe9union" : Windows-1252).
@@ -98,6 +132,11 @@ func TestPlanning(t *testing.T) {
 	}
 	if e.Cours != "DPPA" || e.Salle != "A - BAUJON - CLAV" || e.Groupe != "-" {
 		t.Errorf("libellés %+v", e)
+	}
+	// Le SACLE est la clé de rattachement au référentiel des salles — le
+	// libellé SALLE n'est qu'un affichage.
+	if e.Sacle != "2" {
+		t.Errorf("sacle %q, attendu %q", e.Sacle, "2")
 	}
 	// La note vient de LANOTE, jamais de NOTE (qui n'est que sa clé).
 	if e.Note != "Réunion DRDV" {

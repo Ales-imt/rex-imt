@@ -25,7 +25,8 @@ type Source struct {
 	eleves []source.Personne
 
 	coursNoms map[string]string // COCLEUNIK -> nom complet
-	salles    map[string]string // SACLEUNIK -> nom
+	salles    map[string]string // SACLEUNIK -> nom (conservée : creneau() s'en sert)
+	sallesRef []source.Salle    // référentiel complet, pour Salles()
 	groupes   map[string]string // GRCLEUNIK -> nom
 	profsNoms map[string]string // PRCLEUNIK -> nom d'affichage
 	planning  map[string][]source.Creneau
@@ -64,6 +65,8 @@ type (
 	hfSalle struct {
 		SACLEUNIK cleunik
 		Nom       string `json:"nom"`
+		Capacite  int    `json:"capacite"`
+		Type      string `json:"type"`
 	}
 	hfEleGro struct {
 		GRCLEUNIK cleunik
@@ -154,8 +157,20 @@ func NewSource(dir string) (*Source, error) {
 		s.groupes[g.GRCLEUNIK.String()] = champ(g.Nom)
 	}
 	s.salles = make(map[string]string, len(salles))
+	s.sallesRef = make([]source.Salle, 0, len(salles))
 	for _, sa := range salles {
-		s.salles[sa.SACLEUNIK.String()] = champ(sa.Nom)
+		nom := champ(sa.Nom)
+		if nom == "" {
+			continue
+		}
+		id := sa.SACLEUNIK.String()
+		s.salles[id] = nom
+		s.sallesRef = append(s.sallesRef, source.Salle{
+			ExternalID: id,
+			Nom:        nom,
+			Capacite:   sa.Capacite,
+			Type:       champ(sa.Type),
+		})
 	}
 
 	s.membres = make(map[string][]string)
@@ -193,6 +208,7 @@ func (s *Source) creneau(c hfPlanning) source.Creneau {
 		Date:   champ(c.Jour),
 		HD:     champ(c.Heuredebut),
 		HF:     champ(c.Heurefin),
+		Sacle:  c.SACLEUNIK.String(),
 		Salle:  s.salles[c.SACLEUNIK.String()],
 		Prof:   s.profsNoms[c.PRCLEUNIK.String()],
 		Note:   champ(c.Note),
@@ -203,6 +219,7 @@ func (s *Source) Promos() ([]source.Promo, error)       { return s.promos, nil }
 func (s *Source) Profs() ([]source.Personne, error)     { return s.profs, nil }
 func (s *Source) Eleves() ([]source.Personne, error)    { return s.eleves, nil }
 func (s *Source) CoursNoms() (map[string]string, error) { return s.coursNoms, nil }
+func (s *Source) Salles() ([]source.Salle, error)       { return s.sallesRef, nil }
 
 // Planning filtre l'instantané sur la promotion et la plage demandées. webdfd
 // délègue ce filtrage au serveur ; ici il se fait en mémoire, sur des dates au

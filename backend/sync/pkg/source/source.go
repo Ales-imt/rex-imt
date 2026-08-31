@@ -38,7 +38,8 @@ type Creneau struct {
 	Date   string `json:"date"`   // AAAAMMJJ
 	HD     string `json:"hd"`     // HHMM heure de début
 	HF     string `json:"hf"`     // HHMM heure de fin
-	Salle  string `json:"salle"`  // salle
+	Sacle  string `json:"sacle"`  // salle (SACLE / SACLEUNIK) — c'est ELLE qui rattache
+	Salle  string `json:"salle"`  // libellé de la salle, affichage seul, jamais une clé
 	Prof   string `json:"prof"`   // nom d'affichage du professeur
 	Note   string `json:"note"`   // note libre du créneau (LANOTE / note), vide si absente
 }
@@ -47,6 +48,18 @@ type Creneau struct {
 type Promo struct {
 	ExternalID string // P0CLEUNIK
 	Nom        string
+}
+
+// Salle est une salle du référentiel amont.
+//
+// Capacite vaut 0 quand l'amont ne la renseigne pas — c'est la valeur qu'il
+// rend, pas une convention d'ici. La distinction entre « 0 place » et « non
+// renseigné » est faite à l'écriture (public.salle.capacite est nullable).
+type Salle struct {
+	ExternalID string // SACLEUNIK
+	Nom        string
+	Capacite   int
+	Type       string // « Amphithéâtre », « Salle de TP »… vide si l'amont se tait
 }
 
 // Personne est un professeur ou un élève du référentiel amont.
@@ -72,6 +85,8 @@ type Source interface {
 	Profs() ([]Personne, error)
 	// Eleves rend les élèves connus.
 	Eleves() ([]Personne, error)
+	// Salles rend les salles connues, avec leur capacité et leur type.
+	Salles() ([]Salle, error)
 	// CoursNoms rend les noms complets des matières, indexés par COCLEUNIK.
 	CoursNoms() (map[string]string, error)
 	// Planning rend les créneaux d'une promotion sur une plage de dates

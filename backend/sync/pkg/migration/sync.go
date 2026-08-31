@@ -92,11 +92,12 @@ func RunSync(ctx context.Context, src source.Source, db *pgxpool.Pool, dumpPlann
 // ecrire déroule les étapes dans l'ordre imposé par leurs dépendances, toutes
 // sur la même transaction.
 //
+//  0. salles       — rien (mais AVANT les séances : syncSeances y résout salle_id)
 //  1. promotions   — rien
 //  2. profs        — rien (mais AVANT les séances : syncSeances y résout prof_id)
 //  3. matières     — promotions (période rattachée à une promo)
 //  4. groupes      — promotions
-//  5. séances      — matières, groupes, profs
+//  5. séances      — matières, groupes, profs, salles
 //  6. élèves       — rien
 //  7. eleve_groupe — groupes, élèves
 //  8. justifications — eleve_groupe (l'effectif attendu doit être celui du cycle)
@@ -109,6 +110,12 @@ func ecrire(ctx context.Context, q *Queries, c *collecte, ac anneeCourante, anne
 	cycleStart, err := q.Now(ctx)
 	if err != nil {
 		return fmt.Errorf("sync: horloge base: %w", err)
+	}
+
+	// 0. Salles. Hors année : le référentiel n'est pas annualisé.
+	resSalle, err := syncSalles(ctx, q, c.salles, c.sallesOK)
+	if err != nil {
+		return err
 	}
 
 	// 1. Promotions.
@@ -124,7 +131,7 @@ func ecrire(ctx context.Context, q *Queries, c *collecte, ac anneeCourante, anne
 	// 3, 4 et 5. Planning : matières et périodes, groupes, séances, annulations.
 	var aRattacher []int64
 	if anneeOK {
-		if aRattacher, err = syncPlanning(ctx, q, c, ac, cycleStart); err != nil {
+		if aRattacher, err = syncPlanning(ctx, q, c, ac, cycleStart, resSalle); err != nil {
 			return err
 		}
 	}

@@ -147,13 +147,38 @@ ON CONFLICT (source, external_id) DO UPDATE
   SET internal_id  = EXCLUDED.internal_id,
       last_seen_at = now();
 
+-- name: GetSalleBySource :one
+SELECT internal_id FROM migration.salle_map WHERE source = $1 AND external_id = $2;
+
+-- name: CreateSalle :one
+INSERT INTO public.salle (name, capacite, type) VALUES ($1, $2, $3) RETURNING id;
+
+-- name: UpdateSalle :exec
+UPDATE public.salle SET name = $1, capacite = $2, type = $3 WHERE id = $4;
+
+-- name: UpsertSalleMap :exec
+INSERT INTO migration.salle_map (internal_id, source, external_id, last_seen_at)
+VALUES ($1, $2, $3, now())
+ON CONFLICT (source, external_id) DO UPDATE
+  SET internal_id  = EXCLUDED.internal_id,
+      last_seen_at = now();
+
+-- name: ListSallesParSource :many
+-- Index SACLE → salle du cycle. JOIN et non LEFT JOIN : une salle sans
+-- correspondance amont n'est rattachable par rien — le nom ne sert jamais de
+-- clé — et n'a donc pas à figurer dans le résolveur.
+SELECT sa.id, sa.name, m.external_id
+FROM public.salle sa
+JOIN migration.salle_map m ON m.internal_id = sa.id AND m.source = $1
+ORDER BY sa.id;
+
 -- name: GetSeanceBySource :one
 SELECT internal_id FROM migration.seance_map WHERE source = $1 AND external_id = $2;
 
 -- name: CreateSeance :one
 INSERT INTO public.seance
-  (matiere_id, starts_at, ends_at, salle, prof, promotion_id, groupe_id, prof_id, remarque, opened_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $2)
+  (matiere_id, starts_at, ends_at, salle, salle_id, prof, promotion_id, groupe_id, prof_id, remarque, opened_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $2)
 RETURNING id;
 
 -- name: AttacherJustificationsSeance :exec
@@ -204,10 +229,17 @@ WITH avant AS (
   FROM public.seance sa WHERE sa.id = @seance_id
 )
 UPDATE public.seance s
+-- salle et salle_id viennent du MÊME appel au résolveur (cf. salles.go) : le
+-- texte est le name de la salle résolue par le SACLE, et ne retombe sur le
+-- libellé du créneau que lorsque la clé ne résout pas. salle_id est écrasé sans
+-- la précaution de groupe_id/prof_id : le résolveur est reconstruit depuis la
+-- base à chaque cycle, un NULL signifie bien « SACLE absent ou inconnu du
+-- référentiel », et non « on n'a pas su résoudre faute de données ».
 SET matiere_id   = @matiere_id,
     starts_at    = @starts_at,
     ends_at      = @ends_at,
     salle        = @salle,
+    salle_id     = @salle_id,
     prof         = @prof,
     promotion_id = @promotion_id,
     groupe_id    = COALESCE(@groupe_id, CASE WHEN @grcle_vide::bool THEN NULL ELSE avant.groupe_id END),

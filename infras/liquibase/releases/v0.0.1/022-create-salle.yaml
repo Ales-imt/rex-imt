@@ -1,0 +1,123 @@
+databaseChangeLog:
+
+  # ---- public.salle --------------------------------------------------------
+  # Référentiel des salles, alimenté par rex-sync depuis cybema (salles_txt /
+  # salles.json). Aucune saisie manuelle n'est prévue : l'amont fait foi.
+  #
+  # capacite est NULLABLE et non NOT NULL DEFAULT 0 : l'amont rend 0 pour les
+  # salles dont la capacité n'est pas renseignée (« FOND DE RESTAURANT »), et
+  # confondre « 0 place » avec « on ne sait pas » fausserait tout taux de
+  # remplissage calculé en aval.
+  - changeSet:
+      id: v0.0.1-022a-create-table-salle
+      author: vjo
+      changes:
+        - createTable:
+            tableName: salle
+            schemaName: public
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: capacite
+                  type: integer
+              - column:
+                  name: type
+                  type: varchar(64)
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+        # Pas d'index ni de contrainte d'unicité sur `name` : le nom ne sert
+        # jamais à retrouver une salle — le rattachement passe par le SACLE via
+        # migration.salle_map — et deux salles homonymes sont possibles en amont.
+      rollback:
+        - dropTable:
+            tableName: salle
+            schemaName: public
+
+  # ---- migration.salle_map -------------------------------------------------
+  # Même forme que user_map / prof_map / seance_map : pas de colonne `annee`.
+  # Une salle n'est pas annualisée — le bâtiment ne change pas de SACLEUNIK
+  # d'une rentrée à l'autre, contrairement aux promotions et aux groupes.
+  - changeSet:
+      id: v0.0.1-022b-create-salle-map
+      author: vjo
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE TABLE migration.salle_map (
+                internal_id  BIGINT      NOT NULL,
+                source       TEXT        NOT NULL,
+                external_id  TEXT        NOT NULL,
+                last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT pk_migration_salle_map
+                    PRIMARY KEY (internal_id, source),
+                CONSTRAINT uq_migration_salle_map_source_ext
+                    UNIQUE (source, external_id),
+                CONSTRAINT chk_migration_salle_map_source
+                    CHECK (source IN ('webdfd', 'cyber_notes', 'aurega')),
+                CONSTRAINT fk_migration_salle_map_salle
+                    FOREIGN KEY (internal_id) REFERENCES public.salle(id) ON DELETE CASCADE
+              );
+              CREATE INDEX idx_migration_salle_map_internal ON migration.salle_map(internal_id);
+      rollback:
+        - sql:
+            sql: DROP TABLE IF EXISTS migration.salle_map;
+
+  # ---- public.seance.salle_id ----------------------------------------------
+  # La colonne texte `salle` est CONSERVÉE. Elle est lue par presence/pdf.go,
+  # presence/export.go, justification/query.sql et common/presencedata : la
+  # remplacer imposerait une jointure à quatre endroits pour un gain nul, et
+  # elle reste le seul libellé disponible quand l'amont nomme une salle absente
+  # du référentiel. salle_id est donc un ENRICHISSEMENT, pas un remplacement.
+  - changeSet:
+      id: v0.0.1-022c-seance-salle-id
+      author: vjo
+      changes:
+        - addColumn:
+            tableName: seance
+            schemaName: public
+            columns:
+              - column:
+                  name: salle_id
+                  type: bigint
+        - addForeignKeyConstraint:
+            baseTableName: seance
+            baseTableSchemaName: public
+            baseColumnNames: salle_id
+            referencedTableSchemaName: public
+            referencedTableName: salle
+            referencedColumnNames: id
+            constraintName: fk_seance_salle
+            onDelete: SET NULL
+        # (salle_id, starts_at) et non salle_id seul : toutes les requêtes
+        # d'occupation filtrent une salle sur une plage de dates, l'index
+        # composite sert alors le WHERE et l'ORDER BY d'un seul parcours.
+        - createIndex:
+            tableName: seance
+            schemaName: public
+            indexName: idx_seance_salle_starts_at
+            columns:
+              - column:
+                  name: salle_id
+              - column:
+                  name: starts_at
+      rollback:
+        - dropColumn:
+            tableName: seance
+            schemaName: public
+            columnName: salle_id
