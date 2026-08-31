@@ -75,25 +75,16 @@ func TestSyncSalles(t *testing.T) {
 	})
 
 	t.Run("résolveur", func(t *testing.T) {
-		// SACLE connu : id + nom du RÉFÉRENTIEL, pas le libellé du créneau.
-		id, nom := res.resoudre("999901", "libellé périmé du créneau")
-		if !id.Valid || !nom.Valid || nom.String != "TEST - AMPHI SALLES" {
-			t.Errorf("SACLE connu : id=%+v nom=%+v", id, nom)
+		if id := res.resoudre("999901"); !id.Valid {
+			t.Errorf("SACLE connu non résolu : %+v", id)
 		}
-		// SACLE à 0 (distanciel, créneau sans salle) : repli sur le libellé.
-		id, nom = res.resoudre("0", " B - CLAV ")
-		if id.Valid || !nom.Valid || nom.String != "B - CLAV" {
-			t.Errorf("SACLE=0 : id=%+v nom=%+v", id, nom)
-		}
-		// SACLE inconnu du référentiel : pas de rattachement, libellé conservé.
-		id, nom = res.resoudre("888888", "SALLE FANTOME")
-		if id.Valid || nom.String != "SALLE FANTOME" {
-			t.Errorf("SACLE inconnu : id=%+v nom=%+v", id, nom)
-		}
-		// Ni clé ni libellé : les deux restent NULL.
-		id, nom = res.resoudre("", "  ")
-		if id.Valid || nom.Valid {
-			t.Errorf("sans salle : id=%+v nom=%+v", id, nom)
+		// SACLE à 0 (distanciel, créneau sans salle) et SACLE inconnu du
+		// référentiel rendent le même NULL : une séance a une salle ou n'en a
+		// pas, il n'y a pas de troisième cas.
+		for _, sacle := range []string{"0", "888888", ""} {
+			if id := res.resoudre(sacle); id.Valid {
+				t.Errorf("SACLE %q résolu : %+v", sacle, id)
+			}
 		}
 	})
 
@@ -115,8 +106,19 @@ func TestSyncSalles(t *testing.T) {
 		if n != 1 {
 			t.Errorf("%d entrées salle_map pour 999901, attendu 1", n)
 		}
-		if _, nom := res2.resoudre("999901", ""); nom.String != "TEST - AMPHI RENOMMÉ" {
-			t.Errorf("nom après mise à jour : %q", nom.String)
+		if id := res2.resoudre("999901"); !id.Valid {
+			t.Errorf("SACLE 999901 non résolu après mise à jour : %+v", id)
+		}
+		var nom string
+		if err := tx.QueryRow(ctx, `
+			SELECT sa.name FROM public.salle sa
+			JOIN migration.salle_map m ON m.internal_id = sa.id
+			WHERE m.source = 'webdfd' AND m.external_id = '999901'`,
+		).Scan(&nom); err != nil {
+			t.Fatal(err)
+		}
+		if nom != "TEST - AMPHI RENOMMÉ" {
+			t.Errorf("nom après mise à jour : %q", nom)
 		}
 	})
 
@@ -127,7 +129,7 @@ func TestSyncSalles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("syncSalles (amont muet): %v", err)
 		}
-		if id, _ := res3.resoudre("999902", ""); !id.Valid {
+		if id := res3.resoudre("999902"); !id.Valid {
 			t.Error("salle connue en base non rattachable quand l'amont ne répond pas")
 		}
 	})

@@ -75,9 +75,11 @@ func syncPlanning(ctx context.Context, q *Queries, c *collecte, ac anneeCourante
 	// Ce compteur n'est pas un ornement : sans lui, un SACLE qui cesse d'être
 	// servi en amont fait silencieusement chuter l'occupation de toutes les
 	// salles à zéro, et l'écran affiche un établissement vide au lieu d'une
-	// erreur.
+	// erreur. Cas transitoire — salles_txt en échec pendant que planning_txt
+	// répondait — qui se répare au cycle suivant.
 	if res.sallesNonResolues > 0 {
-		log.Printf("planning: %d séance(s) dont le SACLE ne résout pas — libellé amont conservé, hors bilan d'occupation", res.sallesNonResolues)
+		log.Printf("planning: %d séance(s) sans salle, SACLE inconnus du référentiel: %v",
+			res.sallesNonResolues, res.saclesInconnus)
 	}
 	if err != nil {
 		return res.aRattacher, err
@@ -275,10 +277,12 @@ type resultatSeances struct {
 	// diagnostic qu'il faut penser à activer.
 	ecartesMatiere int
 	ecartesHoraire int
-	// sallesNonResolues : séances dont le créneau annonce une salle que le
-	// référentiel ne connaît pas. Écrites quand même, avec le libellé amont,
-	// mais elles sortent du bilan d'occupation. Compté, pas ignoré.
+	// sallesNonResolues : séances dont le SACLE est inconnu du référentiel.
+	// Écrites quand même, sans salle, mais elles sortent du bilan d'occupation.
+	// Compté, pas ignoré — et les SACLE eux-mêmes sont conservés pour le
+	// journal, seule trace restante puisqu'aucun libellé n'est plus stocké.
 	sallesNonResolues int
+	saclesInconnus    []string
 }
 
 // syncSeances synchronise chaque créneau amont (identifié par PL = plcle stable)
@@ -327,12 +331,14 @@ func syncSeances(
 		if uid, found := prcleToUserID[e.Prcle]; found {
 			profID = pgtype.Int4{Int32: uid, Valid: true}
 		}
-		// salle et salle_id sortent du MÊME appel au résolveur : le texte est le
-		// name de la salle résolue par le SACLE, et ne retombe sur le libellé du
-		// créneau que lorsque la clé ne résout pas. Les faire diverger rouvrirait
-		// deux vocabulaires pour la même salle, selon l'écran.
-		salleID, salle := resSalle.resoudre(e.Sacle, e.Salle)
-		if !salleID.Valid && strings.TrimSpace(e.Salle) != "" {
+		salleID := resSalle.resoudre(e.Sacle)
+		if !salleID.Valid && e.Sacle != "" && e.Sacle != "0" {
+			// Plus aucun libellé n'est stocké : ce journal est la seule trace
+			// qu'il restera d'une salle non résolue. Le libellé amont, lui,
+			// survit dans le dump de diagnostic (source.Creneau.Salle).
+			if !contient(res.saclesInconnus, e.Sacle) {
+				res.saclesInconnus = append(res.saclesInconnus, e.Sacle)
+			}
 			res.sallesNonResolues++
 		}
 		prof := pgtype.Text{String: e.Prof, Valid: e.Prof != ""}
@@ -356,7 +362,6 @@ func syncSeances(
 				MatiereID:   matiereID,
 				StartsAt:    startsAtPg,
 				EndsAt:      endsAt,
-				Salle:       salle,
 				SalleID:     salleID,
 				Prof:        prof,
 				PromotionID: promoID,
@@ -377,7 +382,6 @@ func syncSeances(
 				MatiereID:   matiereID,
 				StartsAt:    startsAtPg,
 				EndsAt:      endsAt,
-				Salle:       salle,
 				SalleID:     salleID,
 				Prof:        prof,
 				PromotionID: promoID,

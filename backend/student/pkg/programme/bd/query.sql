@@ -31,7 +31,7 @@
 -- ces copies et les laisse fusionner.
 SELECT s.id, s.matiere_id, m.name AS matiere_name,
        s.starts_at, s.ends_at,
-       COALESCE(s.salle, '') AS salle,
+       COALESCE(sa.name, '') AS salle,
        COALESCE(s.prof, '')  AS prof,
        COALESCE(pr.name, '') AS promo,
        COALESCE(CASE WHEN s.groupe_id IS NOT NULL THEN g.name END, '')::text AS groupe,
@@ -40,12 +40,13 @@ FROM seance s
 JOIN matiere m       ON m.id = s.matiere_id
 JOIN periode pe      ON pe.id = m.periode_id
 JOIN promotion pr    ON pr.id = pe.promotion_id
+LEFT JOIN salle sa   ON sa.id = s.salle_id
 JOIN groupe g        ON g.promo_id = pr.id AND (s.groupe_id IS NULL OR g.id = s.groupe_id)
 JOIN eleve_groupe eg ON eg.id_groupe = g.id
 WHERE eg.num_etudiant = @user_id
   AND s.cancelled_at IS NULL
   AND s.starts_at >= @debut AND s.starts_at < @fin
-GROUP BY s.id, m.name, s.starts_at, s.ends_at, s.salle, s.prof, pr.name,
+GROUP BY s.id, m.name, s.starts_at, s.ends_at, sa.name, s.prof, pr.name,
          CASE WHEN s.groupe_id IS NOT NULL THEN g.name END
 ORDER BY s.starts_at;
 
@@ -61,13 +62,14 @@ ORDER BY s.starts_at;
 -- gestionnaire ne voient chacun qu'une ligne par séance.
 SELECT s.id, s.matiere_id, m.name AS matiere_name,
        s.starts_at, s.ends_at,
-       COALESCE(s.salle, '') AS salle,
+       COALESCE(sa.name, '') AS salle,
        COALESCE(s.prof, '')  AS prof,
        COALESCE(prs.name, prp.name, '') AS promo,
        COALESCE(g.name, '') AS groupe,
        COALESCE(s.remarque, '') AS remarque
 FROM seance s
 JOIN matiere m          ON m.id = s.matiere_id
+LEFT JOIN salle sa      ON sa.id = s.salle_id
 LEFT JOIN promotion prs ON prs.id = s.promotion_id
 LEFT JOIN periode pe    ON pe.id = m.periode_id
 LEFT JOIN promotion prp ON prp.id = pe.promotion_id
@@ -82,13 +84,14 @@ ORDER BY s.starts_at;
 -- comme presencedata.ListSeancesJour pour la journée courante.
 SELECT s.id, s.matiere_id, m.name AS matiere_name,
        s.starts_at, s.ends_at,
-       COALESCE(s.salle, '') AS salle,
+       COALESCE(sa.name, '') AS salle,
        COALESCE(s.prof, '')  AS prof,
        COALESCE(prs.name, prp.name, '') AS promo,
        COALESCE(g.name, '') AS groupe,
        COALESCE(s.remarque, '') AS remarque
 FROM seance s
 JOIN matiere m          ON m.id = s.matiere_id
+LEFT JOIN salle sa      ON sa.id = s.salle_id
 LEFT JOIN promotion prs ON prs.id = s.promotion_id
 LEFT JOIN periode pe    ON pe.id = m.periode_id
 LEFT JOIN promotion prp ON prp.id = pe.promotion_id

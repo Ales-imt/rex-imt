@@ -23,11 +23,12 @@
 -- plage non bornée, qui chevaucherait n'importe quelle demande.
 SELECT s.id, s.starts_at, s.ends_at,
        m.name AS matiere_name,
-       COALESCE(s.salle, '') AS salle,
+       COALESCE(sa.name, '') AS salle,
        COALESCE(p.statut, 'ABSENT')::text AS statut
 FROM seance s
 JOIN matiere m ON m.id = s.matiere_id
 JOIN seance_effectif_resolu er ON er.seance_id = s.id AND er.user_id = @user_id
+LEFT JOIN salle sa ON sa.id = s.salle_id
 LEFT JOIN pointage p ON p.seance_id = s.id AND p.user_id = @user_id
 WHERE s.cancelled_at IS NULL
   AND s.starts_at IS NOT NULL
@@ -140,12 +141,13 @@ ORDER BY lower(j.periode) DESC, j.id DESC;
 -- Même filtre que le compteur nb_seances, sous peine de deux comptes différents.
 SELECT s.id, s.starts_at, s.ends_at,
        m.name AS matiere_name,
-       COALESCE(s.salle, '') AS salle,
+       COALESCE(sa.name, '') AS salle,
        COALESCE(p.statut, 'ABSENT')::text AS statut
 FROM justification_seance js
 JOIN justification j ON j.id = js.justification_id
 JOIN seance s        ON s.id = js.seance_id
 JOIN matiere m       ON m.id = s.matiere_id
+LEFT JOIN salle sa   ON sa.id = s.salle_id
 LEFT JOIN pointage p ON p.seance_id = s.id AND p.user_id = j.user_id
 WHERE js.justification_id = @justification_id
   AND s.cancelled_at IS NULL

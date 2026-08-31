@@ -6,17 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
-
-// salleRef : ce que le résolveur rend pour un SACLE connu.
-type salleRef struct {
-	id  int64
-	nom string
-}
 
 // resolveurSalle traduit le SACLE d'un créneau en salle du référentiel.
 //
@@ -26,25 +19,19 @@ type salleRef struct {
 // qu'un rattachement absent : il impute des heures d'occupation à la mauvaise
 // salle, et rien ne le signale.
 type resolveurSalle struct {
-	parSacle map[string]salleRef
+	parSacle map[string]int64
 }
 
-// resoudre rend l'identifiant de la salle ET son nom de référentiel.
-//
-// Le nom est rendu parce que seance.salle en dérive : la colonne texte cesse de
-// recopier le libellé du créneau pour porter celui du référentiel, ce qui aligne
-// l'écran d'occupation, les exports et les PDF de présence sur un seul
-// vocabulaire. `nomCreneau` ne sert que de repli d'affichage quand la clé ne
-// résout pas.
-func (r resolveurSalle) resoudre(sacle, nomCreneau string) (pgtype.Int8, pgtype.Text) {
+// resoudre rend l'identifiant de la salle, NULL pour un SACLE absent (créneau
+// sans salle, distanciel) comme pour un SACLE inconnu du référentiel — le
+// second cas est compté et journalisé par syncSeances.
+func (r resolveurSalle) resoudre(sacle string) pgtype.Int8 {
 	if sacle != "" && sacle != "0" {
-		if s, ok := r.parSacle[sacle]; ok {
-			return pgtype.Int8{Int64: s.id, Valid: true},
-				pgtype.Text{String: s.nom, Valid: true}
+		if id, ok := r.parSacle[sacle]; ok {
+			return pgtype.Int8{Int64: id, Valid: true}
 		}
 	}
-	nom := strings.TrimSpace(nomCreneau)
-	return pgtype.Int8{}, pgtype.Text{String: nom, Valid: nom != ""}
+	return pgtype.Int8{}
 }
 
 // syncSalles upserte le référentiel des salles et rend de quoi rattacher les
@@ -119,9 +106,9 @@ func chargerResolveurSalle(ctx context.Context, q *Queries) (resolveurSalle, err
 		return resolveurSalle{}, fmt.Errorf("salle: chargement du résolveur: %w", err)
 	}
 
-	r := resolveurSalle{parSacle: make(map[string]salleRef, len(rows))}
+	r := resolveurSalle{parSacle: make(map[string]int64, len(rows))}
 	for _, row := range rows {
-		r.parSacle[row.ExternalID] = salleRef{id: row.ID, nom: row.Name}
+		r.parSacle[row.ExternalID] = row.ID
 	}
 	log.Printf("salle: résolveur chargé, %d salles rattachables", len(r.parSacle))
 	return r, nil

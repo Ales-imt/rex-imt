@@ -133,13 +133,14 @@ ON CONFLICT DO NOTHING;
 -- La fenêtre est calculée côté Go pour maîtriser le fuseau horaire.
 SELECT s.id, s.matiere_id, m.name AS matiere_name,
        s.starts_at, s.ends_at,
-       COALESCE(s.salle, '') AS salle,
+       COALESCE(sa.name, '') AS salle,
        COALESCE(s.prof, '') AS prof,
        COALESCE(g.name, pr.name, '') AS promo,
        s.opened_at, s.closed_at,
        (s.code IS NOT NULL)::bool AS activated
 FROM seance s
 JOIN matiere m         ON m.id = s.matiere_id
+LEFT JOIN salle sa     ON sa.id = s.salle_id
 LEFT JOIN groupe g     ON g.id = s.groupe_id
 LEFT JOIN promotion pr ON pr.id = s.promotion_id
 WHERE s.cancelled_at IS NULL
@@ -151,13 +152,14 @@ ORDER BY s.starts_at;
 -- Le filtrage se fait ici, côté SQL, jamais après coup dans le handler.
 SELECT s.id, s.matiere_id, m.name AS matiere_name,
        s.starts_at, s.ends_at,
-       COALESCE(s.salle, '') AS salle,
+       COALESCE(sa.name, '') AS salle,
        COALESCE(s.prof, '') AS prof,
        COALESCE(g.name, pr.name, '') AS promo,
        s.opened_at, s.closed_at,
        (s.code IS NOT NULL)::bool AS activated
 FROM seance s
 JOIN matiere m         ON m.id = s.matiere_id
+LEFT JOIN salle sa     ON sa.id = s.salle_id
 LEFT JOIN groupe g     ON g.id = s.groupe_id
 LEFT JOIN promotion pr ON pr.id = s.promotion_id
 WHERE s.cancelled_at IS NULL

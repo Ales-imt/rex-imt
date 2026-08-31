@@ -287,7 +287,6 @@ export function Presence() {
                     matiere_id: selectedMatiereId,
                     starts_at: selectedSeance?.starts_at,
                     ends_at: selectedSeance?.ends_at,
-                    salle: selectedSeance?.salle ?? '',
                     prof: selectedSeance?.prof ?? '',
                 })
                 .then(r => r.data),

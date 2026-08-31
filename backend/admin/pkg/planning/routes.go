@@ -7,5 +7,4 @@ func RoutePlanning(r chi.Router) {
 	r.Get("/heures", GetHeures)
 	r.Get("/salles/occupation", GetOccupation)
 	r.Get("/salles/creneaux", GetCreneaux)
-	r.Get("/salles/non-resolues", GetNonResolues)
 }

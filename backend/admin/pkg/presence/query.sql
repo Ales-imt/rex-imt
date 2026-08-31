@@ -1,9 +1,10 @@
 -- name: ListSeancesPlanning :many
 SELECT s.id, s.starts_at, s.ends_at,
-       COALESCE(s.salle, '') AS salle,
+       COALESCE(sa.name, '') AS salle,
        COALESCE(s.prof, '') AS prof,
        COALESCE(g.name, pr.name, '') AS promo
 FROM seance s
+LEFT JOIN salle sa     ON sa.id = s.salle_id
 LEFT JOIN groupe g     ON g.id = s.groupe_id
 LEFT JOIN promotion pr ON pr.id = s.promotion_id
 WHERE s.matiere_id = @matiere_id
@@ -12,8 +13,11 @@ WHERE s.matiere_id = @matiere_id
 ORDER BY s.starts_at;
 
 -- name: OpenSeance :one
-INSERT INTO seance (matiere_id, code, starts_at, ends_at, salle, prof, late_after_minutes)
-VALUES (@matiere_id, @code, @starts_at, @ends_at, @salle, @prof, @late_after_minutes)
+-- Pas de salle : cette branche ne s'exécute que hors créneau planifié, où
+-- l'utilisateur n'en a jamais désigné — et une salle se désigne par sa clé,
+-- pas par un texte libre.
+INSERT INTO seance (matiere_id, code, starts_at, ends_at, prof, late_after_minutes)
+VALUES (@matiere_id, @code, @starts_at, @ends_at, @prof, @late_after_minutes)
 ON CONFLICT (code) DO UPDATE SET code = EXCLUDED.code
 RETURNING id, code, opened_at;
 
@@ -27,12 +31,13 @@ LIMIT 1;
 -- name: GetSeanceDetail :one
 SELECT s.id, s.code, s.opened_at, s.closed_at, s.late_after_minutes,
        s.starts_at, s.ends_at,
-       COALESCE(s.salle, '') AS salle,
+       COALESCE(sa.name, '') AS salle,
        COALESCE(s.prof, '') AS prof,
        m.name AS matiere_name,
        COALESCE(g.name, pr.name, '') AS promo
 FROM seance s
 JOIN matiere m         ON m.id = s.matiere_id
+LEFT JOIN salle sa     ON sa.id = s.salle_id
 LEFT JOIN groupe g     ON g.id = s.groupe_id
 LEFT JOIN periode pe   ON pe.id = m.periode_id
 LEFT JOIN promotion pr ON pr.id = pe.promotion_id
@@ -59,7 +64,7 @@ WHERE pe.id = @id;
 -- NULL désactive la clause correspondante.
 SELECT s.id, s.code, s.opened_at, s.closed_at, s.late_after_minutes,
        s.starts_at, s.ends_at,
-       COALESCE(s.salle, '') AS salle,
+       COALESCE(sa.name, '') AS salle,
        COALESCE(s.prof, '') AS prof,
        m.id AS matiere_id,
        m.name AS matiere_name,
@@ -67,6 +72,7 @@ SELECT s.id, s.code, s.opened_at, s.closed_at, s.late_after_minutes,
 FROM seance s
 JOIN matiere m         ON m.id = s.matiere_id
 JOIN periode pe        ON pe.id = m.periode_id
+LEFT JOIN salle sa     ON sa.id = s.salle_id
 LEFT JOIN promotion pr ON pr.id = pe.promotion_id
 LEFT JOIN groupe g     ON g.id = s.groupe_id
 WHERE pe.id = @periode_id

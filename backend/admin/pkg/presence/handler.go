@@ -27,7 +27,6 @@ type openSeanceRequest struct {
 	MatiereID        int64  `json:"matiere_id"`
 	StartsAt         string `json:"starts_at"`
 	EndsAt           string `json:"ends_at"`
-	Salle            string `json:"salle"`
 	Prof             string `json:"prof"`
 	LateAfterMinutes int32  `json:"late_after_minutes"`
 }
@@ -232,7 +231,6 @@ func OpenSeanceHandler(w http.ResponseWriter, r *http.Request) {
 		Code:             toText(presencetoken.GenerateCode()),
 		StartsAt:         startsAt,
 		EndsAt:           toTstz(req.EndsAt),
-		Salle:            toText(req.Salle),
 		Prof:             toText(req.Prof),
 		LateAfterMinutes: req.LateAfterMinutes,
 	})

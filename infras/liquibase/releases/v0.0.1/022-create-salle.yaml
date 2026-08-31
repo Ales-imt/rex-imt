@@ -79,11 +79,9 @@ databaseChangeLog:
             sql: DROP TABLE IF EXISTS migration.salle_map;
 
   # ---- public.seance.salle_id ----------------------------------------------
-  # La colonne texte `salle` est CONSERVÉE. Elle est lue par presence/pdf.go,
-  # presence/export.go, justification/query.sql et common/presencedata : la
-  # remplacer imposerait une jointure à quatre endroits pour un gain nul, et
-  # elle reste le seul libellé disponible quand l'amont nomme une salle absente
-  # du référentiel. salle_id est donc un ENRICHISSEMENT, pas un remplacement.
+  # Livré d'abord en enrichissement à côté de la colonne texte `salle`, pour
+  # que le palier reste sans effet sur l'existant ; 022d supprime ensuite la
+  # colonne texte, une fois toutes les lectures passées par la jointure.
   - changeSet:
       id: v0.0.1-022c-seance-salle-id
       author: vjo
@@ -121,3 +119,25 @@ databaseChangeLog:
             tableName: seance
             schemaName: public
             columnName: salle_id
+
+  # ---- suppression de public.seance.salle ----------------------------------
+  # La colonne recopiait salle.name. Deux vérités pour une même donnée, dont
+  # une non contrainte : un libellé pouvait désigner une salle absente du
+  # référentiel, sans qu'aucune requête ne puisse trancher. salle_id, nullable,
+  # dit tout — une salle, ou aucune.
+  - changeSet:
+      id: v0.0.1-022d-drop-seance-salle
+      author: vjo
+      changes:
+        - dropColumn:
+            tableName: seance
+            schemaName: public
+            columnName: salle
+      rollback:
+        - addColumn:
+            tableName: seance
+            schemaName: public
+            columns:
+              - column:
+                  name: salle
+                  type: varchar(255)

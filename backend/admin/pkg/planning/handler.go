@@ -94,13 +94,6 @@ type creneauSalle struct {
 	PromotionName *string `json:"promotion_name"`
 }
 
-// salleNonResolue : un libellé de salle que le référentiel ne connaît pas —
-// des heures qui manquent au bilan d'occupation.
-type salleNonResolue struct {
-	Libelle   string `json:"libelle"`
-	NbSeances int64  `json:"nb_seances"`
-}
-
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
 // parsePeriodeID lit et valide le paramètre ?periode_id=.
@@ -190,8 +183,8 @@ func GetReservations(w http.ResponseWriter, r *http.Request) {
 			Groupes:      []groupeRef{},
 		}
 
-		if row.Salle.Valid && row.Salle.String != "" {
-			res.Salles = append(res.Salles, salleRef{ID: 0, Name: row.Salle.String})
+		if row.SalleID.Valid {
+			res.Salles = append(res.Salles, salleRef{ID: row.SalleID.Int64, Name: row.SalleName.String})
 		}
 		if row.Prof.Valid && row.Prof.String != "" {
 			var profID int32
@@ -280,30 +273,6 @@ func GetCreneaux(w http.ResponseWriter, r *http.Request) {
 			GroupeName:    textOrNil(row.GroupeName),
 			PromotionName: textOrNil(row.PromotionName),
 		})
-	}
-	render.JSON(w, r, result)
-}
-
-// GetNonResolues rend les libellés de salle que le référentiel ne connaît pas.
-// Écran de supervision : une entrée ici est soit une salle nouvelle en amont,
-// soit un rattachement cassé — dans les deux cas, des heures hors bilan.
-func GetNonResolues(w http.ResponseWriter, r *http.Request) {
-	debut, fin, ok := parsePlage(r)
-	if !ok {
-		services.InvalidRequestError(w, r, "debut/fin invalides (RFC 3339 ou AAAA-MM-JJ, debut < fin)", services.NO_INFORMATION, nil)
-		return
-	}
-
-	q := New(services.GetPgCtx(r.Context()).Db)
-	rows, err := q.GetSallesNonResolues(context.Background(), GetSallesNonResoluesParams{Debut: debut, Fin: fin})
-	if err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
-
-	result := make([]salleNonResolue, 0, len(rows))
-	for _, row := range rows {
-		result = append(result, salleNonResolue{Libelle: row.Libelle, NbSeances: row.NbSeances})
 	}
 	render.JSON(w, r, result)
 }

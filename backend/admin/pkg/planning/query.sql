@@ -5,7 +5,8 @@ SELECT
     s.ends_at    AS ends_at,
     s.matiere_id AS matiere_id,
     m.name       AS matiere_name,
-    s.salle      AS salle,
+    s.salle_id   AS salle_id,
+    sa.name      AS salle_name,
     s.prof       AS prof,
     s.prof_id    AS prof_id,
     s.groupe_id  AS groupe_id,
@@ -13,6 +14,7 @@ SELECT
     s.remarque   AS remarque
 FROM seance s
 JOIN matiere m ON m.id = s.matiere_id
+LEFT JOIN salle sa ON sa.id = s.salle_id
 LEFT JOIN groupe g ON g.id = s.groupe_id
 WHERE m.periode_id = $1
   AND s.starts_at IS NOT NULL
@@ -96,19 +98,6 @@ WHERE s.starts_at >= @debut AND s.starts_at < @fin
   AND s.ends_at IS NOT NULL
   AND s.cancelled_at IS NULL
 ORDER BY sa.name, s.starts_at;
-
--- name: GetSallesNonResolues :many
--- Séances portant un libellé de salle absent du référentiel. Sert d'écran de
--- supervision : une entrée ici est soit une salle nouvelle en amont, soit un
--- rattachement cassé — dans les deux cas, des heures qui manquent au bilan.
-SELECT btrim(s.salle) AS libelle, COUNT(*)::bigint AS nb_seances
-FROM public.seance s
-WHERE s.starts_at >= @debut AND s.starts_at < @fin
-  AND s.cancelled_at IS NULL
-  AND s.salle_id IS NULL
-  AND btrim(COALESCE(s.salle, '')) <> ''
-GROUP BY 1
-ORDER BY nb_seances DESC;
 
 -- name: GetHeuresConsommeesByProf :many
 SELECT
