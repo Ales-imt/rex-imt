@@ -1,0 +1,44 @@
+databaseChangeLog:
+
+  # ---- public.refresh_tokens : fenêtre de grâce de la rotation ------------
+  # prev_token porte le hachage du jeton que la rotation vient de consommer,
+  # prev_consumed_at l'instant de cette consommation — l'ancrage FIXE de la
+  # fenêtre de grâce (jetonEnGrace, backend/common/pkg/auth/jwt.go) : un
+  # client dont la réponse de /auth/refresh s'est perdue (timeout, reload)
+  # peut rejouer son jeton dans la minute au lieu d'être déconnecté.
+  # NULL au login (pas de prédécesseur) et sur les lignes antérieures à cette
+  # migration (pas de grâce possible pour elles avant leur prochaine rotation).
+  - changeSet:
+      id: v0.0.1-021-alter-refresh-tokens-grace
+      author: vjo
+      changes:
+        - addColumn:
+            tableName: refresh_tokens
+            schemaName: public
+            columns:
+              - column:
+                  name: prev_token
+                  type: text
+              - column:
+                  name: prev_consumed_at
+                  type: TIMESTAMPTZ
+        - createIndex:
+            tableName: refresh_tokens
+            schemaName: public
+            indexName: refresh_tokens_prev_token_idx
+            columns:
+              - column:
+                  name: prev_token
+      rollback:
+        - dropIndex:
+            tableName: refresh_tokens
+            schemaName: public
+            indexName: refresh_tokens_prev_token_idx
+        - dropColumn:
+            tableName: refresh_tokens
+            schemaName: public
+            columnName: prev_token
+        - dropColumn:
+            tableName: refresh_tokens
+            schemaName: public
+            columnName: prev_consumed_at

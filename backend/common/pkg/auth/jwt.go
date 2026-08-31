@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"context"
-	"errors"
 	"net/http"
 	"time"
 
@@ -74,7 +73,41 @@ func logJetonInconnu(ctx context.Context, r *http.Request, q *Queries, secret st
 	logRefusRefresh(ctx, r, "session fermée (logout ou révocation)", attrs...)
 }
 
-// RefreshAccessToken tourne le refresh token (rotation stricte, usage unique).
+// refreshGraceWindow : durée pendant laquelle un jeton déjà consommé reste
+// échangeable une nouvelle fois (voir jetonEnGrace). Assez long pour couvrir
+// un timeout client (8 s) suivi d'un rechargement de page sur réseau mobile,
+// assez court pour que la détection de rejeu garde son sens.
+const refreshGraceWindow = 60 * time.Second
+
+// jetonEnGrace tente la fenêtre de grâce sur un jeton introuvable par
+// ConsumeRefreshToken.
+//
+// La rotation stricte fabrique un jeton ORPHELIN quand la réponse de
+// /auth/refresh n'atteint jamais le client : le serveur a tourné v→v+1, mais
+// le client (timeout axios, reload qui avorte la requête en vol, réseau
+// mobile) ne connaît que v. Il le rejoue, recevait « jeton déjà consommé » et
+// se déconnectait — constaté en production le 30/08/2026, deux POST espacés
+// d'exactement 8 s (le timeout client).
+//
+// Si le jeton présenté est le prédécesseur DIRECT du jeton vivant et que sa
+// consommation date de moins de refreshGraceWindow, la ligne vivante est
+// retournée : l'appelant la re-tourne EN PLACE (GraceRotateRefreshToken), ce
+// qui invalide le successeur jamais reçu et en délivre un nouveau. Au-delà de
+// la fenêtre, ErrNoRows : le refus — et, à terme, la révocation de famille du
+// lot token_version — reprend ses droits.
+func jetonEnGrace(ctx context.Context, qtx *Queries, hash string) (RefreshToken, error) {
+	vivant, err := qtx.GetRefreshTokenByPrev(ctx, services.ToPgText(hash))
+	if err != nil {
+		return RefreshToken{}, err
+	}
+	if !vivant.PrevConsumedAt.Valid || time.Since(vivant.PrevConsumedAt.Time) > refreshGraceWindow {
+		return RefreshToken{}, pgx.ErrNoRows
+	}
+	return vivant, nil
+}
+
+// RefreshAccessToken tourne le refresh token (rotation stricte, usage unique,
+// avec une courte fenêtre de grâce pour réponse perdue — voir jetonEnGrace).
 //
 // La consommation de l'ancien jeton est ATOMIQUE (DELETE … RETURNING) : de deux
 // requêtes concurrentes portant le même jeton, une seule obtient la ligne,
@@ -103,10 +136,20 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 	defer tx.Rollback(ctx)
 	qtx := New(pgCtx.Db).WithTx(tx)
 
-	oldRefreshToken, err := qtx.ConsumeRefreshToken(ctx, hashToken(body.RefreshToken))
+	hash := hashToken(body.RefreshToken)
+	grace := false
+	oldRefreshToken, err := qtx.ConsumeRefreshToken(ctx, hash)
 	if err == pgx.ErrNoRows {
-		// Jeton inconnu, déjà tourné, ou perdu face à une requête concurrente :
-		// le log qualifie, le client reçoit un 400 volontairement opaque.
+		// Déjà consommé il y a un instant ? Peut-être une réponse de rotation
+		// perdue : la fenêtre de grâce rend alors la ligne VIVANTE, verrouillée
+		// FOR UPDATE, que l'on re-tournera en place au lieu d'en insérer une.
+		oldRefreshToken, err = jetonEnGrace(ctx, qtx, hash)
+		grace = err == nil
+	}
+	if err == pgx.ErrNoRows {
+		// Jeton inconnu, tourné hors fenêtre de grâce, ou perdu face à une
+		// requête concurrente : le log qualifie, le client reçoit un 400
+		// volontairement opaque.
 		// Lecture via le pool : la transaction sera annulée par le defer.
 		logJetonInconnu(ctx, r, New(pgCtx.Db), jwtConfig.Secret, body.RefreshToken)
 		services.InvalidRequestError(w, r, "Refresh token inconnu", services.NO_INFORMATION, nil)
@@ -160,15 +203,37 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 	}
 
 	now := time.Now()
-	err = qtx.CreateRefreshToken(ctx, CreateRefreshTokenParams{
-		Userid:       oldRefreshToken.UserID,
-		Token:        hashToken(tokenPaire.RefreshTokenInfo.Token),
-		Session:      tokenPaire.RefreshTokenInfo.Session,
-		TokenVersion: services.ToPgInt4(tokenPaire.RefreshTokenInfo.Version),
-		Expire:       services.ToPgTimestamptz(&tokenPaire.RefreshTokenInfo.Expiration),
-		Created:      services.ToPgTimestamptz(&now),
-		Revoked:      false,
-	})
+	if grace {
+		// Re-rotation en place : le successeur jamais reçu est remplacé, son
+		// ancrage de grâce (prev_token, prev_consumed_at) conservé. En Warn :
+		// chaque passage ici est une réponse perdue côté client, un signal
+		// réseau qu'il faut pouvoir compter en production.
+		slog.WarnContext(ctx, "refresh accordé en fenêtre de grâce : rotation précédente jamais reçue par le client",
+			"user", oldRefreshToken.UserID, "session", oldRefreshToken.Session,
+			"version_remplacee", oldRefreshToken.TokenVersion.Int32,
+			"version_emise", tokenPaire.RefreshTokenInfo.Version)
+		err = qtx.GraceRotateRefreshToken(ctx, GraceRotateRefreshTokenParams{
+			ID:           oldRefreshToken.ID,
+			Token:        hashToken(tokenPaire.RefreshTokenInfo.Token),
+			TokenVersion: services.ToPgInt4(tokenPaire.RefreshTokenInfo.Version),
+			Expire:       services.ToPgTimestamptz(&tokenPaire.RefreshTokenInfo.Expiration),
+			Created:      services.ToPgTimestamptz(&now),
+		})
+	} else {
+		err = qtx.CreateRefreshToken(ctx, CreateRefreshTokenParams{
+			Userid:       oldRefreshToken.UserID,
+			Token:        hashToken(tokenPaire.RefreshTokenInfo.Token),
+			Session:      tokenPaire.RefreshTokenInfo.Session,
+			TokenVersion: services.ToPgInt4(tokenPaire.RefreshTokenInfo.Version),
+			Expire:       services.ToPgTimestamptz(&tokenPaire.RefreshTokenInfo.Expiration),
+			Created:      services.ToPgTimestamptz(&now),
+			Revoked:      false,
+			// Ancrage de la fenêtre de grâce : le jeton tout juste consommé
+			// reste échangeable refreshGraceWindow durant (cf. jetonEnGrace).
+			PrevToken:      services.ToPgText(hash),
+			PrevConsumedAt: services.ToPgTimestamptz(&now),
+		})
+	}
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
@@ -185,83 +250,6 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 	})
 }
 
-func Me(w http.ResponseWriter, r *http.Request, jwtConfig services.JWTConfig) {
-
-	_, err := checkRefreshToken(r, services.GetPgCtx(r.Context()))
-	if err != nil {
-		services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
-
-	claim, err := getClaims(r, jwtConfig.Secret)
-	if err != nil {
-		services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
-
-	subject, err := getSubjectFromClaims(claim)
-	if err != nil {
-		services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
-
-	id, err := strconv.Atoi(*subject)
-	if err != nil {
-		services.InvalidRequestError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
-
-	pgCtx := services.GetPgCtx(r.Context())
-
-	studentQueries := New(pgCtx.Db)
-	user, err := studentQueries.GetUserById(context.Background(), int32(id))
-	if err == pgx.ErrNoRows {
-		services.InvalidRequestError(w, r, "Utilisateur inconnu", services.NO_INFORMATION, nil)
-		return
-	}
-
-	if err != nil {
-		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
-		return
-	}
-
-	render.JSON(w, r, &LoginResponse{
-		Name:    user.Name,
-		Surname: user.Surname,
-		Roles:   user.Roles,
-	})
-
-}
-
 type refreshBody struct {
 	RefreshToken string `json:"refreshToken"`
-}
-
-func checkRefreshToken(r *http.Request, pgCtx *services.Postgres) (*RefreshToken, error) {
-
-	var body refreshBody
-	if err := render.DecodeJSON(r.Body, &body); err != nil || body.RefreshToken == "" {
-		return nil, errors.New("refresh token manquant")
-	}
-	tokenValue := hashToken(body.RefreshToken)
-
-	queries := New(pgCtx.Db)
-	// Retrieve the refresh token
-	token, err := queries.GetRefreshToken(context.Background(), tokenValue)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if the token is valid
-	if token.Revoked {
-		return nil, errors.New("token has been revoked")
-	}
-
-	// Check if the token has expired
-	now := time.Now()
-	if now.After(token.ExpiresAt.Time) {
-		return nil, errors.New("token has been expires")
-	}
-
-	return &token, nil
 }

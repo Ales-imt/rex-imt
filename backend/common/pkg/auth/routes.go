@@ -28,8 +28,4 @@ func RoutesAuth(r chi.Router, cfg *services.Config,
 		RefreshAccessToken(w, r, cfg.JWT)
 	})
 
-	r.Get("/me", func(w http.ResponseWriter, r *http.Request) {
-		Me(w, r, cfg.JWT)
-	})
-
 }

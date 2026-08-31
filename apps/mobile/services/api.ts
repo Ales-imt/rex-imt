@@ -10,9 +10,10 @@ export const apiInstance = axios.create({
 // Mutex partagé avec services/session.ts (rafraichir()) : au redémarrage de
 // l'app, la garde de navigation (verifierSession) et la première requête d'un
 // écran peuvent toutes deux voir l'access token expirant au même instant.
-// Le refresh token est à usage unique côté serveur (rotation stricte, sans
-// grâce) : deux appels concurrents à /auth/refresh font perdre l'un des deux,
-// qui recevrait un refus et effacerait une session que l'autre vient
+// Le refresh token est à usage unique côté serveur (rotation stricte, avec
+// pour seule tolérance une courte fenêtre de grâce sur le jeton tout juste
+// consommé) : deux appels concurrents à /auth/refresh font perdre l'un des
+// deux, qui recevrait un refus et effacerait une session que l'autre vient
 // pourtant de renouveler avec succès.
 let refreshPromise: Promise<void> | null = null;
 
@@ -42,11 +43,28 @@ async function doRefresh(): Promise<void> {
   });
 }
 
+// Le timeout de 8 s est court à dessein : le démarrage attend ce refresh sur
+// l'écran d'attente. Une réponse perdue (timeout, reload) n'est plus fatale
+// depuis la fenêtre de grâce serveur — rejouer le même jeton dans la minute
+// obtient une nouvelle paire au lieu d'un refus.
 async function appelRefresh(): Promise<void> {
   const refreshToken = await getRefreshToken();
   if (!refreshToken) throw new Error('No refresh token');
-  const res = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken }, { timeout: 8_000 });
-  await saveTokens(res.data.accessToken, res.data.refreshToken);
+  try {
+    const res = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken }, { timeout: 8_000 });
+    await saveTokens(res.data.accessToken, res.data.refreshToken);
+  } catch (e) {
+    // Refus 4xx MAIS le stockage porte déjà un autre jeton : un concurrent
+    // (onglet sans Web Locks, course résiduelle) a tourné le jeton pendant que
+    // notre requête était en vol — sa paire toute fraîche est dans le
+    // stockage. Le refus ne vise que notre exemplaire périmé : échouer ici
+    // ferait effacer (session.ts) une session pourtant valide.
+    if (axios.isAxiosError(e) && e.response && e.response.status < 500) {
+      const courant = await getRefreshToken();
+      if (courant && courant !== refreshToken) return;
+    }
+    throw e;
+  }
 }
 
 // Intercepteurs posés à l'import du module, et non depuis un effet d'écran :
