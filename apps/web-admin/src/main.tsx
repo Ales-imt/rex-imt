@@ -34,6 +34,9 @@ import { BULLETTIN_WORKFLOW } from './pages/bullettin/def.ts';
 import { Bullettin } from './pages/bullettin/Bullettin.tsx';
 import { MODERATION } from './pages/moderation/def.ts';
 import { Moderation } from './pages/moderation/Moderation.tsx';
+import { SALLE_DISPO_WORKFLOW, SALLE_OCCUPATION_WORKFLOW } from './pages/salle/def.ts';
+import { Disponibilite } from './pages/salle/Disponibilite.tsx';
+import { Occupation } from './pages/salle/Occupation.tsx';
 
 const RoleGuard = ({ children, roles }: { children: React.ReactNode, roles: string[] }) => {
   const { session } = useContext(SessionContext);
@@ -120,6 +123,14 @@ const routes = [
               { path: 'select', Component: ProgrammeSelect },
               { path: ':periodeId', Component: Planning },
             ]
+          },
+          {
+            path: SALLE_DISPO_WORKFLOW,
+            element: <RoleGuard roles={[Role.ADMIN, Role.GESTIONNAIRE]}><Disponibilite /></RoleGuard>,
+          },
+          {
+            path: SALLE_OCCUPATION_WORKFLOW,
+            element: <RoleGuard roles={[Role.ADMIN, Role.GESTIONNAIRE]}><Occupation /></RoleGuard>,
           },
           {
             path: BULLETTIN_WORKFLOW,

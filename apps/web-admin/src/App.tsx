@@ -34,6 +34,10 @@ import ArticleIcon from '@mui/icons-material/Article';
 import { MODERATION } from './pages/moderation/def';
 import GavelIcon from '@mui/icons-material/Gavel';
 import RateReviewIcon from '@mui/icons-material/RateReview';
+import { SALLE_DISPO_WORKFLOW, SALLE_OCCUPATION_WORKFLOW } from './pages/salle/def';
+import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
+import EventAvailableIcon from '@mui/icons-material/EventAvailable';
+import DonutLargeIcon from '@mui/icons-material/DonutLarge';
 
 
 type NavigationItemWithRoles = NavigationItem & {
@@ -138,6 +142,27 @@ const NAVIGATION: NavigationItemWithRoles[] = [
     title: 'Programme',
     icon: <CalendarMonthIcon />,
     requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+  },
+  {
+    // Groupe sans segment : les URL des enfants restent de premier niveau,
+    // comme pour le groupe « Présence ».
+    title: 'Salles',
+    icon: <MeetingRoomIcon />,
+    requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+    children: [
+      {
+        segment: SALLE_DISPO_WORKFLOW,
+        title: 'Disponibilité',
+        icon: <EventAvailableIcon />,
+        requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+      },
+      {
+        segment: SALLE_OCCUPATION_WORKFLOW,
+        title: 'Occupation',
+        icon: <DonutLargeIcon />,
+        requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+      },
+    ],
   },
   {
     segment: BULLETTIN_WORKFLOW,
