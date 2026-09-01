@@ -70,9 +70,10 @@ func logJetonInconnu(ctx context.Context, r *http.Request, q *Queries, secret st
 	if err == nil {
 		attrs = append(attrs, "version_en_base", enBase.TokenVersion.Int32)
 		// Instrumentation temporaire (branche pb) : situer le jeton rejoué par
-		// rapport au vivant. recu_est_prev_direct=true + prev_consomme_depuis
-		// > 60 s = grâce expirée (rejeu tardif) ; false = jeton encore plus
-		// ancien que le prédécesseur (storage figé depuis plusieurs rotations).
+		// rapport au vivant. Depuis la réémission idempotente, le prédécesseur
+		// direct est RÉÉMIS, pas refusé — recu_est_prev_direct=true ici ne
+		// devrait plus apparaître que pour un JWT périmé ; false = la chaîne a
+		// avancé d'au moins deux crans (vrai rejeu, ou storage très ancien).
 		attrs = append(attrs,
 			"jeton_recu_hash", prefixeHash(hashToken(brut)),
 			"jeton_en_base_hash", prefixeHash(enBase.Token),
@@ -94,37 +95,43 @@ func logJetonInconnu(ctx context.Context, r *http.Request, q *Queries, secret st
 	logRefusRefresh(ctx, r, "session fermée (logout ou révocation)", attrs...)
 }
 
-// refreshGraceWindow : durée pendant laquelle un jeton déjà consommé reste
-// échangeable une nouvelle fois (voir jetonEnGrace). Assez long pour couvrir
-// un timeout client (8 s) suivi d'un rechargement de page sur réseau mobile,
-// assez court pour que la détection de rejeu garde son sens.
-const refreshGraceWindow = 60 * time.Second
-
-// jetonEnGrace tente la fenêtre de grâce sur un jeton introuvable par
-// ConsumeRefreshToken.
+// jetonReemissible tente la réémission idempotente sur un jeton introuvable
+// par ConsumeRefreshToken.
 //
 // La rotation stricte fabrique un jeton ORPHELIN quand la réponse de
 // /auth/refresh n'atteint jamais le client : le serveur a tourné v→v+1, mais
-// le client (timeout axios, reload qui avorte la requête en vol, réseau
-// mobile) ne connaît que v. Il le rejoue, recevait « jeton déjà consommé » et
-// se déconnectait — constaté en production le 30/08/2026, deux POST espacés
-// d'exactement 8 s (le timeout client).
+// le client (timeout axios, fermeture ou reload qui avorte la requête en vol)
+// ne connaît que v. Il le rejoue — parfois des minutes ou des heures plus
+// tard, à l'ouverture suivante de l'application — recevait « jeton déjà
+// consommé » et se déconnectait. Constaté en production les 30/08 et
+// 01/09/2026 ; la fenêtre de grâce de 60 s essayée entre-temps couvrait le
+// retry immédiat mais pas le retour tardif, et aucune fenêtre TEMPORELLE ne
+// peut le couvrir : c'est l'idempotence qu'il faut.
 //
-// Si le jeton présenté est le prédécesseur DIRECT du jeton vivant et que sa
-// consommation date de moins de refreshGraceWindow, la ligne vivante est
-// retournée : l'appelant la re-tourne EN PLACE (GraceRotateRefreshToken), ce
-// qui invalide le successeur jamais reçu et en délivre un nouveau. Au-delà de
-// la fenêtre, ErrNoRows : le refus — et, à terme, la révocation de famille du
-// lot token_version — reprend ses droits.
-func jetonEnGrace(ctx context.Context, qtx *Queries, hash string) (RefreshToken, error) {
-	vivant, err := qtx.GetRefreshTokenByPrev(ctx, services.ToPgText(hash))
-	if err != nil {
-		return RefreshToken{}, err
-	}
-	if !vivant.PrevConsumedAt.Valid || time.Since(vivant.PrevConsumedAt.Time) > refreshGraceWindow {
+// Si le jeton présenté est un JWT à nous, non périmé, et le prédécesseur
+// DIRECT du jeton vivant (prev_token), la ligne vivante est retournée :
+// l'appelant re-fabrique ce jeton courant À L'IDENTIQUE
+// (regenereRefreshToken) et le rend avec un access token neuf — la même
+// réponse que celle qui s'est perdue, sans rien écrire en base, rejouable à
+// volonté. La détection de rejeu garde son sens avec un cran de retard : dès
+// que le jeton courant est consommé à son tour, prev_token avance et
+// l'ancien prédécesseur retombe mécaniquement sur ErrNoRows — le refus, et à
+// terme la révocation de famille du lot token_version, reprennent leurs
+// droits.
+func jetonReemissible(ctx context.Context, q *Queries, jwtCfg services.JWTConfig, brut string, hash string) (RefreshToken, error) {
+	// Signature et expiration vérifiées sur le JWT présenté lui-même : son
+	// éventuelle ligne en base a été consommée, il ne reste que lui pour en
+	// répondre. Un jeton périmé ou étranger n'ouvre droit à rien.
+	tok, err := jwt.Parse(brut, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("méthode de signature inattendue %v", t.Header["alg"])
+		}
+		return []byte(jwtCfg.Secret), nil
+	})
+	if err != nil || !tok.Valid {
 		return RefreshToken{}, pgx.ErrNoRows
 	}
-	return vivant, nil
+	return q.GetRefreshTokenByPrev(ctx, services.ToPgText(hash))
 }
 
 // ── Instrumentation temporaire (branche pb) ────────────────────────────────
@@ -185,7 +192,8 @@ func attrsJetonRecu(secret string, brut string) []any {
 // ── Fin de l'instrumentation temporaire (helpers) ──────────────────────────
 
 // RefreshAccessToken tourne le refresh token (rotation stricte, usage unique,
-// avec une courte fenêtre de grâce pour réponse perdue — voir jetonEnGrace).
+// avec réémission idempotente du courant pour réponse perdue — voir
+// jetonReemissible).
 //
 // La consommation de l'ancien jeton est ATOMIQUE (DELETE … RETURNING) : de deux
 // requêtes concurrentes portant le même jeton, une seule obtient la ligne,
@@ -222,19 +230,21 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 	qtx := New(pgCtx.Db).WithTx(tx)
 
 	hash := hashToken(body.RefreshToken)
-	grace := false
+	reemission := false
 	oldRefreshToken, err := qtx.ConsumeRefreshToken(ctx, hash)
 	if err == pgx.ErrNoRows {
-		// Déjà consommé il y a un instant ? Peut-être une réponse de rotation
-		// perdue : la fenêtre de grâce rend alors la ligne VIVANTE, verrouillée
-		// FOR UPDATE, que l'on re-tournera en place au lieu d'en insérer une.
-		oldRefreshToken, err = jetonEnGrace(ctx, qtx, hash)
-		grace = err == nil
+		// Déjà consommé ? Peut-être une réponse de rotation perdue : si le
+		// jeton présenté est le prédécesseur direct du jeton vivant, on rendra
+		// au client LA MÊME réponse que celle qui s'est perdue (réémission
+		// idempotente, voir jetonReemissible) — oldRefreshToken est alors la
+		// ligne VIVANTE, pas une ligne consommée.
+		oldRefreshToken, err = jetonReemissible(ctx, qtx, jwtConfig, body.RefreshToken, hash)
+		reemission = err == nil
 	}
 	if err == pgx.ErrNoRows {
-		// Jeton inconnu, tourné hors fenêtre de grâce, ou perdu face à une
-		// requête concurrente : le log qualifie, le client reçoit un 400
-		// volontairement opaque.
+		// Jeton inconnu, plus ancien que le prédécesseur du vivant (la chaîne
+		// a avancé : vrai rejeu), ou périmé : le log qualifie, le client
+		// reçoit un 400 volontairement opaque.
 		// Lecture via le pool : la transaction sera annulée par le defer.
 		logJetonInconnu(ctx, r, New(pgCtx.Db), jwtConfig.Secret, body.RefreshToken)
 		services.InvalidRequestError(w, r, "Refresh token inconnu", services.NO_INFORMATION, nil)
@@ -280,45 +290,75 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 	}
 
 	claims := jwt.MapClaims{"roles": strings.Join(user.Roles, ",")}
+	subject := strconv.Itoa(int(oldRefreshToken.UserID))
 
-	tokenPaire, err := genereTokenPaire(jwtConfig, &oldRefreshToken, &claims, strconv.Itoa(int(oldRefreshToken.UserID)))
+	if reemission {
+		// La réponse perdue, rendue à l'identique : le jeton courant
+		// reconstruit depuis la ligne vivante, accompagné d'un access token
+		// neuf. RIEN n'est écrit en base — rejouable à volonté, deux rejeux
+		// concurrents obtiennent la même chose.
+		refreshBrut, err := regenereRefreshToken(&oldRefreshToken, jwtConfig)
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+		accessToken, err := generateAccessToken(subject, jwtConfig, &claims, oldRefreshToken.Session)
+		if err != nil {
+			services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+			return
+		}
+
+		// En Warn : chaque passage ici est une réponse perdue côté client
+		// (timeout, fermeture ou reload en vol) — un signal à compter en
+		// production.
+		attrs := []any{"user", oldRefreshToken.UserID, "session", oldRefreshToken.Session,
+			"version_reemise", oldRefreshToken.TokenVersion.Int32}
+		if oldRefreshToken.PrevConsumedAt.Valid {
+			attrs = append(attrs, "rotation_perdue_depuis",
+				time.Since(oldRefreshToken.PrevConsumedAt.Time).Round(time.Second).String())
+		}
+		slog.WarnContext(ctx, "refresh réémis à l'identique : rotation précédente jamais reçue par le client", attrs...)
+
+		// Instrumentation temporaire (branche pb) : la SORTIE, chemin réémission.
+		slog.InfoContext(ctx, "refresh accordé",
+			"user", oldRefreshToken.UserID,
+			"session", oldRefreshToken.Session,
+			"version_emise", oldRefreshToken.TokenVersion.Int32,
+			"reemission", true,
+			"jeton_presente_hash", prefixeHash(hash),
+			"jeton_emis_hash", prefixeHash(oldRefreshToken.Token),
+			"exp_emise", oldRefreshToken.ExpiresAt.Time.Format(time.RFC3339),
+			"ip", ipClient(r),
+			"duree", time.Since(debut).Round(time.Millisecond).String())
+
+		render.JSON(w, r, map[string]string{
+			"accessToken":  accessToken.Token,
+			"refreshToken": refreshBrut,
+		})
+		return
+	}
+
+	tokenPaire, err := genereTokenPaire(jwtConfig, &oldRefreshToken, &claims, subject)
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}
 
 	now := time.Now()
-	if grace {
-		// Re-rotation en place : le successeur jamais reçu est remplacé, son
-		// ancrage de grâce (prev_token, prev_consumed_at) conservé. En Warn :
-		// chaque passage ici est une réponse perdue côté client, un signal
-		// réseau qu'il faut pouvoir compter en production.
-		slog.WarnContext(ctx, "refresh accordé en fenêtre de grâce : rotation précédente jamais reçue par le client",
-			"user", oldRefreshToken.UserID, "session", oldRefreshToken.Session,
-			"version_remplacee", oldRefreshToken.TokenVersion.Int32,
-			"version_emise", tokenPaire.RefreshTokenInfo.Version)
-		err = qtx.GraceRotateRefreshToken(ctx, GraceRotateRefreshTokenParams{
-			ID:           oldRefreshToken.ID,
-			Token:        hashToken(tokenPaire.RefreshTokenInfo.Token),
-			TokenVersion: services.ToPgInt4(tokenPaire.RefreshTokenInfo.Version),
-			Expire:       services.ToPgTimestamptz(&tokenPaire.RefreshTokenInfo.Expiration),
-			Created:      services.ToPgTimestamptz(&now),
-		})
-	} else {
-		err = qtx.CreateRefreshToken(ctx, CreateRefreshTokenParams{
-			Userid:       oldRefreshToken.UserID,
-			Token:        hashToken(tokenPaire.RefreshTokenInfo.Token),
-			Session:      tokenPaire.RefreshTokenInfo.Session,
-			TokenVersion: services.ToPgInt4(tokenPaire.RefreshTokenInfo.Version),
-			Expire:       services.ToPgTimestamptz(&tokenPaire.RefreshTokenInfo.Expiration),
-			Created:      services.ToPgTimestamptz(&now),
-			Revoked:      false,
-			// Ancrage de la fenêtre de grâce : le jeton tout juste consommé
-			// reste échangeable refreshGraceWindow durant (cf. jetonEnGrace).
-			PrevToken:      services.ToPgText(hash),
-			PrevConsumedAt: services.ToPgTimestamptz(&now),
-		})
-	}
+	err = qtx.CreateRefreshToken(ctx, CreateRefreshTokenParams{
+		Userid:       oldRefreshToken.UserID,
+		Token:        hashToken(tokenPaire.RefreshTokenInfo.Token),
+		Session:      tokenPaire.RefreshTokenInfo.Session,
+		TokenVersion: services.ToPgInt4(tokenPaire.RefreshTokenInfo.Version),
+		Expire:       services.ToPgTimestamptz(&tokenPaire.RefreshTokenInfo.Expiration),
+		Created:      services.ToPgTimestamptz(&now),
+		Revoked:      false,
+		// Ancrage de la réémission idempotente : tant que le jeton créé ici
+		// n'est pas consommé à son tour, son prédécesseur reste échangeable
+		// contre lui, à l'identique (cf. jetonReemissible).
+		PrevToken:      services.ToPgText(hash),
+		PrevConsumedAt: services.ToPgTimestamptz(&now),
+	})
 	if err != nil {
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
@@ -336,7 +376,7 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 		"session", oldRefreshToken.Session,
 		"version_consommee", oldRefreshToken.TokenVersion.Int32,
 		"version_emise", tokenPaire.RefreshTokenInfo.Version,
-		"grace", grace,
+		"reemission", false,
 		"jeton_consomme_hash", prefixeHash(hash),
 		"jeton_emis_hash", prefixeHash(hashToken(tokenPaire.RefreshTokenInfo.Token)),
 		"exp_emise", tokenPaire.RefreshTokenInfo.Expiration.Format(time.RFC3339),

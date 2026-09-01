@@ -19,25 +19,12 @@ SELECT *
 DELETE FROM refresh_tokens WHERE token = @token RETURNING *;
 
 -- name: GetRefreshTokenByPrev :one
--- Fenêtre de grâce : retrouve le jeton VIVANT dont le prédécesseur direct est
--- le jeton présenté. FOR UPDATE : deux rejeux concurrents du même prédécesseur
--- se sérialisent sur la ligne au lieu de fabriquer chacun leur successeur.
+-- Réémission idempotente : retrouve le jeton VIVANT dont le prédécesseur
+-- direct est le jeton présenté. Lecture pure — la réémission n'écrit rien,
+-- deux rejeux concurrents obtiennent la même réponse, c'est le but.
 SELECT *
         FROM refresh_tokens
-        WHERE prev_token = @prev_token
-        FOR UPDATE;
-
--- name: GraceRotateRefreshToken :exec
--- Re-rotation EN PLACE du jeton vivant (fenêtre de grâce). prev_token et
--- prev_consumed_at sont volontairement conservés : l'ancrage temporel de la
--- grâce ne doit pas glisser, sans quoi rejouer l'ancien jeton toutes les 50 s
--- prolongerait la fenêtre indéfiniment.
-UPDATE refresh_tokens
-        SET token = @token,
-            token_version = @token_version,
-            expires_at = @expire,
-            created_at = @created
-        WHERE id = @id;
+        WHERE prev_token = @prev_token;
 
 -- name: GetRefreshTokenBySession :one
 SELECT *

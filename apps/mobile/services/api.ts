@@ -10,11 +10,11 @@ export const apiInstance = axios.create({
 // Mutex partagé avec services/session.ts (rafraichir()) : au redémarrage de
 // l'app, la garde de navigation (verifierSession) et la première requête d'un
 // écran peuvent toutes deux voir l'access token expirant au même instant.
-// Le refresh token est à usage unique côté serveur (rotation stricte, avec
-// pour seule tolérance une courte fenêtre de grâce sur le jeton tout juste
-// consommé) : deux appels concurrents à /auth/refresh font perdre l'un des
-// deux, qui recevrait un refus et effacerait une session que l'autre vient
-// pourtant de renouveler avec succès.
+// Le refresh token est à usage unique côté serveur (rotation stricte ; seule
+// tolérance, le prédécesseur direct reste échangeable contre LE MÊME
+// successeur — réémission idempotente) : sérialiser reste préférable, un
+// appel concurrent parti avec un jeton plus vieux d'un cran recevrait un
+// refus et effacerait une session pourtant valide.
 let refreshPromise: Promise<void> | null = null;
 
 export async function ensureRefreshed(): Promise<void> {
@@ -44,9 +44,10 @@ async function doRefresh(): Promise<void> {
 }
 
 // Le timeout de 8 s est court à dessein : le démarrage attend ce refresh sur
-// l'écran d'attente. Une réponse perdue (timeout, reload) n'est plus fatale
-// depuis la fenêtre de grâce serveur — rejouer le même jeton dans la minute
-// obtient une nouvelle paire au lieu d'un refus.
+// l'écran d'attente. Une réponse perdue (timeout, fermeture, reload) n'est
+// plus fatale depuis la réémission idempotente côté serveur — rejouer le même
+// jeton, cinq secondes ou trois heures plus tard, obtient LA MÊME paire que
+// celle qui s'est perdue.
 async function appelRefresh(): Promise<void> {
   const refreshToken = await getRefreshToken();
   if (!refreshToken) throw new Error('No refresh token');

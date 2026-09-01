@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -128,6 +129,37 @@ func generateRefreshToken(oldRefreshToken *RefreshToken, subject string, jwtCfg 
 	}
 
 	return &info, nil
+}
+
+// regenereRefreshToken refabrique À L'IDENTIQUE le jeton de renouvellement
+// que représente une ligne de refresh_tokens. C'est possible parce que le JWT
+// est entièrement déterministe : ses seuls claims (sub, session_id, version,
+// exp — voir generateRefreshToken, qui ne pose ni jti ni iat) sont tous
+// stockés dans la ligne, et la signature HMAC comme la sérialisation JSON
+// (clés triées) ne dépendent que d'eux. C'est la clef de la réémission
+// idempotente : on ne stocke que le hachage du jeton courant, mais on sait le
+// reconstruire pour le rendre une seconde fois au client qui a perdu la
+// réponse de sa rotation.
+//
+// Le hachage du résultat est confronté à la colonne token : toute divergence
+// (format de claims qui aurait évolué, ligne antérieure à une migration)
+// rend une erreur plutôt qu'un jeton qui ne correspond pas à la base.
+func regenereRefreshToken(row *RefreshToken, jwtCfg services.JWTConfig) (string, error) {
+	refreshToken := jwt.New(jwt.SigningMethodHS256)
+	rtClaims := refreshToken.Claims.(jwt.MapClaims)
+	rtClaims["sub"] = strconv.Itoa(int(row.UserID))
+	rtClaims["exp"] = row.ExpiresAt.Time.Unix()
+	rtClaims["session_id"] = row.Session
+	rtClaims["version"] = int(row.TokenVersion.Int32)
+
+	brut, err := refreshToken.SignedString([]byte(jwtCfg.Secret))
+	if err != nil {
+		return "", err
+	}
+	if hashToken(brut) != row.Token {
+		return "", fmt.Errorf("jeton régénéré divergent de la base pour la ligne %d : claims inattendus", row.ID)
+	}
+	return brut, nil
 }
 
 func getClaims(r *http.Request, jwtSecret string) (*jwt.MapClaims, error) {
