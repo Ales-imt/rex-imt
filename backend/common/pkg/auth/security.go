@@ -4,6 +4,7 @@ import (
 	"back-rex-common/pkg/services"
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strconv"
@@ -58,6 +59,14 @@ func Authenticate(jwt services.JWTConfig) func(next http.Handler) http.Handler {
 				queries := New(pgCtx.Db)
 				_, err := queries.GetRefreshTokenBySession(r.Context(), session)
 				if err != nil {
+					// Instrumentation temporaire (branche pb) : ce 401 est
+					// l'autre déclencheur de déconnexion côté client (son
+					// intercepteur efface les jetons) — il partait en Debug,
+					// invisible en production.
+					slog.WarnContext(r.Context(), "accès refusé : session absente en base (fermée ou révoquée)",
+						"user", context.UserID, "session", session,
+						"chemin", r.URL.Path, "ip", ipClient(r),
+						"referer", r.Referer(), "user_agent", r.UserAgent())
 					services.AuthenticationError(w, r, "session révoquée", services.NO_INFORMATION, nil)
 					return
 				}

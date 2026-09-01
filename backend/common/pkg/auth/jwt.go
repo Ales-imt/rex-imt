@@ -21,7 +21,10 @@ import (
 // utilisateur déconnecté « sans raison » ne laissait aucune trace exploitable.
 // Le jeton lui-même n'est JAMAIS logué, même haché.
 func logRefusRefresh(ctx context.Context, r *http.Request, raison string, attrs ...any) {
-	args := append([]any{"raison", raison, "user_agent", r.UserAgent()}, attrs...)
+	// ip + referer : instrumentation temporaire (branche pb), pour corréler
+	// chaque refus avec l'access log nginx et la page qui a déclenché l'appel.
+	args := append([]any{"raison", raison, "ip", ipClient(r), "referer", r.Referer(),
+		"user_agent", r.UserAgent()}, attrs...)
 	slog.WarnContext(ctx, "refresh refusé", args...)
 }
 
@@ -65,9 +68,27 @@ func logJetonInconnu(ctx context.Context, r *http.Request, q *Queries, secret st
 
 	enBase, err := q.GetRefreshTokenBySession(ctx, session)
 	if err == nil {
+		attrs = append(attrs, "version_en_base", enBase.TokenVersion.Int32)
+		// Instrumentation temporaire (branche pb) : situer le jeton rejoué par
+		// rapport au vivant. recu_est_prev_direct=true + prev_consomme_depuis
+		// > 60 s = grâce expirée (rejeu tardif) ; false = jeton encore plus
+		// ancien que le prédécesseur (storage figé depuis plusieurs rotations).
+		attrs = append(attrs,
+			"jeton_recu_hash", prefixeHash(hashToken(brut)),
+			"jeton_en_base_hash", prefixeHash(enBase.Token),
+			"derniere_rotation", enBase.CreatedAt.Time.Format(time.RFC3339))
+		if enBase.PrevToken.Valid {
+			attrs = append(attrs,
+				"prev_en_base_hash", prefixeHash(enBase.PrevToken.String),
+				"recu_est_prev_direct", hashToken(brut) == enBase.PrevToken.String)
+		}
+		if enBase.PrevConsumedAt.Valid {
+			attrs = append(attrs,
+				"prev_consomme_depuis", time.Since(enBase.PrevConsumedAt.Time).Round(time.Second).String())
+		}
 		logRefusRefresh(ctx, r,
 			"jeton déjà consommé : la session porte un jeton plus récent (replay après rotation, ou course perdue)",
-			append(attrs, "version_en_base", enBase.TokenVersion.Int32)...)
+			attrs...)
 		return
 	}
 	logRefusRefresh(ctx, r, "session fermée (logout ou révocation)", attrs...)
@@ -106,6 +127,63 @@ func jetonEnGrace(ctx context.Context, qtx *Queries, hash string) (RefreshToken,
 	return vivant, nil
 }
 
+// ── Instrumentation temporaire (branche pb) ────────────────────────────────
+//
+// Trace CHAQUE passage dans /auth/refresh, entrée comme sortie, pour
+// comprendre les déconnexions résiduelles en production. Entorse assumée à la
+// règle « jamais le jeton dans les logs » : le HACHAGE est logué TRONQUÉ à 12
+// hex — assez pour corréler avec les colonnes token / prev_token de
+// refresh_tokens, inutilisable pour s'authentifier (le jeton en clair n'est
+// pas dérivable de son SHA-256). À RETIRER une fois le diagnostic posé.
+
+// prefixeHash rend les 12 premiers hex du hachage déjà calculé d'un jeton.
+func prefixeHash(hash string) string {
+	if len(hash) < 12 {
+		return hash
+	}
+	return hash[:12]
+}
+
+// ipClient remonte l'adresse réelle du client posée par le nginx du conteneur
+// (X-Real-IP), pour corréler avec son access log ; à défaut, l'adresse TCP.
+func ipClient(r *http.Request) string {
+	if ip := r.Header.Get("X-Real-IP"); ip != "" {
+		return ip
+	}
+	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+		return ip
+	}
+	return r.RemoteAddr
+}
+
+// attrsJetonRecu décode le jeton présenté SANS le valider (même périmé ou
+// étranger, on veut savoir qui prétend quoi) et rend les attributs de log :
+// hachage tronqué, user, session, version, expiration.
+func attrsJetonRecu(secret string, brut string) []any {
+	attrs := []any{"jeton_hash", prefixeHash(hashToken(brut))}
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+	tok, err := parser.Parse(brut, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("méthode de signature inattendue %v", t.Header["alg"])
+		}
+		return []byte(secret), nil
+	})
+	if err != nil || !tok.Valid {
+		return append(attrs, "claims", "illisibles ou signature invalide")
+	}
+	claims, _ := tok.Claims.(jwt.MapClaims)
+	sub, _ := claims["sub"].(string)
+	session, _ := claims["session_id"].(string)
+	version, _ := claims["version"].(float64)
+	attrs = append(attrs, "user", sub, "session", session, "version_jeton", int(version))
+	if exp, expErr := claims.GetExpirationTime(); expErr == nil && exp != nil {
+		attrs = append(attrs, "exp_jeton", exp.Time.Format(time.RFC3339))
+	}
+	return attrs
+}
+
+// ── Fin de l'instrumentation temporaire (helpers) ──────────────────────────
+
 // RefreshAccessToken tourne le refresh token (rotation stricte, usage unique,
 // avec une courte fenêtre de grâce pour réponse perdue — voir jetonEnGrace).
 //
@@ -127,6 +205,13 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 		services.InvalidRequestError(w, r, "refresh token manquant", services.NO_INFORMATION, nil)
 		return
 	}
+
+	// Instrumentation temporaire (branche pb) : l'ENTRÉE de chaque refresh,
+	// avant toute décision — qui présente quoi, depuis où.
+	debut := time.Now()
+	slog.InfoContext(ctx, "refresh reçu",
+		append(attrsJetonRecu(jwtConfig.Secret, body.RefreshToken),
+			"ip", ipClient(r), "referer", r.Referer(), "user_agent", r.UserAgent())...)
 
 	tx, err := pgCtx.Db.Begin(ctx)
 	if err != nil {
@@ -243,6 +328,20 @@ func RefreshAccessToken(w http.ResponseWriter, r *http.Request, jwtConfig servic
 		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
 		return
 	}
+
+	// Instrumentation temporaire (branche pb) : la SORTIE de chaque refresh
+	// réussi — ce qui a été consommé, ce qui est délivré, par quel chemin.
+	slog.InfoContext(ctx, "refresh accordé",
+		"user", oldRefreshToken.UserID,
+		"session", oldRefreshToken.Session,
+		"version_consommee", oldRefreshToken.TokenVersion.Int32,
+		"version_emise", tokenPaire.RefreshTokenInfo.Version,
+		"grace", grace,
+		"jeton_consomme_hash", prefixeHash(hash),
+		"jeton_emis_hash", prefixeHash(hashToken(tokenPaire.RefreshTokenInfo.Token)),
+		"exp_emise", tokenPaire.RefreshTokenInfo.Expiration.Format(time.RFC3339),
+		"ip", ipClient(r),
+		"duree", time.Since(debut).Round(time.Millisecond).String())
 
 	render.JSON(w, r, map[string]string{
 		"accessToken":  tokenPaire.AccessToken.Token,
