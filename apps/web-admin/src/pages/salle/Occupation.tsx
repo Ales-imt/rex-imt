@@ -1,38 +1,25 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router';
 import dayjs from 'dayjs';
 import {
     Alert, Box, Chip, IconButton, LinearProgress, MenuItem, Paper, Select,
     Skeleton, Stack, Table, TableBody, TableCell, TableHead, TableRow,
-    TableSortLabel, TextField, Typography,
+    TableSortLabel, TextField, Tooltip, Typography,
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { apiInstance } from '../../services/api';
-import { ENDPOINT_SALLES, useSessionState, type OccupationSalle } from './def';
-
-// Amplitudes d'ouverture proposées : le dénominateur du taux est une
-// convention d'établissement, elle se choisit ici et jamais en SQL — la figer
-// côté base interdirait de la faire varier sans redéploiement.
-const AMPLITUDES = [
-    { cle: '8-18x5', label: '8h–18h · lun-ven', heures: 50 },
-    { cle: '8-20x5', label: '8h–20h · lun-ven', heures: 60 },
-    { cle: '8-18x6', label: '8h–18h · lun-sam', heures: 60 },
-] as const;
+import {
+    AMPLITUDES, ENDPOINT_SALLES, SALLE_SEMAINE_LUNDI_KEY, SALLE_SEMAINE_WORKFLOW,
+    labelSemaine, lundiDe, useSessionState, type OccupationSalle,
+} from './def';
 
 type CleTri = 'salle' | 'type' | 'capacite' | 'nb_seances' | 'heures';
 type Ordre = 'asc' | 'desc';
 
-function lundiDe(d: dayjs.Dayjs): string {
-    return d.subtract((d.day() + 6) % 7, 'day').format('YYYY-MM-DD');
-}
-
-function labelSemaine(lundi: string): string {
-    const d = new Date(lundi + 'T12:00:00');
-    return 'Semaine du ' + d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-}
-
 export function Occupation() {
+    const navigate = useNavigate();
     const [lundi, setLundi] = useSessionState('salle.occupation.lundi', lundiDe(dayjs()));
     const [amplitudeCle, setAmplitudeCle] = useSessionState<string>('salle.occupation.amplitude', AMPLITUDES[0].cle);
     const [recherche, setRecherche] = useSessionState<string>('salle.occupation.recherche', '');
@@ -86,6 +73,13 @@ export function Occupation() {
                 return ordre === 'asc' ? c : -c;
             });
     }, [occupationQ.data, typeFiltre, rechercheMin, triPar, ordre]);
+
+    // Ouvre l'écran Semaine sur la même semaine que celle observée ici : sa
+    // clé de session est écrite avant la navigation.
+    const ouvrirSemaine = (salleId: number) => {
+        sessionStorage.setItem(SALLE_SEMAINE_LUNDI_KEY, lundi);
+        navigate(`/${SALLE_SEMAINE_WORKFLOW}/${salleId}`);
+    };
 
     const totalHeures = lignes.reduce((s, l) => s + l.heures, 0);
     const tauxMoyen = lignes.length > 0 ? totalHeures / amplitude / lignes.length : 0;
@@ -200,14 +194,21 @@ export function Occupation() {
                                 {lignes.map(salle => {
                                     const taux = salle.heures / amplitude;
                                     return (
-                                        <TableRow key={salle.salle_id} hover>
+                                        <TableRow
+                                            key={salle.salle_id}
+                                            hover
+                                            sx={{ cursor: 'pointer' }}
+                                            onClick={() => ouvrirSemaine(salle.salle_id)}
+                                        >
                                             <TableCell>
-                                                <Stack direction="row" alignItems="center" spacing={1}>
-                                                    <span>{salle.salle_name}</span>
-                                                    {salle.heures === 0 && (
-                                                        <Chip size="small" variant="outlined" label="jamais réservée" />
-                                                    )}
-                                                </Stack>
+                                                <Tooltip title="Voir la semaine de cette salle">
+                                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                                        <span>{salle.salle_name}</span>
+                                                        {salle.heures === 0 && (
+                                                            <Chip size="small" variant="outlined" label="jamais réservée" />
+                                                        )}
+                                                    </Stack>
+                                                </Tooltip>
                                             </TableCell>
                                             <TableCell>{salle.type ?? ''}</TableCell>
                                             <TableCell align="right">{salle.capacite ?? '—'}</TableCell>

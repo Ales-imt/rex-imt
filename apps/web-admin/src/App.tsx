@@ -34,7 +34,7 @@ import ArticleIcon from '@mui/icons-material/Article';
 import { MODERATION } from './pages/moderation/def';
 import GavelIcon from '@mui/icons-material/Gavel';
 import RateReviewIcon from '@mui/icons-material/RateReview';
-import { SALLE_DISPO_WORKFLOW, SALLE_OCCUPATION_WORKFLOW } from './pages/salle/def';
+import { SALLE_DISPO_WORKFLOW, SALLE_OCCUPATION_WORKFLOW, SALLE_SEMAINE_WORKFLOW } from './pages/salle/def';
 import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import DonutLargeIcon from '@mui/icons-material/DonutLarge';
@@ -160,6 +160,12 @@ const NAVIGATION: NavigationItemWithRoles[] = [
         segment: SALLE_OCCUPATION_WORKFLOW,
         title: 'Occupation',
         icon: <DonutLargeIcon />,
+        requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
+      },
+      {
+        segment: SALLE_SEMAINE_WORKFLOW,
+        title: 'Semaine',
+        icon: <CalendarMonthIcon />,
         requiredRoles: [Role.ADMIN, Role.GESTIONNAIRE],
       },
     ],
