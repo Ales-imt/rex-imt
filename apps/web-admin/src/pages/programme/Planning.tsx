@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import PaletteIcon from '@mui/icons-material/Palette';
 import TuneIcon from '@mui/icons-material/Tune';
+import ViewTimelineIcon from '@mui/icons-material/ViewTimeline';
 import { apiInstance } from '../../services/api';
 import { HeuresPanel } from './HeuresPanel';
 import { PROGRAMME_WORKFLOW, PROGRAMME_LAST_PERIODE_KEY } from './def';
@@ -68,8 +69,10 @@ export function Planning() {
     }, [periodeId]);
 
     // ── Données ─────────────────────────────────────────────────────────────
+    // Même clé que l'écran Groupes : même endpoint, même paramètre — le cache
+    // est partagé, l'aller-retour entre les deux vues ne recharge rien.
     const { data: reservations = [] } = useQuery<ReservationDetail[]>({
-        queryKey: ['reservations', periodeId],
+        queryKey: ['programme.reservations', periodeId],
         queryFn: () => apiInstance.get(`/api/v2/planning/reservation?periode_id=${periodeId}`).then(r => r.data),
         enabled: !!periodeId,
     });
@@ -135,6 +138,11 @@ export function Planning() {
                 <Tooltip title="Changer de promotion / période" placement="left">
                     <IconButton size="small" onClick={() => navigate(`/${PROGRAMME_WORKFLOW}/select`)}>
                         <TuneIcon />
+                    </IconButton>
+                </Tooltip>
+                <Tooltip title="Vue par groupes" placement="left">
+                    <IconButton size="small" onClick={() => navigate(`/${PROGRAMME_WORKFLOW}/${periodeId}/groupes`)}>
+                        <ViewTimelineIcon />
                     </IconButton>
                 </Tooltip>
                 <Tooltip title={colorMode === 'type' ? 'Couleur par matière' : 'Couleur par type de cours'} placement="left">

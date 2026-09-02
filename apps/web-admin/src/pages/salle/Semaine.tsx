@@ -11,9 +11,11 @@ import {
     Typography,
 } from '@mui/material';
 import { apiInstance } from '../../services/api';
+import { AMPLITUDES, lundiDe } from '../../services/calendrier';
+import { useSessionState } from '../../hooks/useSessionState';
 import {
-    AMPLITUDES, ENDPOINT_SALLES, SALLE_SEMAINE_LUNDI_KEY, SALLE_SEMAINE_SALLE_KEY,
-    SALLE_SEMAINE_WORKFLOW, libelleOccupant, lundiDe, useSessionState,
+    ENDPOINT_SALLES, SALLE_SEMAINE_LUNDI_KEY, SALLE_SEMAINE_SALLE_KEY,
+    SALLE_SEMAINE_WORKFLOW, libelleOccupant,
     type CreneauSalle, type OccupationSalle,
 } from './def';
 

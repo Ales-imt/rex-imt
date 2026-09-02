@@ -11,11 +11,14 @@ SELECT
     s.prof_id    AS prof_id,
     s.groupe_id  AS groupe_id,
     g.name       AS groupe_name,
+    s.promotion_id AS promotion_id,
+    p.name         AS promotion_name,
     s.remarque   AS remarque
 FROM seance s
 JOIN matiere m ON m.id = s.matiere_id
 LEFT JOIN salle sa ON sa.id = s.salle_id
 LEFT JOIN groupe g ON g.id = s.groupe_id
+LEFT JOIN promotion p ON p.id = s.promotion_id
 WHERE m.periode_id = $1
   AND s.starts_at IS NOT NULL
   AND s.ends_at IS NOT NULL
@@ -112,3 +115,14 @@ WHERE m.periode_id = $1
   AND s.cancelled_at IS NULL
 GROUP BY s.prof_id, s.prof
 ORDER BY s.prof NULLS LAST;
+
+-- name: GetGroupesByPeriode :many
+-- Groupes de la promotion à laquelle la période appartient. C'est l'axe des
+-- ordonnées de la grille : il vient du référentiel et non des séances, sans
+-- quoi un groupe non planifié — le cas à détecter — n'aurait pas de ligne.
+SELECT g.id AS groupe_id, g.name AS groupe_name, g.taille AS taille
+FROM groupe g
+JOIN promotion p ON p.id = g.promo_id
+JOIN periode pe  ON pe.promotion_id = p.id
+WHERE pe.id = $1
+ORDER BY g.name;

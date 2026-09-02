@@ -9,8 +9,9 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import { apiInstance } from '../../services/api';
+import { useSessionState } from '../../hooks/useSessionState';
 import {
-    ENDPOINT_SALLES, fmtHeure, libelleOccupant, statutSalle, useSessionState,
+    ENDPOINT_SALLES, fmtHeure, libelleOccupant, statutSalle,
     type CreneauSalle, type OccupationSalle,
 } from './def';
 

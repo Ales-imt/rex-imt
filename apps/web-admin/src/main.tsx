@@ -30,6 +30,7 @@ import { createAnneeRoutes } from './pages/annee/routes.tsx';
 import { PROGRAMME_WORKFLOW } from './pages/programme/def.ts';
 import { ProgrammeSelect, ProgrammeIndex } from './pages/programme/ProgrammeSelect.tsx';
 import { Planning } from './pages/programme/Planning.tsx';
+import { Groupes } from './pages/programme/Groupes.tsx';
 import { BULLETTIN_WORKFLOW } from './pages/bullettin/def.ts';
 import { Bullettin } from './pages/bullettin/Bullettin.tsx';
 import { MODERATION } from './pages/moderation/def.ts';
@@ -123,6 +124,7 @@ const routes = [
               { index: true, Component: ProgrammeIndex },
               { path: 'select', Component: ProgrammeSelect },
               { path: ':periodeId', Component: Planning },
+              { path: ':periodeId/groupes', Component: Groupes },
             ]
           },
           {

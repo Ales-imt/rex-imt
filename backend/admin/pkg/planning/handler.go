@@ -49,7 +49,19 @@ type reservationDetail struct {
 	Salles       []salleRef       `json:"salles"`
 	Intervenants []intervenantRef `json:"intervenants"`
 	Groupes      []groupeRef      `json:"groupes"`
-	Remarque     *string          `json:"remarque"`
+	// Une séance vise SOIT un groupe, SOIT la promotion entière (CM en amphi) :
+	// dans ce cas Groupes reste vide et c'est au front d'en tirer les
+	// conséquences — aplatir ici en liste de groupes perdrait la distinction.
+	PromotionID   *int64  `json:"promotion_id"`
+	PromotionName *string `json:"promotion_name"`
+	Remarque      *string `json:"remarque"`
+}
+
+// groupeDetail : une ligne de la grille « groupes × heures ».
+type groupeDetail struct {
+	GroupeID   int64  `json:"groupe_id"`
+	GroupeName string `json:"groupe_name"`
+	Taille     int32  `json:"taille"`
 }
 
 // heuresItem : une entrée de répartition (par matière, groupe ou prof).
@@ -200,6 +212,10 @@ func GetReservations(w http.ResponseWriter, r *http.Request) {
 			}
 			res.Groupes = append(res.Groupes, groupeRef{ID: row.GroupeID.Int64, Name: name, OptionID: 0})
 		}
+		if row.PromotionID.Valid {
+			res.PromotionID = &row.PromotionID.Int64
+			res.PromotionName = textOrNil(row.PromotionName)
+		}
 		if row.Remarque.Valid && row.Remarque.String != "" {
 			res.Remarque = &row.Remarque.String
 		}
@@ -207,6 +223,34 @@ func GetReservations(w http.ResponseWriter, r *http.Request) {
 		result = append(result, res)
 	}
 
+	render.JSON(w, r, result)
+}
+
+// GetGroupes rend les groupes de la promotion de la période, depuis le
+// référentiel : un groupe sans aucune séance y figure, et c'est lui qu'on
+// cherche.
+func GetGroupes(w http.ResponseWriter, r *http.Request) {
+	periodeID, ok := parsePeriodeID(r)
+	if !ok {
+		services.InvalidRequestError(w, r, "periode_id invalide", services.NO_INFORMATION, nil)
+		return
+	}
+
+	q := New(services.GetPgCtx(r.Context()).Db)
+	rows, err := q.GetGroupesByPeriode(context.Background(), periodeID.Int64)
+	if err != nil {
+		services.InternalServerError(w, r, err.Error(), services.NO_INFORMATION, nil)
+		return
+	}
+
+	result := make([]groupeDetail, 0, len(rows))
+	for _, row := range rows {
+		g := groupeDetail{GroupeID: row.GroupeID, Taille: row.Taille}
+		if row.GroupeName.Valid {
+			g.GroupeName = row.GroupeName.String
+		}
+		result = append(result, g)
+	}
 	render.JSON(w, r, result)
 }
 

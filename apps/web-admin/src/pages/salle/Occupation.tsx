@@ -10,9 +10,11 @@ import {
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { apiInstance } from '../../services/api';
+import { AMPLITUDES, labelSemaine, lundiDe } from '../../services/calendrier';
+import { useSessionState } from '../../hooks/useSessionState';
 import {
-    AMPLITUDES, ENDPOINT_SALLES, SALLE_SEMAINE_LUNDI_KEY, SALLE_SEMAINE_WORKFLOW,
-    labelSemaine, lundiDe, useSessionState, type OccupationSalle,
+    ENDPOINT_SALLES, SALLE_SEMAINE_LUNDI_KEY, SALLE_SEMAINE_WORKFLOW,
+    type OccupationSalle,
 } from './def';
 
 type CleTri = 'salle' | 'type' | 'capacite' | 'nb_seances' | 'heures';

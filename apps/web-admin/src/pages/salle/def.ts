@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 
 export const SALLE_DISPO_WORKFLOW      = 'salle-dispo';
@@ -10,27 +9,6 @@ export const ENDPOINT_SALLES           = '/api/v2/planning/salles';
 // semaine avant de naviguer, pour que le clic ouvre la même semaine.
 export const SALLE_SEMAINE_LUNDI_KEY = 'salle.semaine.lundi';
 export const SALLE_SEMAINE_SALLE_KEY = 'salle.semaine.salle';
-
-// Amplitudes d'ouverture proposées : une convention d'établissement, elle se
-// choisit ici et jamais en SQL — la figer côté base interdirait de la faire
-// varier sans redéploiement. Elle sert deux fois : dénominateur du taux
-// d'Occupation (heures) et bornes de la grille de Semaine (debut/fin/samedi).
-// Une seule définition, sinon les deux écrans divergent sans que personne ne
-// s'en aperçoive.
-export const AMPLITUDES = [
-    { cle: '8-18x5', label: '8h–18h · lun-ven', heures: 50, debut: '08:00:00', fin: '18:00:00', samedi: false },
-    { cle: '8-20x5', label: '8h–20h · lun-ven', heures: 60, debut: '08:00:00', fin: '20:00:00', samedi: false },
-    { cle: '8-18x6', label: '8h–18h · lun-sam', heures: 60, debut: '08:00:00', fin: '18:00:00', samedi: true  },
-] as const;
-
-export function lundiDe(d: Dayjs): string {
-    return d.subtract((d.day() + 6) % 7, 'day').format('YYYY-MM-DD');
-}
-
-export function labelSemaine(lundi: string): string {
-    const d = new Date(lundi + 'T12:00:00');
-    return 'Semaine du ' + d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-}
 
 // Réponse de GET /salles/occupation. Elle part des salles (LEFT JOIN) : une
 // salle jamais réservée sort avec heures: 0 — c'est LA source de la liste
@@ -97,15 +75,4 @@ export function statutSalle(creneaux: CreneauSalle[], t: Dayjs): StatutSalle {
         }
     }
     return { occupants, prochain };
-}
-
-// État persisté en sessionStorage : les filtres et la période observée
-// survivent à une navigation vers un autre écran et retour.
-export function useSessionState<T extends string>(key: string, defaut: T): [T, (v: T) => void] {
-    const [valeur, setValeur] = useState<T>(() => (sessionStorage.getItem(key) as T | null) ?? defaut);
-    const set = (v: T) => {
-        setValeur(v);
-        sessionStorage.setItem(key, v);
-    };
-    return [valeur, set];
 }
