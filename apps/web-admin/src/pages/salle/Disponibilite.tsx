@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router';
 import dayjs from 'dayjs';
 import {
     Alert, Box, Chip, IconButton, MenuItem, Paper, Select, Skeleton, Stack,
@@ -9,9 +10,11 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import { apiInstance } from '../../services/api';
+import { lundiDe } from '../../services/calendrier';
 import { useSessionState } from '../../hooks/useSessionState';
 import {
-    ENDPOINT_SALLES, fmtHeure, libelleOccupant, statutSalle,
+    ENDPOINT_SALLES, SALLE_SEMAINE_LUNDI_KEY, SALLE_SEMAINE_WORKFLOW,
+    fmtHeure, libelleOccupant, statutSalle,
     type CreneauSalle, type OccupationSalle,
 } from './def';
 
@@ -30,6 +33,7 @@ function fmtMinutes(m: number): string {
 }
 
 export function Disponibilite() {
+    const navigate = useNavigate();
     const aujourdhui = dayjs().format('YYYY-MM-DD');
     const [jour, setJour] = useSessionState('salle.dispo.jour', aujourdhui);
     const [minutesStr, setMinutesStr] = useSessionState('salle.dispo.minutes', String(H_DEBUT));
@@ -82,6 +86,13 @@ export function Disponibilite() {
     const revenirMaintenant = () => {
         setJour(dayjs().format('YYYY-MM-DD'));
         setMaintenant('1');
+    };
+
+    // Ouvre l'écran Semaine sur la semaine du jour observé ici : sa clé de
+    // session est écrite avant la navigation (même mécanisme qu'Occupation).
+    const ouvrirSemaine = (salleId: number) => {
+        sessionStorage.setItem(SALLE_SEMAINE_LUNDI_KEY, lundiDe(dayjs(jour)));
+        navigate(`/${SALLE_SEMAINE_WORKFLOW}/${salleId}`);
     };
 
     const creneauxParSalle = useMemo(() => {
@@ -263,7 +274,12 @@ export function Disponibilite() {
                                 direction="row"
                                 alignItems="center"
                                 spacing={1.5}
-                                sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider', '&:last-child': { borderBottom: 0 } }}
+                                sx={{
+                                    px: 2, py: 1, borderBottom: 1, borderColor: 'divider',
+                                    '&:last-child': { borderBottom: 0 },
+                                    cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' },
+                                }}
+                                onClick={() => ouvrirSemaine(salle.salle_id)}
                             >
                                 <Chip
                                     size="small"
@@ -273,9 +289,11 @@ export function Disponibilite() {
                                 />
                                 <Box sx={{ flex: 1, minWidth: 0 }}>
                                     <Stack direction="row" alignItems="baseline" spacing={1}>
-                                        <Typography variant="body2" fontWeight={600} noWrap>
-                                            {salle.salle_name}
-                                        </Typography>
+                                        <Tooltip title="Voir la semaine de cette salle">
+                                            <Typography variant="body2" fontWeight={600} noWrap>
+                                                {salle.salle_name}
+                                            </Typography>
+                                        </Tooltip>
                                         <Typography variant="caption" color="text.secondary" noWrap>
                                             {[salle.type, salle.capacite !== null ? `${salle.capacite} pl.` : null]
                                                 .filter(Boolean).join(' · ')}
