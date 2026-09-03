@@ -37,6 +37,7 @@ interface Bloc {
     width: number;
     debutMin: number;
     finMin: number;
+    duree: number;    // heures visibles, bornées à l'amplitude — ce qui est peint est ce qui est compté
     promo: boolean;   // bande de promotion (CM en amphi), peinte sur chaque ligne
     conflit: boolean; // chevauche un autre bloc de la même ligne
 }
@@ -44,7 +45,6 @@ interface Bloc {
 interface Ligne {
     groupe: GroupeDetail;
     blocs: Bloc[];
-    heures: number;   // heures PROPRES au groupe, hors bandes de promotion
     conflits: number; // paires de blocs qui se chevauchent sur cette ligne
 }
 
@@ -73,6 +73,7 @@ function placer(r: ReservationDetail, ampDebut: number, ampFin: number, promo: b
     return {
         r, jour, promo,
         debutMin: d, finMin: f,
+        duree: (f - d) / 60,
         left: ((d - ampDebut) / span) * 100,
         width: ((f - d) / span) * 100,
     };
@@ -182,23 +183,36 @@ export function Groupes() {
 
         const lignes: Ligne[] = groupes.map(groupe => {
             const propres: Bloc[] = [];
-            let heures = 0;
             for (const r of semaine) {
                 if (!r.groupes.some(g => g.id === groupe.groupe_id)) continue;
-                heures += dayjs(r.horaire.Upper).diff(dayjs(r.horaire.Lower), 'minute') / 60;
                 const p = placer(r, ampDebut, ampFin, false);
                 if (p) propres.push({ ...p, conflit: false });
             }
             const blocs = [...bandes.map(b => ({ ...b, conflit: false })), ...propres];
             const conflits = marquerConflits(blocs, false);
-            return { groupe, blocs, heures, conflits };
+            return { groupe, blocs, conflits };
         });
         const conflits = conflitsPromo + lignes.reduce((n, l) => n + l.conflits, 0);
         return { lignes, horsGrille, conflits };
     }, [groupesQ.data, semaine, ampDebut, ampFin]);
 
     const jourIdx = Math.min(Number(jourStr) || 0, jours.length - 1);
-    const joursAffiches = mode === 'jour' ? [jours[jourIdx]] : jours;
+    const joursAffiches = useMemo(() => mode === 'jour' ? [jours[jourIdx]] : jours, [mode, jours, jourIdx]);
+
+    // Seuls les groupes ayant des heures PROPRES sur la plage affichée — la
+    // semaine ou le jour — ont une ligne. Les bandes de promotion ne comptent
+    // pas : un groupe dont la seule séance du jour est l'amphi n'a rien qui
+    // lui soit affecté. Les heures du libellé suivent la même plage.
+    const lignesAffichees = useMemo(() => {
+        const dates = new Set(joursAffiches.map(j => j.date));
+        return grille.lignes
+            .map(l => ({
+                ...l,
+                heures: l.blocs.filter(b => !b.promo && dates.has(b.jour)).reduce((h, b) => h + b.duree, 0),
+            }))
+            .filter(l => l.heures > 0);
+    }, [grille.lignes, joursAffiches]);
+    const groupesMasques = grille.lignes.length - lignesAffichees.length;
     const nbHeures = (ampFin - ampDebut) / 60;
     const pasTicks = mode === 'jour' ? 1 : 2;
     const ticks = Array.from({ length: Math.floor(nbHeures / pasTicks) + 1 }, (_, i) => ampDebut + i * pasTicks * 60)
@@ -239,6 +253,11 @@ export function Groupes() {
                         <Chip color="error" size="small" label={`${grille.conflits} chevauchement${grille.conflits > 1 ? 's' : ''}`} />
                     </Tooltip>
                 )}
+                {groupesMasques > 0 && (
+                    <Tooltip title={`Groupes sans heure propre sur ${mode === 'jour' ? 'ce jour' : 'cette semaine'} : pas de ligne`}>
+                        <Chip size="small" variant="outlined" label={`${groupesMasques} groupe${groupesMasques > 1 ? 's' : ''} sans séance`} />
+                    </Tooltip>
+                )}
                 {grille.horsGrille > 0 && (
                     <Tooltip title="Séances sans groupe ni promotion, ou visant un groupe d'une autre promotion : elles n'apparaissent sur aucune ligne">
                         <Chip color="warning" size="small" variant="outlined" label={`${grille.horsGrille} hors grille`} />
@@ -267,10 +286,10 @@ export function Groupes() {
 
             {!chargement && !erreur && !sansGroupe && (
                 <>
-                    {reservationsQ.isSuccess && semaine.length === 0 && (
-                        // La grille reste affichée : ici, une semaine vide EST
-                        // une réponse — aucun groupe n'est planifié.
-                        <Alert severity="info" sx={{ mb: 1 }}>Aucune séance cette semaine.</Alert>
+                    {reservationsQ.isSuccess && lignesAffichees.length === 0 && (
+                        <Alert severity="info" sx={{ mb: 1 }}>
+                            {mode === 'jour' ? 'Aucun groupe n\'a de séance ce jour.' : 'Aucun groupe n\'a de séance cette semaine.'}
+                        </Alert>
                     )}
                     <Paper variant="outlined" sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
                         <Box sx={{
@@ -308,21 +327,19 @@ export function Groupes() {
                             ))}
 
                             {/* Une ligne par groupe du référentiel, planifié ou non */}
-                            {grille.lignes.map(ligne => {
-                                const vide = ligne.heures === 0;
+                            {lignesAffichees.map(ligne => {
                                 return [
                                     <Box
                                         key={`l-${ligne.groupe.groupe_id}`}
                                         sx={{
                                             px: 1, height: HAUTEUR_LIGNE, display: 'flex', alignItems: 'center', gap: 1,
                                             borderBottom: 1, borderColor: 'divider', overflow: 'hidden',
-                                            color: vide ? 'warning.main' : 'text.primary',
                                         }}
                                     >
-                                        <Typography variant="body2" noWrap sx={{ fontWeight: vide ? 700 : 500, flex: 1 }}>
+                                        <Typography variant="body2" noWrap sx={{ fontWeight: 500, flex: 1 }}>
                                             {ligne.groupe.groupe_name}
                                         </Typography>
-                                        <Typography variant="caption" noWrap color={vide ? 'warning.main' : 'text.secondary'}>
+                                        <Typography variant="caption" noWrap color="text.secondary">
                                             {[
                                                 ligne.groupe.taille ? `${ligne.groupe.taille} él.` : null,
                                                 fmtHeures(ligne.heures),
@@ -335,7 +352,6 @@ export function Groupes() {
                                             sx={{
                                                 position: 'relative', height: HAUTEUR_LIGNE,
                                                 borderBottom: 1, borderLeft: 1, borderColor: 'divider',
-                                                bgcolor: vide ? 'rgba(237, 108, 2, 0.06)' : undefined,
                                                 backgroundImage: `repeating-linear-gradient(to right, rgba(0,0,0,0.07) 0 1px, transparent 1px ${100 / nbHeures}%)`,
                                             }}
                                         >
