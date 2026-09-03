@@ -1,0 +1,73 @@
+databaseChangeLog:
+
+  # ---- public.seance_effectif_resolu : la séance dit elle-même à qui elle
+  # s'adresse -----------------------------------------------------------------
+  #
+  # La branche vivante remontait matière → période → promotion pour trouver les
+  # groupes concernés. Or une matière n'appartient qu'à UNE période, donc à UNE
+  # promotion : celle où la synchronisation a vu son COCLE en premier
+  # (migration/collecte.go). Pour un cours mutualisé — journée de rentrée,
+  # remise à niveau, conférence — toutes les séances des autres promotions
+  # ciblaient un groupe étranger à cette promotion, et la jointure les vidait.
+  # En base de production, 14 % des séances actives étaient ainsi sans aucun
+  # attendu, et invisibles au planning de leurs élèves.
+  #
+  # La séance porte pourtant sa propre cible, remplie depuis le créneau amont :
+  # groupe_id (GRCLE) et promotion_id (P0). C'est elle qui fait foi désormais.
+  #   — groupe_id renseigné : les élèves de CE groupe, quelle que soit la
+  #     promotion à laquelle la matière est rattachée ;
+  #   — sinon promotion_id : la promotion entière ;
+  #   — sinon, repli sur la promotion de la matière : c'est le seul cas des
+  #     séances ouvertes hors créneau planifié (presencedata.OpenSeance), qui
+  #     n'ont ni groupe ni promotion.
+  #
+  # La branche figée ne change pas : une feuille émise ne se réécrit pas.
+  - changeSet:
+      id: v0.0.1-023a-alter-view-seance-effectif-resolu
+      author: vjo
+      changes:
+        - createView:
+            viewName: seance_effectif_resolu
+            schemaName: public
+            replaceIfExists: true
+            selectQuery: |
+              -- Effectif figé à la clôture : une feuille émise ne se réécrit plus.
+              SELECT se.seance_id, se.user_id
+              FROM public.seance_effectif se
+              UNION ALL
+              -- Séances pas encore clôturées : résolution vivante sur les
+              -- groupes actuels, à partir de la cible portée par la séance.
+              -- Les deux branches sont disjointes (NOT EXISTS), l'UNION ALL ne
+              -- peut donc pas produire de doublon. DISTINCT : un élève inscrit
+              -- à plusieurs groupes d'une promotion serait sinon compté autant
+              -- de fois sur une séance de promotion entière.
+              SELECT DISTINCT s.id AS seance_id, eg.num_etudiant AS user_id
+              FROM public.seance s
+              LEFT JOIN public.matiere m  ON m.id = s.matiere_id
+              LEFT JOIN public.periode pe ON pe.id = m.periode_id
+              JOIN public.groupe g
+                ON (s.groupe_id IS NOT NULL AND g.id = s.groupe_id)
+                OR (s.groupe_id IS NULL AND g.promo_id = COALESCE(s.promotion_id, pe.promotion_id))
+              JOIN public.eleve_groupe eg ON eg.id_groupe = g.id
+              WHERE NOT EXISTS (
+                SELECT 1 FROM public.seance_effectif x WHERE x.seance_id = s.id
+              )
+      rollback:
+        - createView:
+            viewName: seance_effectif_resolu
+            schemaName: public
+            replaceIfExists: true
+            selectQuery: |
+              SELECT se.seance_id, se.user_id
+              FROM public.seance_effectif se
+              UNION ALL
+              SELECT DISTINCT s.id AS seance_id, eg.num_etudiant AS user_id
+              FROM public.seance s
+              JOIN public.matiere m       ON m.id = s.matiere_id
+              JOIN public.periode pe      ON pe.id = m.periode_id
+              JOIN public.promotion pr    ON pr.id = pe.promotion_id
+              JOIN public.groupe g        ON g.promo_id = pr.id AND (s.groupe_id IS NULL OR g.id = s.groupe_id)
+              JOIN public.eleve_groupe eg ON eg.id_groupe = g.id
+              WHERE NOT EXISTS (
+                SELECT 1 FROM public.seance_effectif x WHERE x.seance_id = s.id
+              )

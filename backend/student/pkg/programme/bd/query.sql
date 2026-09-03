@@ -2,52 +2,47 @@
 -- synchronisation de back-rex-admin (pkg/migration/planning.go). Source
 -- nominale du programme : plus aucun appel au système amont à la volée.
 --
--- L'effectif est ici résolu sur eleve_groupe, donc sur l'état COURANT des
--- groupes : un élève ayant changé de groupe voit son planning passé recalculé.
--- C'est sans conséquence pour un planning, et inacceptable sur une feuille de
--- présence — d'où seance_effectif_resolu, que ces requêtes n'utilisent
--- volontairement PAS.
---
 -- Les trois requêtes filtrent sur [debut, fin) et écartent les séances
 -- annulées (cancelled_at IS NOT NULL) : une séance supprimée en amont ne doit
 -- pas rester affichée comme un cours fantôme.
 
 -- name: ListProgrammeEleve :many
--- Jointures identiques à presencedata.ListPresence : le planning d'un élève doit
--- désigner exactement les séances dont il est attendu, sans quoi il pourrait
--- être marqué absent d'un cours qui ne lui a jamais été annoncé.
+-- Le planning d'un élève est exactement l'ensemble des séances dont il est
+-- attendu : il lit la vue seance_effectif_resolu, la seule écriture de cette
+-- règle dans le dépôt (cf. presencedata.ListPresence). Un cours affiché ici
+-- est donc toujours un cours où il peut être pointé, et réciproquement.
+--
+-- Une version antérieure recopiait la chaîne matière → période → promotion.
+-- Elle perdait toutes les séances d'un cours mutualisé ciblant un groupe d'une
+-- autre promotion que celle de la matière (journées de rentrée, remises à
+-- niveau…), et les promettait pourtant identiques à la feuille de présence.
+--
+-- Conséquence assumée de la vue : pour une séance clôturée, c'est l'effectif
+-- FIGÉ qui fait foi. Un élève ayant changé de groupe garde donc au planning
+-- les séances passées où il était convoqué, comme sur la feuille.
 --
 -- `promo` est le nom de la PROMOTION et non celui du groupe : le filtre promo du
--- front mobile en dépend.
---
--- `groupe` est le nom du groupe (TD/TP) de la séance, uniquement quand elle en
--- cible un précisément (s.groupe_id NOT NULL) : une séance de promo entière
--- n'a pas de groupe à afficher, même si la jointure ci-dessous la relie à
--- plusieurs des groupes de l'élève pour résoudre l'effectif.
---
--- GROUP BY : un élève inscrit à plusieurs groupes d'une même promotion
--- produirait autant de copies de chaque séance de promo (groupe_id IS NULL) —
--- d'où le CASE dans le GROUP BY plutôt que g.name : il vaut NULL pour toutes
--- ces copies et les laisse fusionner.
+-- front mobile en dépend. Elle vient de seance.promotion_id, avec repli sur la
+-- période de la matière pour les séances qui n'en portent pas — mêmes règles
+-- que ListProgrammeProf. `groupe` est le nom du groupe (TD/TP) de la séance,
+-- vide pour une séance de promotion entière.
 SELECT s.id, s.matiere_id, m.name AS matiere_name,
        s.starts_at, s.ends_at,
        COALESCE(sa.name, '') AS salle,
        COALESCE(s.prof, '')  AS prof,
-       COALESCE(pr.name, '') AS promo,
-       COALESCE(CASE WHEN s.groupe_id IS NOT NULL THEN g.name END, '')::text AS groupe,
+       COALESCE(prs.name, prp.name, '') AS promo,
+       COALESCE(g.name, '') AS groupe,
        COALESCE(s.remarque, '') AS remarque
 FROM seance s
-JOIN matiere m       ON m.id = s.matiere_id
-JOIN periode pe      ON pe.id = m.periode_id
-JOIN promotion pr    ON pr.id = pe.promotion_id
-LEFT JOIN salle sa   ON sa.id = s.salle_id
-JOIN groupe g        ON g.promo_id = pr.id AND (s.groupe_id IS NULL OR g.id = s.groupe_id)
-JOIN eleve_groupe eg ON eg.id_groupe = g.id
-WHERE eg.num_etudiant = @user_id
-  AND s.cancelled_at IS NULL
+JOIN matiere m          ON m.id = s.matiere_id
+JOIN seance_effectif_resolu er ON er.seance_id = s.id AND er.user_id = @user_id
+LEFT JOIN salle sa      ON sa.id = s.salle_id
+LEFT JOIN promotion prs ON prs.id = s.promotion_id
+LEFT JOIN periode pe    ON pe.id = m.periode_id
+LEFT JOIN promotion prp ON prp.id = pe.promotion_id
+LEFT JOIN groupe g      ON g.id = s.groupe_id
+WHERE s.cancelled_at IS NULL
   AND s.starts_at >= @debut AND s.starts_at < @fin
-GROUP BY s.id, m.name, s.starts_at, s.ends_at, sa.name, s.prof, pr.name,
-         CASE WHEN s.groupe_id IS NOT NULL THEN g.name END
 ORDER BY s.starts_at;
 
 -- name: ListProgrammeProf :many

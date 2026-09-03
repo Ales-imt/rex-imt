@@ -266,16 +266,21 @@ func TestDoubleClotureNeRefigePas(t *testing.T) {
 	}
 }
 
-// Effectif calculable vide (matière sans période, groupe pas encore
-// synchronisé…) : rien n'est figé. Une séance figée à zéro serait
-// indistinguable d'une séance sans attendus et gèlerait une feuille vide pour
-// toujours ; l'absence de lignes laisse la vue retomber sur sa branche vivante.
+// Effectif calculable vide (séance sans groupe ni promotion, matière sans
+// période…) : rien n'est figé. Une séance figée à zéro serait indistinguable
+// d'une séance sans attendus et gèlerait une feuille vide pour toujours ;
+// l'absence de lignes laisse la vue retomber sur sa branche vivante.
 func TestEffectifVideNeFigeRien(t *testing.T) {
 	db := openDB(t)
 	f := fixtureEffectif(t, db)
 	ctx := context.Background()
 
-	// La matière perd sa période : la chaîne de résolution est rompue.
+	// La séance perd sa cible et la matière sa période : plus aucune des trois
+	// résolutions de la vue (groupe, promotion, repli par la matière) n'aboutit.
+	if _, err := db.Exec(ctx,
+		`UPDATE public.seance SET groupe_id = NULL, promotion_id = NULL WHERE id = $1`, f.seanceID); err != nil {
+		t.Fatalf("détachement de la cible: %v", err)
+	}
 	if _, err := db.Exec(ctx, `UPDATE public.matiere SET periode_id = NULL WHERE id = $1`, f.matiereID); err != nil {
 		t.Fatalf("détachement de la période: %v", err)
 	}
@@ -297,12 +302,126 @@ func TestEffectifVideNeFigeRien(t *testing.T) {
 		t.Errorf("%d lignes figées, attendu aucune", nb)
 	}
 
-	// Rétablie, la période refait vivre la feuille : rien n'a été gelé à zéro.
-	if _, err := db.Exec(ctx, `UPDATE public.matiere SET periode_id = $1 WHERE id = $2`, f.periodID, f.matiereID); err != nil {
-		t.Fatalf("rétablissement de la période: %v", err)
+	// Rétablie, la cible refait vivre la feuille : rien n'a été gelé à zéro.
+	if _, err := db.Exec(ctx,
+		`UPDATE public.seance SET groupe_id = $1, promotion_id = $2 WHERE id = $3`,
+		f.groupeID, f.promoID, f.seanceID); err != nil {
+		t.Fatalf("rétablissement de la cible: %v", err)
 	}
 	attendus, _ := idsPresence(t, db, f.seanceID)
 	if len(attendus) != 1 {
 		t.Errorf("feuille = %v, attendu l'élève du groupe", attendus)
+	}
+}
+
+// La séance fait foi sur sa cible, pas la matière. Cas réel : une journée de
+// rentrée mutualisée, dont la matière est rattachée à la promotion où la
+// synchronisation a vu son COCLE en premier, ciblant un groupe d'une AUTRE
+// promotion. Les élèves de ce groupe sont attendus ; ceux de la promotion de
+// la matière ne le sont pas.
+func TestEffectifSuitLeGroupeDeLaSeanceNonLaMatiere(t *testing.T) {
+	db := openDB(t)
+	f := fixtureEffectif(t, db)
+	ctx := context.Background()
+	suffixe := time.Now().UnixNano()
+
+	// Une seconde promotion, avec son groupe et son élève : la cible réelle.
+	var autrePromoID, autreGroupeID int64
+	if err := db.QueryRow(ctx, `INSERT INTO public.promotion (name) VALUES ($1) RETURNING id`,
+		fmt.Sprintf("promo-mutualisee-%d", suffixe)).Scan(&autrePromoID); err != nil {
+		t.Fatalf("promotion cible: %v", err)
+	}
+	if err := db.QueryRow(ctx, `INSERT INTO public.groupe (name, promo_id) VALUES ($1, $2) RETURNING id`,
+		fmt.Sprintf("groupe-mutualise-%d", suffixe), autrePromoID).Scan(&autreGroupeID); err != nil {
+		t.Fatalf("groupe cible: %v", err)
+	}
+	if _, err := db.Exec(ctx,
+		`INSERT INTO public.eleve_groupe (num_etudiant, id_groupe) VALUES ($1, $2)`,
+		f.autreID, autreGroupeID); err != nil {
+		t.Fatalf("inscription au groupe cible: %v", err)
+	}
+	t.Cleanup(func() {
+		c := context.Background()
+		db.Exec(c, `DELETE FROM public.eleve_groupe WHERE id_groupe = $1`, autreGroupeID)
+		db.Exec(c, `DELETE FROM public.seance WHERE id = $1`, f.seanceID)
+		db.Exec(c, `DELETE FROM public.groupe WHERE id = $1`, autreGroupeID)
+		db.Exec(c, `DELETE FROM public.promotion WHERE id = $1`, autrePromoID)
+	})
+
+	// La séance garde la matière de la première promotion, mais vise le
+	// groupe de la seconde.
+	if _, err := db.Exec(ctx,
+		`UPDATE public.seance SET promotion_id = $1, groupe_id = $2 WHERE id = $3`,
+		autrePromoID, autreGroupeID, f.seanceID); err != nil {
+		t.Fatalf("reciblage de la séance: %v", err)
+	}
+
+	attendus, _ := idsPresence(t, db, f.seanceID)
+	if !contient(attendus, f.autreID) {
+		t.Errorf("feuille = %v, l'élève du groupe ciblé par la séance manque", attendus)
+	}
+	if contient(attendus, f.eleveID) {
+		t.Errorf("feuille = %v, un élève de la promotion de la matière est attendu à tort", attendus)
+	}
+}
+
+// Séance de promotion entière (groupe_id NULL) : l'effectif est celui de
+// seance.promotion_id, et non de la promotion de la matière.
+func TestEffectifPromotionEntiereSuitLaSeance(t *testing.T) {
+	db := openDB(t)
+	f := fixtureEffectif(t, db)
+	ctx := context.Background()
+	suffixe := time.Now().UnixNano()
+
+	var autrePromoID, autreGroupeID int64
+	if err := db.QueryRow(ctx, `INSERT INTO public.promotion (name) VALUES ($1) RETURNING id`,
+		fmt.Sprintf("promo-entiere-%d", suffixe)).Scan(&autrePromoID); err != nil {
+		t.Fatalf("promotion cible: %v", err)
+	}
+	if err := db.QueryRow(ctx, `INSERT INTO public.groupe (name, promo_id) VALUES ($1, $2) RETURNING id`,
+		fmt.Sprintf("groupe-entier-%d", suffixe), autrePromoID).Scan(&autreGroupeID); err != nil {
+		t.Fatalf("groupe cible: %v", err)
+	}
+	if _, err := db.Exec(ctx,
+		`INSERT INTO public.eleve_groupe (num_etudiant, id_groupe) VALUES ($1, $2)`,
+		f.autreID, autreGroupeID); err != nil {
+		t.Fatalf("inscription au groupe cible: %v", err)
+	}
+	t.Cleanup(func() {
+		c := context.Background()
+		db.Exec(c, `DELETE FROM public.eleve_groupe WHERE id_groupe = $1`, autreGroupeID)
+		db.Exec(c, `DELETE FROM public.seance WHERE id = $1`, f.seanceID)
+		db.Exec(c, `DELETE FROM public.groupe WHERE id = $1`, autreGroupeID)
+		db.Exec(c, `DELETE FROM public.promotion WHERE id = $1`, autrePromoID)
+	})
+
+	if _, err := db.Exec(ctx,
+		`UPDATE public.seance SET promotion_id = $1, groupe_id = NULL WHERE id = $2`,
+		autrePromoID, f.seanceID); err != nil {
+		t.Fatalf("reciblage de la séance: %v", err)
+	}
+
+	attendus, _ := idsPresence(t, db, f.seanceID)
+	if !contient(attendus, f.autreID) || contient(attendus, f.eleveID) || len(attendus) != 1 {
+		t.Errorf("feuille = %v, attendu le seul élève de la promotion de la séance", attendus)
+	}
+}
+
+// Séance ouverte hors créneau planifié (presencedata.OpenSeance) : ni groupe
+// ni promotion. La vue se replie alors sur la promotion de la matière, seul
+// rattachement disponible — sans lui, personne ne serait jamais attendu.
+func TestEffectifSansCibleSeReplieSurLaMatiere(t *testing.T) {
+	db := openDB(t)
+	f := fixtureEffectif(t, db)
+	ctx := context.Background()
+
+	if _, err := db.Exec(ctx,
+		`UPDATE public.seance SET groupe_id = NULL, promotion_id = NULL WHERE id = $1`, f.seanceID); err != nil {
+		t.Fatalf("détachement de la cible: %v", err)
+	}
+
+	attendus, _ := idsPresence(t, db, f.seanceID)
+	if !contient(attendus, f.eleveID) || len(attendus) != 1 {
+		t.Errorf("feuille = %v, attendu l'élève de la promotion de la matière", attendus)
 	}
 }

@@ -218,14 +218,14 @@ ON CONFLICT DO NOTHING;
 -- que la synchronisation n'a pas su résoudre (prof absent de prof_map faute
 -- d'email, groupe encore inconnu → on garde la valeur en place). L'enjeu est
 -- surtout sur groupe_id : à NULL, seance_effectif_resolu élargit
--- silencieusement l'effectif attendu à la promotion entière.
+-- silencieusement l'effectif attendu à la promotion entière (promotion_id).
 --
 -- Le CTE `cible` capte l'état précédent et calcule les valeurs retenues :
 -- RETURNING ne rend que les valeurs nouvelles, alors que l'appelant a besoin de
 -- savoir si la séance était annulée (compteur de résurrections) et si son
 -- rattachement aux justifications doit être revu.
 WITH avant AS (
-  SELECT sa.id, sa.cancelled_at, sa.starts_at, sa.ends_at, sa.matiere_id, sa.groupe_id, sa.prof_id
+  SELECT sa.id, sa.cancelled_at, sa.starts_at, sa.ends_at, sa.matiere_id, sa.promotion_id, sa.groupe_id, sa.prof_id
   FROM public.seance sa WHERE sa.id = @seance_id
 )
 UPDATE public.seance s
@@ -249,7 +249,10 @@ RETURNING
   (avant.cancelled_at IS NOT NULL)::bool AS ressuscitee,
   -- rattacher : la couverture des excuses doit être recalculée. Vrai quand la
   -- séance redevient visible, quand sa plage horaire bouge, ou quand son
-  -- effectif attendu change (matière → période → promotion, ou groupe).
+  -- effectif attendu change : groupe, promotion, ou matière — cette dernière
+  -- ne compte que pour le repli de seance_effectif_resolu sur la période de
+  -- la matière, mais elle est comparée quand même, un faux positif ne coûte
+  -- qu'un recalcul.
   --
   -- Le groupe est comparé à la valeur RETENUE, en répétant le COALESCE du SET
   -- plutôt qu'en testant le paramètre. Ce n'est pas un choix de style : un
@@ -261,6 +264,7 @@ RETURNING
    OR avant.starts_at  IS DISTINCT FROM @starts_at
    OR avant.ends_at    IS DISTINCT FROM @ends_at
    OR avant.matiere_id IS DISTINCT FROM @matiere_id
+   OR avant.promotion_id IS DISTINCT FROM @promotion_id
    OR avant.groupe_id  IS DISTINCT FROM
         COALESCE(@groupe_id, CASE WHEN @grcle_vide::bool THEN NULL ELSE avant.groupe_id END)
   )::bool AS rattacher;
